@@ -14,7 +14,7 @@ namespace PixivAss
     class Client
     {
         private string cookie;
-        private int user_id;
+        private string user_id;
         private string base_url;
         private string base_host;
         private string user_name;
@@ -22,7 +22,7 @@ namespace PixivAss
         public Client()
         {
             
-            user_id = 16428599;
+            user_id = "16428599";
             user_name = "xyzkljl1";
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
@@ -35,25 +35,52 @@ namespace PixivAss
         }
         public string Test()
         {
-            //https://www.pixiv.net/ajax/user/16428599/illusts/bookmarks?tag=&offset=0&limit=400&rest=hide
-            //var doc = GetHtml(base_url);
-            //if (GetUserFromHomePage(doc) != this.user_name)
-            //   throw new Exception("Login Not Success");
-            JObject json=GetJson("https://www.pixiv.net/ajax/user/16428599/illusts/bookmarks?tag=&offset=0&limit=400&rest=hide");
-            var array=json.GetValue("body").Value<JArray>("works");
-
-            Console.Write(array.ToString());
-
+            //CheckHomePage();
+            FetchBookMark(true);
+            FetchIllust("76278759");
+            FetchAllByUserId("3104565");
             return "123";
         }
-        private string GetUserFromHomePage(HtmlDocument doc)
+        public void FetchAllByUserId(string userId)
         {
+            string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
+            string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
+            JObject json = GetJson(url, referer);
+            string x = json.ToString();
+            if (json.Value<Boolean>("error"))
+                throw new Exception("Get All By User Fail");
+        }
+        public void FetchIllust(string illustId)
+        {
+            string url = String.Format("{0}ajax/illust/{1}/pages", base_url, illustId);
+            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
+            JObject json = GetJson(url, referer);
+            string x = json.ToString();
+            if (json.Value<Boolean>("error"))
+                throw new Exception("Get Illust Fail");
+        }
+        public void FetchBookMark(bool pub)
+        {
+            string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset=0&limit=40000&rest={2}", base_url,user_id,pub?"show":"hide");
+            string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
+            JObject json = GetJson(url, referer);
+            if (json.Value<Boolean>("error"))
+                throw new Exception("Get Bookmark Fail");
+            var array = json.GetValue("body").Value<JArray>("works");
+            Console.Write("Fetch "+array.Count.ToString()+" Bookmarks");
+        }
+        public void CheckHomePage()
+        {
+            string url = base_url;
+            string referer = String.Format("{0}search.php?word=%E5%85%A8%E8%A3%B8&s_mode=s_tag_full&order=popular_d&p=1",base_url);
+            var doc = GetHtml(base_url,referer);
             HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//a[@class='user-name js-click-trackable-later']");
             if (headNode != null)
-                return headNode.InnerText;
-            return null;
+                if (headNode.InnerText == this.user_name)
+                    return;
+            throw new Exception("Login Not Success");
         }
-        public string GetResponse(string url)
+        public string GetResponse(string url,Uri referer)
         {
             try
             {
@@ -66,7 +93,7 @@ namespace PixivAss
                 var httpClient = new HttpClient(handler);
                 httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.Referrer = new Uri("https://www.pixiv.net/search.php?word=%E5%85%A8%E8%A3%B8&s_mode=s_tag_full&order=popular_d&p=3");
+                httpClient.DefaultRequestHeaders.Referrer = referer;
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie);
@@ -84,14 +111,14 @@ namespace PixivAss
                 throw;
             }
         }
-        public JObject GetJson(string url)
+        public JObject GetJson(string url,string referer)
         {
-            JObject jsonobj = (JObject)JsonConvert.DeserializeObject(GetResponse(url));
+            JObject jsonobj = (JObject)JsonConvert.DeserializeObject(GetResponse(url,new Uri(referer)));
             return jsonobj;
         }
-        public HtmlDocument GetHtml(string url)
+        public HtmlDocument GetHtml(string url, string referer)
         {
-            var result = GetResponse(url);
+            var result = GetResponse(url,new Uri(referer));
             var doc = new HtmlDocument();
             doc.LoadHtml(result);
             return doc;
