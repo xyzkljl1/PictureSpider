@@ -9,6 +9,7 @@ using System.Net.Http.Headers;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using PixivAss.Data;
 namespace PixivAss
 {
     class Client
@@ -37,7 +38,7 @@ namespace PixivAss
         {
             //CheckHomePage();
             FetchBookMark(true);
-            FetchIllust("76278759");
+            FetchIllust(new List<string>{ "76278759"});
             FetchAllByUserId("3104565");
             return "123";
         }
@@ -50,24 +51,33 @@ namespace PixivAss
             if (json.Value<Boolean>("error"))
                 throw new Exception("Get All By User Fail");
         }
-        public void FetchIllust(string illustId)
+        public void FetchIllust(List<string> illustIdList)
         {
-            string url = String.Format("{0}ajax/illust/{1}/pages", base_url, illustId);
-            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
-            JObject json = GetJson(url, referer);
-            string x = json.ToString();
-            if (json.Value<Boolean>("error"))
-                throw new Exception("Get Illust Fail");
+            var illustList = new List<Illust>();
+            foreach(var illustId in illustIdList)
+            {
+                string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
+                string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
+                JObject json = GetJson(url, referer);
+                if (json.Value<Boolean>("error"))
+                    throw new Exception("Get Illust Fail");
+                var x = new Illust(json.Value<JObject>("body"));
+                illustList.Add(x);
+            }
+
         }
         public void FetchBookMark(bool pub)
         {
             string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset=0&limit=40000&rest={2}", base_url,user_id,pub?"show":"hide");
             string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-            JObject json = GetJson(url, referer);
-            if (json.Value<Boolean>("error"))
+            JObject ret = GetJson(url, referer);
+            if (ret.Value<Boolean>("error"))
                 throw new Exception("Get Bookmark Fail");
-            var array = json.GetValue("body").Value<JArray>("works");
-            Console.Write("Fetch "+array.Count.ToString()+" Bookmarks");
+            var idList = new List<string>();
+            foreach(var illust in ret.GetValue("body").Value<JArray>("works"))
+                idList.Add(illust.Value<string>("id"));
+            FetchIllust(idList);
+            Console.Write("Fetch "+ idList.Count.ToString()+" Bookmarks");
         }
         public void CheckHomePage()
         {
