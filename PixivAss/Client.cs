@@ -19,10 +19,11 @@ namespace PixivAss
         private string base_url;
         private string base_host;
         private string user_name;
+        private PixivAss.Database database;
         //private HttpClient httpClient;
         public Client()
         {
-            
+            database = new Database("root","pixivAss","pass");
             user_id = "16428599";
             user_name = "xyzkljl1";
             base_url = "https://www.pixiv.net/";
@@ -38,8 +39,8 @@ namespace PixivAss
         {
             //CheckHomePage();
             FetchBookMark(true);
-            FetchIllust(new List<string>{ "76278759"});
-            FetchAllByUserId("3104565");
+            //FetchIllust(new List<string>{ "76278759"});
+            //FetchAllByUserId("3104565");
             return "123";
         }
         public void FetchAllByUserId(string userId)
@@ -63,8 +64,10 @@ namespace PixivAss
                     throw new Exception("Get Illust Fail");
                 var x = new Illust(json.Value<JObject>("body"));
                 illustList.Add(x);
+                break;
             }
 
+            database.UpdateIllust(illustList, false);
         }
         public void FetchBookMark(bool pub)
         {
