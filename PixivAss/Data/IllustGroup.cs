@@ -72,6 +72,8 @@ namespace PixivAss.Data
                 urlThumbFormat = urlThumbFormat.Insert(idx, "{").Insert(idx + 2, "}");
             }
             updateTime = DateTime.UtcNow;
+            readed = false;
+            bookmarkEach = "";
         }
     }
 }

@@ -27,7 +27,7 @@ namespace PixivAss
 
         private void onButtonClicked(object sender, EventArgs e)
         {
-            PageTextBox.Text = pixivClient.Test();
+            PageTextBox.Text =pixivClient.Test();
         }
         private void InitializeComponent()
         {
@@ -60,7 +60,7 @@ namespace PixivAss
             this.Controls.Add(this.GoButton);
             this.Name = "MainWindow";
             this.ResumeLayout(false);
-
+            pixivClient.Test();
         }
 
     }

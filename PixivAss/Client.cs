@@ -38,62 +38,72 @@ namespace PixivAss
         public string Test()
         {
             //CheckHomePage();
-            FetchBookMark(true);
-            //FetchIllust(new List<string>{ "76278759"});
-            //FetchAllByUserId("3104565");
-            return "123";
+            //FetchBookMark(true);
+            //FetchIllustByList(new List<string>{ "76278759"});
+            FetchAllByUserId("3104565");
+            return "12s3";
         }
         public void FetchAllByUserId(string userId)
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject json = GetJson(url, referer);
-            string x = json.ToString();
-            if (json.Value<Boolean>("error"))
+            JObject ret = GetJsonAsync(url, referer).Result;
+            if (ret.Value<Boolean>("error"))
                 throw new Exception("Get All By User Fail");
+            var idList = new List<string>();
+            foreach (var illust in ret.GetValue("body").Value<JObject>("illusts"))
+                idList.Add(illust.Key.ToString());
+            FetchIllustByList(idList);
         }
-        public void FetchIllust(List<string> illustIdList)
+        public async Task<Illust> FetchIllustAsync(string illustId)
+        {
+            string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
+            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
+            JObject json =await GetJsonAsync(url, referer).ConfigureAwait(false);
+            if (json.Value<Boolean>("error"))
+                throw new Exception("Get Illust Fail");
+            return new Illust(json.Value<JObject>("body"));
+        }
+        public void FetchIllustByList(List<string> illustIdList)
         {
             var illustList = new List<Illust>();
-            foreach(var illustId in illustIdList)
-            {
-                string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
-                string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
-                JObject json = GetJson(url, referer);
-                if (json.Value<Boolean>("error"))
-                    throw new Exception("Get Illust Fail");
-                var x = new Illust(json.Value<JObject>("body"));
-                illustList.Add(x);
-                break;
-            }
-
-            database.UpdateIllust(illustList, false);
+            var startTime1 = DateTime.Now;
+            var task_list = new List<Task<Illust>>();
+            foreach (var illustId in illustIdList)
+                task_list.Add(FetchIllustAsync(illustId));
+            Task.WaitAll(task_list.ToArray());
+            foreach (var task in task_list)
+                illustList.Add(task.Result);
+            Console.WriteLine("Final:"+(DateTime.Now - startTime1).ToString());
+            startTime1 = DateTime.Now;
+            database.UpdateIllustLeft(illustList);
+            Console.WriteLine("Final:" + (DateTime.Now - startTime1).ToString());
         }
         public void FetchBookMark(bool pub)
         {
             string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset=0&limit=40000&rest={2}", base_url,user_id,pub?"show":"hide");
             string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-            JObject ret = GetJson(url, referer);
+            JObject ret =GetJsonAsync(url, referer).Result;
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get Bookmark Fail");
             var idList = new List<string>();
             foreach(var illust in ret.GetValue("body").Value<JArray>("works"))
                 idList.Add(illust.Value<string>("id"));
-            FetchIllust(idList);
+            FetchIllustByList(idList);
             Console.Write("Fetch "+ idList.Count.ToString()+" Bookmarks");
         }
         public void CheckHomePage()
         {
             string url = base_url;
             string referer = String.Format("{0}search.php?word=%E5%85%A8%E8%A3%B8&s_mode=s_tag_full&order=popular_d&p=1",base_url);
-            var doc = GetHtml(base_url,referer);
+            var doc = GetHtmlAsync(base_url,referer).Result;
             HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//a[@class='user-name js-click-trackable-later']");
             if (headNode != null)
                 if (headNode.InnerText == this.user_name)
                     return;
             throw new Exception("Login Not Success");
         }
-        public string GetResponse(string url,Uri referer)
+        public async Task<string> GetResponseAsync(string url,Uri referer)
         {
             try
             {
@@ -113,9 +123,9 @@ namespace PixivAss
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
-                HttpResponseMessage response = httpClient.GetAsync(url).Result;
+                HttpResponseMessage response =await httpClient.GetAsync(url).ConfigureAwait(false);
                 CheckStatusCode(response);
-                return response.Content.ReadAsStringAsync().Result;
+                return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -124,16 +134,15 @@ namespace PixivAss
                 throw;
             }
         }
-        public JObject GetJson(string url,string referer)
+        public async Task<JObject> GetJsonAsync(string url,string referer)
         {
-            JObject jsonobj = (JObject)JsonConvert.DeserializeObject(GetResponse(url,new Uri(referer)));
+            JObject jsonobj = (JObject)JsonConvert.DeserializeObject(await GetResponseAsync(url, new Uri(referer)).ConfigureAwait(false));
             return jsonobj;
         }
-        public HtmlDocument GetHtml(string url, string referer)
+        public async Task<HtmlDocument> GetHtmlAsync(string url, string referer)
         {
-            var result = GetResponse(url,new Uri(referer));
             var doc = new HtmlDocument();
-            doc.LoadHtml(result);
+            doc.LoadHtml(await GetResponseAsync(url, new Uri(referer)).ConfigureAwait(false));
             return doc;
         }
     }
