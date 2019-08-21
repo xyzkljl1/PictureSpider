@@ -17,11 +17,148 @@ namespace PixivAss
             connect_str = String.Format("server=127.0.0.1;port=4321;UID={0};pwd={1};database={2};",
                 user,pwd,database);
         }
-        public List<Illust> GetIllustUnreaded()
+        public List<Illust> GetPrivateBookmarkURL()
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {
+                try
+                {
+                    var ret =new List<Illust>();
+                    connection.Open();
+                    var cmd = new MySqlCommand("select * from illust where bookmarked=true and bookmarkPrivate=true", connection);
+                    MySqlDataReader dataReader = cmd.ExecuteReader();
+                    while (dataReader.Read())
+                        ret.Add(new Illust(dataReader.GetString("id"),
+                                        dataReader.GetString("urlFormat"), dataReader.GetInt32("pageCount")));
+                    Console.WriteLine("Selected:" + ret.Count);
+                    connection.Close();
+                    return ret;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
 
+        public User GetUserByIllustId(string illustId)
+        {
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                try
+                {
+                    User ret = null;
+                    connection.Open();
+                    var cmd = new MySqlCommand("select * from user where userId in (select userId from illust where id=@0)", connection);
+                    cmd.Parameters.AddWithValue("@0", illustId);
+                    MySqlDataReader dataReader = cmd.ExecuteReader();
+                    if (dataReader.Read())
+                        ret = new User(dataReader.GetString("userId"), dataReader.GetString("userName"), dataReader.GetBoolean("followed"));
+                    connection.Close();
+                    return ret;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
+        public List<User> GetUser(bool followed,bool unfollowed)
+        {
+            if (followed == false && unfollowed == false)
+                return new List<User>();
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                try
+                {
+                    connection.Open();
+                    var ret = new List<User>();
+                    string cmdText = "select * from user";
+                    if (followed == true && unfollowed == true)
+                        ;
+                    else if (followed == true)
+                        cmdText += " where followed=true";
+                    else
+                        cmdText += " where followed=false";
+                    var cmd = new MySqlCommand(cmdText, connection);
+                    MySqlDataReader dataReader = cmd.ExecuteReader();
+                    while(dataReader.Read())
+                        ret.Add( new User(dataReader.GetString("userId"),dataReader.GetString("userName"),dataReader.GetBoolean("followed")));
+                    Console.WriteLine("Selected:" + ret.Count);
+                    connection.Close();
+                    return ret;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
+        public void UpdateFollowedUser(List<User> data) {
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                connection.Open();
+                MySqlTransaction ts = null;
+                try
+                {
+                    ts = connection.BeginTransaction();
+                    int affected = 0;
+                    {
+                    var cmd = new MySqlCommand("update user set followed=false", connection, ts);
+                    cmd.ExecuteNonQuery();
+                    }
+                    foreach (var user in data)
+                    {
+                        string cmdText = "insert into user values(@0,@1,@2,NOW()) on duplicate key update userName=@1,followed=@2,updateTime=NOW();\n";
+                        var cmd = new MySqlCommand(cmdText, connection, ts);
+                        cmd.Parameters.AddWithValue("@0", user.userId);
+                        cmd.Parameters.AddWithValue("@1", user.userName);
+                        cmd.Parameters.AddWithValue("@2", user.followed);
+                        affected += cmd.ExecuteNonQuery();
+                    }
+                    ts.Commit();
+                    Console.WriteLine("Affected:" + affected);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    ts.Rollback();
+                    throw;
+                }
+                connection.Close();
+            }
+        }
+        public void UpdateUserName(List<User> data)
+        {
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                connection.Open();
+                MySqlTransaction ts = null;
+                try
+                {
+                    ts = connection.BeginTransaction();
+                    int affected = 0;
+                    foreach (var user in data)
+                    {
+                        string cmdText = "insert user values(@0,@1,false,NOW()) on duplicate key update userId=@0,userName=@1,updateTime=NOW();\n";
+                        var cmd = new MySqlCommand(cmdText, connection, ts);
+                        cmd.Parameters.AddWithValue("@0", user.userId);
+                        cmd.Parameters.AddWithValue("@1", user.userName);
+                        affected += cmd.ExecuteNonQuery();
+                    }
+                    ts.Commit();
+                    Console.WriteLine("Affected:" + affected);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    ts.Rollback();
+                    throw;
+                }
+                connection.Close();
             }
         }
         public void UpdateIllustLeft(List<Illust> data)

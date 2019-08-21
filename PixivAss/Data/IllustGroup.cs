@@ -12,7 +12,19 @@ namespace PixivAss.Data
         //Original Data
         public string userId;
         public string userName;
-        //tmp
+        public Boolean followed;
+        public User(string _id,string _name,Boolean _f)
+        {
+            userId = _id;
+            userName = _name;
+            followed = _f;
+        }
+        public User(JObject json)
+        {
+            userId = json.Value<string>("userId");
+            userName = json.Value<string>("userName");
+            followed = json.Value<Boolean>("following");
+        }
     }
     class Illust
     {
@@ -38,6 +50,12 @@ namespace PixivAss.Data
         //tmp
         public string userName;
         public int bookmarkCount;
+        public Illust(string _id,string _urlFormat,int _pageCount)
+        {
+            urlFormat = _urlFormat;
+            id = _id;
+            pageCount = _pageCount;
+        }
         public Illust(JObject json)
         {
             id = json.Value<string>("illustId");
