@@ -56,12 +56,20 @@ namespace PixivAss
          */
         public async Task DownloadIllust(string id,int page,string url)
         {
-            string addr = "E:\\p\\" + id+"p"+page.ToString()+".jpg";
-            if (File.Exists(addr))
-                return;
-            Console.WriteLine("Begin:" + addr);
-            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
-            await RequestToFile(url, new Uri(referer), addr).ConfigureAwait(false);
+            string addr = "E:\\p\\" + id + "p" + page.ToString() + ".jpg";
+            try
+            {
+                if (File.Exists(addr))
+                    return;
+                Console.WriteLine("Begin:" + addr);
+                string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
+                await RequestToFile(url, new Uri(referer), addr).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                //File.Delete(addr);
+                Console.WriteLine(e.Message);
+            }
             return;
         }
         public void DownloadBookmarkPrivate()
@@ -73,17 +81,18 @@ namespace PixivAss
                 for (int i = 0; i < illust.pageCount; ++i)
                 {
                     string url = String.Format(illust.urlFormat,i);
-                    task_list.Add(DownloadIllust(illust.id,i,url));
+                    //task_list.Add();                    
+                    Task.WaitAll(new Task[] { DownloadIllust(illust.id, i, url) },TimeSpan.FromSeconds(300));
                 }
 
-                Console.WriteLine("Task "+illust.id+" "+task_list.Count);
-                if (task_list.Count > 10)
+                /*Console.WriteLine("Task "+illust.id+" "+task_list.Count);
+                if (task_list.Count > 5)
                 {
                     Task.WaitAll(task_list.ToArray());
                     task_list.Clear();
-                }
+                }*/
             }
-            Task.WaitAll(task_list.ToArray());
+            //Task.WaitAll(task_list.ToArray());
             Console.WriteLine("Downloaded "+task_list.Count);
         }
 
@@ -317,6 +326,7 @@ namespace PixivAss
                 file.Close();
                 Console.WriteLine("Done:" + addr);
                 inputStream.Close();
+                httpClient.Dispose();
                 return;
             }
             catch (Exception e)
