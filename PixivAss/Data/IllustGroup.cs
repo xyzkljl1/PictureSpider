@@ -47,17 +47,25 @@ namespace PixivAss.Data
         public Boolean readed;
         public string bookmarkEach;//分别,0:no,1:Pub,2:Private
         public DateTime updateTime;
+        public bool valid;
         //tmp
         public string userName;
         public int bookmarkCount;
+        public Illust(string _id,bool _valid)
+        {
+            id = _id;
+            valid = _valid;
+        }
         public Illust(string _id,string _urlFormat,int _pageCount)
         {
             urlFormat = _urlFormat;
             id = _id;
             pageCount = _pageCount;
+            valid = true;
         }
         public Illust(JObject json)
         {
+            valid = true;
             id = json.Value<string>("illustId");
             title = json.Value<string>("illustTitle");
             description = json.Value<string>("illustComment");

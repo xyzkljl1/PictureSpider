@@ -161,7 +161,7 @@ namespace PixivAss
                 connection.Close();
             }
         }
-        public void UpdateIllustLeft(List<Illust> data)
+        public void UpdateIllustAllCol(List<Illust> data)
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {
@@ -172,31 +172,44 @@ namespace PixivAss
                     ts = connection.BeginTransaction();
                     int affected = 0;
                     foreach (var illust in data)
-                    {
-                        string cmdText = "insert ignore user(userId) values(@userId);\n" +
-                                         "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,NOW())" +
-                                         "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
-                                         "userId=@5,width=@6,height=@7,pageCount=@8,bookmarked=@9,bookmarkPrivate=@10," +
-                                         "urlFormat=@11,urlThumbFormat=@12,updateTime=NOW();\n";
-                        var cmd = new MySqlCommand(cmdText, connection, ts);
-                        cmd.Parameters.AddWithValue("@userId", illust.userId);
-                        cmd.Parameters.AddWithValue("@0", illust.id);
-                        cmd.Parameters.AddWithValue("@1", illust.title);
-                        cmd.Parameters.AddWithValue("@2", illust.description);
-                        cmd.Parameters.AddWithValue("@3", illust.xRestrict);
-                        cmd.Parameters.AddWithValue("@4", String.Join("`", illust.tags));
-                        cmd.Parameters.AddWithValue("@5", illust.userId);
-                        cmd.Parameters.AddWithValue("@6", illust.width);
-                        cmd.Parameters.AddWithValue("@7", illust.height);
-                        cmd.Parameters.AddWithValue("@8", illust.pageCount);
-                        cmd.Parameters.AddWithValue("@9", illust.bookmarked);
-                        cmd.Parameters.AddWithValue("@10", illust.bookmarkPrivate);
-                        cmd.Parameters.AddWithValue("@11", illust.urlFormat);
-                        cmd.Parameters.AddWithValue("@12", illust.urlThumbFormat);
-                        cmd.Parameters.AddWithValue("@13", illust.readed);
-                        cmd.Parameters.AddWithValue("@14", illust.bookmarkEach);
-                        affected += cmd.ExecuteNonQuery();
-                    }
+                        if(illust.valid)
+                        {
+                            string cmdText = "insert ignore user(userId) values(@userId);\n" +
+                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,NOW(),@15)" +
+                                             "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
+                                             "userId=@5,width=@6,height=@7,pageCount=@8,bookmarked=@9,bookmarkPrivate=@10," +
+                                             "urlFormat=@11,urlThumbFormat=@12,updateTime=NOW(),valid=@15;\n";
+                            var cmd = new MySqlCommand(cmdText, connection, ts);
+                            cmd.Parameters.AddWithValue("@userId", illust.userId);
+                            cmd.Parameters.AddWithValue("@0", illust.id);
+                            cmd.Parameters.AddWithValue("@1", illust.title);
+                            cmd.Parameters.AddWithValue("@2", illust.description);
+                            cmd.Parameters.AddWithValue("@3", illust.xRestrict);
+                            cmd.Parameters.AddWithValue("@4", String.Join("`", illust.tags));
+                            cmd.Parameters.AddWithValue("@5", illust.userId);
+                            cmd.Parameters.AddWithValue("@6", illust.width);
+                            cmd.Parameters.AddWithValue("@7", illust.height);
+                            cmd.Parameters.AddWithValue("@8", illust.pageCount);
+                            cmd.Parameters.AddWithValue("@9", illust.bookmarked);
+                            cmd.Parameters.AddWithValue("@10", illust.bookmarkPrivate);
+                            cmd.Parameters.AddWithValue("@11", illust.urlFormat);
+                            cmd.Parameters.AddWithValue("@12", illust.urlThumbFormat);
+                            cmd.Parameters.AddWithValue("@13", illust.readed);
+                            cmd.Parameters.AddWithValue("@14", illust.bookmarkEach);
+                            cmd.Parameters.AddWithValue("@15", illust.valid);
+                            affected += cmd.ExecuteNonQuery();
+                        }
+                        else
+                        {
+                            string cmdText = "insert ignore user(userId) values(@userId);\n" +
+                                             "insert into illust(id,updateTime,valid) values(@0,NOW(),@1)" +
+                                             "on duplicate key update updateTime=NOW(),valid=@1;\n";
+                            var cmd = new MySqlCommand(cmdText, connection, ts);
+                            cmd.Parameters.AddWithValue("@userId", illust.userId);
+                            cmd.Parameters.AddWithValue("@0", illust.id);
+                            cmd.Parameters.AddWithValue("@1", illust.valid);
+                            affected += cmd.ExecuteNonQuery();
+                        }
                     ts.Commit();
                     Console.WriteLine("Affected:"+affected);
                 }
@@ -209,7 +222,7 @@ namespace PixivAss
                 connection.Close();
             }
         }
-        public void UpdateIllusRight(List<Illust> data)
+        public void UpdateIllustRight(List<Illust> data)
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {

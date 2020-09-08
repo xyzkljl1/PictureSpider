@@ -42,7 +42,6 @@ namespace PixivAss
             user_name = "xyzkljl1";
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
-            cookie = "";
             cookie_server = new CookieServer();
         }
         public void CheckStatusCode(HttpResponseMessage response)
@@ -54,13 +53,14 @@ namespace PixivAss
         {
             //ICIDMLinkTransmitter2 idm=new CIDMLinkTransmitter();
             //idm.SendLinkToIDM("https://www.dlsite.com/maniax/work/=/product_id/RJ273091.html","","","","","", "E:/MyWebsiteHelper","1.html",0);
-            DownloadBookmarkPrivate();
+            //DownloadBookmarkPrivate();
             //RequestSearchResult("染みパン", false);
             //CheckHomePage();
-            //FetchBookMarkIllust(true);
+            FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
             //FetchAllUser();
             //FetchIllustByList(new List<string>{ "76278759"});
+            //RequestIllustAsync("47974548");
             return "12s3";
         }
 
@@ -75,10 +75,14 @@ namespace PixivAss
             var illustList = database.GetPrivateBookmarkURL();
             foreach (var illust in illustList)
             {
+                string ext = "";
+                int pos = illust.urlFormat.LastIndexOf(".");
+                if (pos >= 0)
+                    ext = illust.urlFormat.Substring(pos + 1);
                 for (int i = 0; i < illust.pageCount; ++i)
                 {
                     string url = String.Format(illust.urlFormat, i);
-                    ct += DownloadIllust(illust.id, i, url) ? 1 : 0;
+                    ct += DownloadIllust(illust.id, i, url, ext) ? 1 : 0;
                 }
             }
             /*
@@ -97,7 +101,7 @@ namespace PixivAss
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
             JObject json =await RequestJsonAsync(url, referer).ConfigureAwait(false);
             if (json.Value<Boolean>("error"))
-                throw new Exception("Get Illust Fail");
+                return new Illust(illustId, false);
             return new Illust(json.Value<JObject>("body"));
         }
         public void FetchAllByUserId(string userId)
@@ -122,18 +126,33 @@ namespace PixivAss
             var illustList = new List<Illust>();
             foreach (var task in task_list)
                 illustList.Add(task.Result);
-            database.UpdateIllustLeft(illustList);
+            database.UpdateIllustAllCol(illustList);
         }
         public void FetchBookMarkIllust(bool pub)
         {
-            string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset=0&limit=40000&rest={2}", base_url,user_id,pub?"show":"hide");
-            string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-            JObject ret =RequestJsonAsync(url, referer).Result;
-            if (ret.Value<Boolean>("error"))
-                throw new Exception("Get Bookmark Fail");
+            int total = 0;
+            int offset = 0;
+            int page_size = 48;
             var idList = new List<string>();
-            foreach(var illust in ret.GetValue("body").Value<JArray>("works"))
-                idList.Add(illust.Value<string>("id"));
+            while (offset==0||offset<total)
+            {
+                //和获取其它用户的收藏不同，limit不能过高
+                string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset={2}&limit={3}&rest={4}",
+                                            base_url, user_id,offset,page_size, pub ? "show" : "hide");
+                string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
+                JObject ret = RequestJsonAsync(url, referer).Result;
+                if (ret.Value<Boolean>("error"))
+                    throw new Exception("Get Bookmark Fail");
+                if (offset == 0)//获取总数
+                    total = ret.GetValue("body").Value<int>("total");
+                //获取该页的id
+                foreach (var illust in ret.GetValue("body").Value<JArray>("works"))
+                    idList.Add(illust.Value<string>("id"));
+                offset += page_size;
+            }
+            //总数可能小于total，因为删除的作品会被剔掉但是不会从总数中扣除
+            if(total!=idList.Count)
+                throw new Exception("Get Bookmark Fail");
             FetchIllustByList(idList);
             Console.Write("Fetch "+ idList.Count.ToString()+" Bookmarks");
         }
@@ -272,12 +291,17 @@ namespace PixivAss
                 httpClient.DefaultRequestHeaders.Referrer = referer;
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
-                httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie);
+                httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
                 HttpResponseMessage response =await httpClient.GetAsync(url).ConfigureAwait(false);
+                //作品已删除
+                if(response.StatusCode==HttpStatusCode.NotFound)
+                    return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                //未知错误
                 CheckStatusCode(response);
+                //正常
                 return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             }
             catch (Exception e)
@@ -305,7 +329,7 @@ namespace PixivAss
                 httpClient.DefaultRequestHeaders.Referrer = referer;
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
-                //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie);
+                //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
@@ -342,9 +366,9 @@ namespace PixivAss
             doc.LoadHtml(ret);
             return doc;
         }
-        public bool DownloadIllust(string id, int page, string url)
+        public bool DownloadIllust(string id, int page, string url,string ext)
         {
-            string file_name = String.Format("{0}_p{1}.png", id, page);
+            string file_name = String.Format("{0}_p{1}.{2}", id, page,ext);
             string path = download_dir + "/" + file_name;
             try
             {
@@ -354,7 +378,7 @@ namespace PixivAss
                 string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
                 //referer = String.Format("https://www.pixiv.net/artworks/{0}",id);
                 //0x01:不确认，0x02:稍后下载
-                idm.SendLinkToIDM(url,referer,cookie,"","","", download_dir, file_name, 0x01);
+                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", download_dir, file_name, 0x01);
             }
             catch (Exception e)
             {
