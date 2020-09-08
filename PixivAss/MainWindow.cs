@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.IO;
+using System.Runtime.InteropServices;
 namespace PixivAss
 {
     public partial class MainWindow : Form
@@ -16,18 +18,12 @@ namespace PixivAss
             pixivClient = new Client();
             InitializeComponent();
         }
-
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
         private Client pixivClient;
         private Button GoButton;
         private RichTextBox PageTextBox;
-
         private void onButtonClicked(object sender, EventArgs e)
         {
-            PageTextBox.Text =pixivClient.Test();
+            PageTextBox.Text = pixivClient.Test(); 
         }
         private void InitializeComponent()
         {
@@ -37,7 +33,7 @@ namespace PixivAss
             // 
             // GoButton
             // 
-            this.GoButton.Location = new System.Drawing.Point(51, 71);
+            this.GoButton.Location = new System.Drawing.Point(51, 12);
             this.GoButton.Name = "GoButton";
             this.GoButton.Size = new System.Drawing.Size(165, 60);
             this.GoButton.TabIndex = 0;
@@ -47,7 +43,7 @@ namespace PixivAss
             // 
             // PageTextBox
             // 
-            this.PageTextBox.Location = new System.Drawing.Point(154, 303);
+            this.PageTextBox.Location = new System.Drawing.Point(51, 93);
             this.PageTextBox.Name = "PageTextBox";
             this.PageTextBox.Size = new System.Drawing.Size(473, 329);
             this.PageTextBox.TabIndex = 1;
@@ -55,13 +51,11 @@ namespace PixivAss
             // 
             // MainWindow
             // 
-            this.ClientSize = new System.Drawing.Size(1692, 731);
+            this.ClientSize = new System.Drawing.Size(1801, 731);
             this.Controls.Add(this.PageTextBox);
             this.Controls.Add(this.GoButton);
             this.Name = "MainWindow";
             this.ResumeLayout(false);
-            pixivClient.Test();
         }
-
     }
 }
