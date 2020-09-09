@@ -49,7 +49,7 @@ namespace PixivAss
                         ctx.Response.Close();
                     }
                 }
-                listerner.Stop();
+                //listerner.Stop();
             }
         }
         private void SaveCookie()

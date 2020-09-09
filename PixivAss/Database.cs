@@ -17,19 +17,88 @@ namespace PixivAss
             connect_str = String.Format("server=127.0.0.1;port=4321;UID={0};pwd={1};database={2};",
                 user,pwd,database);
         }
-        public List<Illust> GetPrivateBookmarkURL()
+        public List<string> GetAllIllustId()
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {
                 try
                 {
-                    var ret =new List<Illust>();
+                    var ret = new List<string>();
                     connection.Open();
-                    var cmd = new MySqlCommand("select * from illust where bookmarked=true and bookmarkPrivate=true", connection);
+                    var cmd = new MySqlCommand("select id from illust", connection);
                     MySqlDataReader dataReader = cmd.ExecuteReader();
                     while (dataReader.Read())
-                        ret.Add(new Illust(dataReader.GetString("id"),
-                                        dataReader.GetString("urlFormat"), dataReader.GetInt32("pageCount")));
+                        ret.Add(dataReader.GetString("id"));
+                    Console.WriteLine("Selected:" + ret.Count);
+                    connection.Close();
+                    return ret;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
+
+        public List<string> GetBookmarkIllustId(bool pub)
+        {
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                try
+                {
+                    var ret =new List<string>();
+                    connection.Open();
+                    var cmd = new MySqlCommand("select id from illust where bookmarked=true and bookmarkPrivate="+(pub?"false":"true"), connection);
+                    MySqlDataReader dataReader = cmd.ExecuteReader();
+                    while (dataReader.Read())
+                        ret.Add(dataReader.GetString("id"));
+                    Console.WriteLine("Selected:" + ret.Count);
+                    connection.Close();
+                    return ret;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
+        public List<Illust> GetAllIllustFull(bool pub)
+        {
+            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            {
+                try
+                {
+                    var ret = new List<Illust>();
+                    connection.Open();
+                    var cmd = new MySqlCommand("select * from illust", connection);
+                    MySqlDataReader dataReader = cmd.ExecuteReader();
+                    while (dataReader.Read())
+                    {
+                        Illust illust = new Illust("",true);
+                        /*id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
+                                             "userId=@5,width=@6,height=@7,pageCount=@8,bookmarked=@9,bookmarkPrivate=@10," +
+                                             "urlFormat=@11,urlThumbFormat=@12,updateTime=NOW(),valid=@15;*/
+                        illust.id=dataReader.GetString("id");
+                        illust.title=dataReader.GetString("title");
+                        illust.description=dataReader.GetString("description");
+                        illust.xRestrict=dataReader.GetInt32("xRestrict");
+                        illust.tags=dataReader.GetString("tags").Split('`').ToList();
+                        illust.userId=dataReader.GetString("userId");
+                        illust.width=dataReader.GetInt32("width");
+                        illust.height=dataReader.GetInt32("height");
+                        illust.pageCount=dataReader.GetInt32("pageCount");
+                        illust.bookmarked=dataReader.GetBoolean("bookmarked");
+                        illust.bookmarkPrivate=dataReader.GetBoolean("bookmarkPrivate");
+                        illust.urlFormat=dataReader.GetString("urlFormat");
+                        illust.urlThumbFormat=dataReader.GetString("urlThumbFormat");
+                        illust.readed=dataReader.GetBoolean("readed");
+                        illust.bookmarkEach=dataReader.GetString("bookmarkEach");
+                        illust.updateTime =Convert.ToDateTime(dataReader.GetString("updateTime"));
+                        illust.valid=dataReader.GetBoolean("valid");
+                        ret.Add(illust);
+                    }
                     Console.WriteLine("Selected:" + ret.Count);
                     connection.Close();
                     return ret;

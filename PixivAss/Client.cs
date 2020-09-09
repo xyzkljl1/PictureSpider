@@ -23,12 +23,13 @@ namespace PixivAss
     class Client
     {
         private int bookmarkLimit=1800;
-        private string cookie;
         private string user_id;
         private string base_url;
         private string base_host;
         private string user_name;
-        private string download_dir;
+        private string formal_public_dir;
+        private string formal_private_dir;
+        private string tmp_dir;
         private CookieServer cookie_server;
         private PixivAss.Database database;
         private ICIDMLinkTransmitter2 idm;
@@ -36,7 +37,9 @@ namespace PixivAss
         public Client()
         {
             idm = new CIDMLinkTransmitter();
-            download_dir = "E:/p";
+            formal_public_dir = "E:/p/pub";
+            formal_private_dir = "E:/p/private";
+            tmp_dir = "E:/p/tmp";
             database = new Database("root","pixivAss","pass");
             user_id = "16428599";
             user_name = "xyzkljl1";
@@ -56,7 +59,9 @@ namespace PixivAss
             //DownloadBookmarkPrivate();
             //RequestSearchResult("染みパン", false);
             //CheckHomePage();
-            FetchBookMarkIllust(true);
+            FetchAllKnownIllust();
+            DownloadAllIlust();
+            //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
             //FetchAllUser();
             //FetchIllustByList(new List<string>{ "76278759"});
@@ -69,20 +74,24 @@ namespace PixivAss
          * Fetch:Request and Save to Local
          * Get:Find in Local,if not exists ,Fetch then find.
          */
-        public void DownloadBookmarkPrivate()
+        //同步所有图片到本地，如有必要则进行下载/删除
+        //要求Illust信息都已更新过
+        public void DownloadAllIlust()
         {
             int ct = 0;
-            var illustList = database.GetPrivateBookmarkURL();
+            var illustList = database.GetAllIllustFull(false);
             foreach (var illust in illustList)
             {
-                string ext = "";
-                int pos = illust.urlFormat.LastIndexOf(".");
-                if (pos >= 0)
-                    ext = illust.urlFormat.Substring(pos + 1);
+                string dir = GetDownloadDir(illust);
                 for (int i = 0; i < illust.pageCount; ++i)
                 {
                     string url = String.Format(illust.urlFormat, i);
-                    ct += DownloadIllust(illust.id, i, url, ext) ? 1 : 0;
+                    string file_name = GetDownloadFileName(illust, i);
+                    bool exist = File.Exists(dir + "/" + file_name);
+                    if (exist==false&&GetShouldDownload(illust,i))
+                        ct += DownloadIllustForce(illust.id, url,dir,file_name) ? 1 : 0;
+                    else if(exist&&GetShouldDelete(illust,i))
+                        File.Delete(dir + "/" + file_name);
                 }
             }
             /*
@@ -94,6 +103,11 @@ namespace PixivAss
             */
             Console.WriteLine("Downloaded "+ ct);
         }
+        //更新所有已知的作品状态
+        public void FetchAllKnownIllust()
+        {
+            FetchIllustByList(database.GetAllIllustId());
+        }
 
         public async Task<Illust> RequestIllustAsync(string illustId)
         {
@@ -104,6 +118,7 @@ namespace PixivAss
                 return new Illust(illustId, false);
             return new Illust(json.Value<JObject>("body"));
         }
+        //获取并更新该作者的所有作品
         public void FetchAllByUserId(string userId)
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
@@ -116,6 +131,7 @@ namespace PixivAss
                 idList.Add(illust.Key.ToString());
             FetchIllustByList(idList);
         }
+        //更新指定的作品
         public void FetchIllustByList(List<string> illustIdList)
         {
             var task_list = new List<Task<Illust>>();
@@ -128,12 +144,14 @@ namespace PixivAss
                 illustList.Add(task.Result);
             database.UpdateIllustAllCol(illustList);
         }
+        //获取并更新所有收藏作品
         public void FetchBookMarkIllust(bool pub)
         {
             int total = 0;
             int offset = 0;
             int page_size = 48;
             var idList = new List<string>();
+            //查询收藏作品的id
             while (offset==0||offset<total)
             {
                 //和获取其它用户的收藏不同，limit不能过高
@@ -143,18 +161,24 @@ namespace PixivAss
                 JObject ret = RequestJsonAsync(url, referer).Result;
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
-                if (offset == 0)//获取总数
+                //获取总数,仅用于提示
+                //实际总数可能更小,因为删除的作品会被剔掉但是不会从总数中扣除
+                //已删除的作品仍然会占位,因此每次获取到的数量可能少于page_size
+                if (offset == 0)
                     total = ret.GetValue("body").Value<int>("total");
                 //获取该页的id
                 foreach (var illust in ret.GetValue("body").Value<JArray>("works"))
                     idList.Add(illust.Value<string>("id"));
                 offset += page_size;
             }
-            //总数可能小于total，因为删除的作品会被剔掉但是不会从总数中扣除
-            if(total!=idList.Count)
-                throw new Exception("Get Bookmark Fail");
+            //将当前有效的已收藏作品和可能已无效/已移除收藏的作品(即本地存储的已收藏作品)一起更新状态
+            //FetchIllust时会获取Illust是否已收藏状态，所以不需要另行更新收藏状态
+            int tmp = idList.Count;
+            foreach (var illust_id in database.GetBookmarkIllustId(pub))
+                if (!idList.Contains(illust_id))
+                    idList.Add(illust_id);
             FetchIllustByList(idList);
-            Console.Write("Fetch "+ idList.Count.ToString()+" Bookmarks");
+            Console.Write(String.Format("Fetch {0}/{1} {2} Bookmarks",pub?"Public":"Private",tmp,total));
         }
 
         public async Task<User> RequestUserAsync(string userId)
@@ -183,7 +207,8 @@ namespace PixivAss
                 throw new Exception("Get Bookmark Fail");
             return ret.GetValue("body").Value<int>("total");
         }
-        public void FetchFollowedUser()
+        //获取并更新关注的作者状态
+        public void FetchAllFollowedUser()
         {
             int total = RequestFollowedUserCount();
             var userList = new List<User>();
@@ -200,7 +225,8 @@ namespace PixivAss
             database.UpdateFollowedUser(userList);
             Console.Write("Fetch " + userList.Count.ToString() + " followings");
         }
-        public void FetchUnFollowedUserName()
+        //更新所有已知的未关注作者状态
+        public void FetchAllKnownUnfollowedUserName()
         {
             var user_list = database.GetUser(false, true);
             var task_list = new List<Task<User>>();
@@ -215,8 +241,8 @@ namespace PixivAss
         }
         public void FetchAllUser()
         {
-            FetchFollowedUser();
-            FetchUnFollowedUserName();
+            FetchAllFollowedUser();
+            FetchAllKnownUnfollowedUserName();
         }
 
         public async Task<List<string>> RequestSearchPage(string word,int page,bool text_mode)
@@ -311,49 +337,6 @@ namespace PixivAss
                 throw;
             }
         }
-        public async Task RequestToFile(string url, Uri referer,string addr)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(url))
-                    throw new ArgumentNullException("url");
-                if (!url.StartsWith("https"))
-                    throw new ArgumentException("Not SSL");
-                System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                var handler = new HttpClientHandler() { UseCookies = false };
-                handler.ServerCertificateCustomValidationCallback = delegate { return true; };
-                var httpClient = new HttpClient(handler);
-                httpClient.Timeout=TimeSpan.FromSeconds(30);
-                httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
-                httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.Referrer = referer;
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
-                httpClient.DefaultRequestHeaders.Host = base_host;
-                //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
-                httpClient.DefaultRequestHeaders.Add("upgrade-insecure-requests", "1");
-                //httpClient.DefaultRequestHeaders.Add("if-modified-since", "Mon, 29 Jan 2018 18:53:22 GMT");
-                httpClient.DefaultRequestHeaders.Add("cache-control", "max-age=0");
-                httpClient.DefaultRequestHeaders.Add("upgrade-insecure-requests", "1");
-                httpClient.DefaultRequestHeaders.AcceptEncoding.ParseAdd("gzip, deflate, br");
-                Stream inputStream=await httpClient.GetStreamAsync(url).ConfigureAwait(false);
-                FileStream file = File.Open(addr, FileMode.Create);
-                await inputStream.CopyToAsync(file);
-                file.Close();
-                Console.WriteLine("Done:" + addr);
-                inputStream.Close();
-                httpClient.Dispose();
-                return;
-            }
-            catch (Exception e)
-            {
-                string msg = e.Message;//e.InnerException.InnerException.Message;
-                Console.WriteLine(msg);
-                throw;
-            }
-        }
         public async Task<JObject> RequestJsonAsync(string url,string referer)
         {
             JObject jsonobj = (JObject)JsonConvert.DeserializeObject(await RequestAsync(url, new Uri(referer)).ConfigureAwait(false));
@@ -366,19 +349,20 @@ namespace PixivAss
             doc.LoadHtml(ret);
             return doc;
         }
-        public bool DownloadIllust(string id, int page, string url,string ext)
+        //将指定图片下载到本地
+        //如已存在则先删除
+        public bool DownloadIllustForce(string id,string url, string dir,string file_name)
         {
-            string file_name = String.Format("{0}_p{1}.{2}", id, page,ext);
-            string path = download_dir + "/" + file_name;
+            string path = dir + "/" + file_name;
             try
             {
                 if (File.Exists(path))
-                    return false;
+                    File.Delete(path);
                 Console.WriteLine("Begin:" + file_name);
                 string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
                 //referer = String.Format("https://www.pixiv.net/artworks/{0}",id);
                 //0x01:不确认，0x02:稍后下载
-                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", download_dir, file_name, 0x01);
+                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", dir, file_name, 0x01);
             }
             catch (Exception e)
             {
@@ -386,6 +370,48 @@ namespace PixivAss
                 return false;
             }
             return true;
+        }
+
+        //必须在GetShouldDownload返回false的情况下使用
+        public bool GetShouldDelete(Illust illust, int page)
+        {
+            if (illust.bookmarked)//已收藏作品里只有不喜欢和已删除的图不需要下载
+                return illust.valid;//如果是不喜欢的则删掉，否则留着
+            else if (illust.readed)//已看过且未收藏的作品无论是哪种都可以删
+                return true;
+            return false;//未读作品留着
+        }
+
+        public bool GetShouldDownload(Illust illust, int page)
+        {
+            if (!illust.valid)
+                return false;
+            if(illust.bookmarked)
+            {
+                //illust.bookmarkEach
+                return true;
+            }
+            if (illust.readed)
+                return false;
+            return true;
+        }
+
+        public string GetDownloadFileName(Illust illust, int page)
+        {
+            string ext = "";
+            int pos = illust.urlFormat.LastIndexOf(".");
+            if (pos >= 0)
+                ext = illust.urlFormat.Substring(pos + 1);
+            return String.Format("{0}_p{1}.{2}", illust.id, page, ext);
+        }
+
+        public string GetDownloadDir(Illust illust)
+        {
+            if (illust.bookmarked && illust.bookmarkPrivate)
+                return this.formal_private_dir;
+            else if (illust.bookmarked && !illust.bookmarkPrivate)
+                return this.formal_public_dir;
+            return this.tmp_dir;
         }
     }
 }
