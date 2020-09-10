@@ -1,22 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Data.SQLite;
-using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PixivAss.Data;
 using IDManLib;
-using System.Threading;
 
 namespace PixivAss
 {
@@ -31,9 +23,9 @@ namespace PixivAss
         private string formal_private_dir;
         private string tmp_dir;
         private CookieServer cookie_server;
-        private PixivAss.Database database;
+        public  Database database;
         private ICIDMLinkTransmitter2 idm;
-        //private HttpClient httpClient;
+        private HttpClient httpClient;
         public Client()
         {
             idm = new CIDMLinkTransmitter();
@@ -46,6 +38,24 @@ namespace PixivAss
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
             cookie_server = new CookieServer();
+
+            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            var handler = new HttpClientHandler()
+            {
+                UseCookies = false,
+                Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.01", 1081), false)
+            };
+            handler.ServerCertificateCustomValidationCallback = delegate { return true; };
+            httpClient = new HttpClient(handler);
+            httpClient.Timeout = new TimeSpan(0, 1, 0);
+            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+            httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
+            httpClient.DefaultRequestHeaders.Host = base_host;
+            httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
+            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
+            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
+            httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
         }
         public void CheckStatusCode(HttpResponseMessage response)
         {
@@ -79,7 +89,7 @@ namespace PixivAss
         public void DownloadAllIlust()
         {
             int ct = 0;
-            var illustList = database.GetAllIllustFull(false);
+            var illustList = database.GetAllIllustFull();
             foreach (var illust in illustList)
             {
                 string dir = GetDownloadDir(illust);
@@ -140,8 +150,8 @@ namespace PixivAss
             var task_list = new List<Task<Illust>>();
             foreach (var illustId in illustIdList)
             {
+
                 task_list.Add(RequestIllustAsync(illustId));
-                
             }
 
             Task.WaitAll(task_list.ToArray(),1000*60*60*2);
@@ -319,28 +329,12 @@ namespace PixivAss
             {
                 try
                 {
+                    Console.WriteLine("Begin " + try_ct.ToString() + " " + url);
                     if (string.IsNullOrEmpty(url))
                         throw new ArgumentNullException("url");
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
-                    System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                    var handler = new HttpClientHandler()
-                    {
-                        UseCookies = false,
-                        Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.01", 1081), false)
-                    };
-                    handler.ServerCertificateCustomValidationCallback = delegate { return true; };
-                    var httpClient = new HttpClient(handler);
-                    httpClient.Timeout = new TimeSpan(0,100,0);
-                    httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
-                    httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
                     httpClient.DefaultRequestHeaders.Referrer = referer;
-                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
-                    httpClient.DefaultRequestHeaders.Host = base_host;
-                    httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-                    httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
-                    httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
-                    httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
                     HttpResponseMessage response = await httpClient.GetAsync(url).ConfigureAwait(false);
                     //作品已删除
                     if (response.StatusCode == HttpStatusCode.NotFound)
