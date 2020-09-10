@@ -17,15 +17,24 @@ namespace PixivAss
             public DateTime required_time;
             public bool is_using = false;
         }
-        private const int cache_size = 20;
+        private const int cache_size = 30;
         private List<ImageCache> cache_pool = new List<ImageCache>();
         private List<Illust> illust_list = new List<Illust>();
         private Image empty_image;
         private int index = 0;
-        Client pixivClient;
+        private int sub_index = 0;
+        public Client pixivClient;
+
+        private Label title_label;
+        private Label page_label;
         public Explorer()
         {
             this.SizeMode = PictureBoxSizeMode.Zoom;
+        }
+        public void SetLabel(Label _title,Label _page)
+        {
+            title_label = _title;
+            page_label = _page;
         }
         public void SetClient(Client _client)
         {
@@ -35,9 +44,8 @@ namespace PixivAss
                 empty_image = Image.FromFile(path);
             else
                 empty_image = new Bitmap(1, 1);
-            SetAllIllust();
         }
-        private void SetAllIllust()
+        public void SetAllIllust()
         {
             this.Image = null;
             cache_pool.Clear();
@@ -45,16 +53,27 @@ namespace PixivAss
             foreach (var illust in pixivClient.database.GetAllIllustFull())
                 if (illust.bookmarked && illust.bookmarkPrivate == false)
                     illust_list.Add(illust);
-            SlideTo(0);
+            SlideTo(0,0);
         }
-        private void SlideTo(int i)
+        private void SlideTo(int i,int j)
         {
             if (i >= illust_list.Count || i < 0)
                 return;
             Illust illust = illust_list[i];
             ImageCache cache = Load(illust);
-            this.Image = cache.data[0];
+            if (j < cache.data.Count)
+                this.Image = cache.data[j];
+            else
+                this.Image = empty_image;
             index = i;
+            sub_index = j;
+
+            title_label.Text = String.Format("{0}\n{1}",illust.title,illust.description);
+            page_label.Text = String.Format("{0}/{1}",sub_index+1,illust.pageCount);
+
+            for (int idx = i - 5; idx < i + 5; ++idx)
+                if (idx >= 0 && idx <= illust_list.Count)
+                    Load(illust_list[idx]);
         }
         private ImageCache Load(Illust illust)
         {
@@ -94,15 +113,42 @@ namespace PixivAss
         {
             int new_index = index + i;
             if (new_index >= 0 && new_index < illust_list.Count)
-                SlideTo(new_index);
+                SlideTo(new_index,0);
+        }
+        private void SlideVertical(int i)
+        {
+            int new_index = sub_index + i;
+            if (new_index >= 0 && new_index < illust_list[index].pageCount)
+                SlideTo(index,new_index);
         }
 
+        public void SlideRight(object sender,EventArgs args)
+        {
+            SlideHorizon(1);
+        }
+        public void SlideLeft(object sender, EventArgs args)
+        {
+            SlideHorizon(-1);
+        }
+        public void SlideUp(object sender, EventArgs args)
+        {
+            SlideVertical(-1);
+        }
+        public void SlideDown(object sender, EventArgs args)
+        {
+            SlideVertical(1);
+        }
         public void OnKeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Left)
                 SlideHorizon(-1);
             else if (e.KeyCode == Keys.Right)
                 SlideHorizon(1);
+            else if (e.KeyCode == Keys.Up)
+                SlideVertical(-1);
+            else if (e.KeyCode == Keys.Down)
+                SlideVertical(1);
+
         }
     }
 }

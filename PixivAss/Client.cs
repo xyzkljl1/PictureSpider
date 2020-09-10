@@ -72,7 +72,7 @@ namespace PixivAss
             //RequestSearchResult("染みパン", false);
             //CheckHomePage();
             //FetchAllKnownIllust();
-            //DownloadAllIlust();
+            DownloadAllIlust();
             //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
             //FetchAllUser();
@@ -100,8 +100,11 @@ namespace PixivAss
                     string url = String.Format(illust.urlFormat, i);
                     string file_name = GetDownloadFileName(illust, i);
                     bool exist = File.Exists(dir + "/" + file_name);
-                    if (exist==false&&GetShouldDownload(illust,i))
-                        ct += DownloadIllustForce(illust.id, url,dir,file_name) ? 1 : 0;
+                    if (GetShouldDownload(illust,i))
+                    {
+                        if(!exist)
+                            ct += DownloadIllustForce(illust.id, url, dir, file_name) ? 1 : 0;
+                    }
                     else if(exist&&GetShouldDelete(illust,i))
                         File.Delete(dir + "/" + file_name);
                 }
