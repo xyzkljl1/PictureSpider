@@ -1,22 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Data.SQLite;
-using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PixivAss.Data;
 using IDManLib;
-using System.Threading;
 
 namespace PixivAss
 {
@@ -31,7 +23,7 @@ namespace PixivAss
         private string formal_private_dir;
         private string tmp_dir;
         private CookieServer cookie_server;
-        private PixivAss.Database database;
+        public  Database database;
         private ICIDMLinkTransmitter2 idm;
         private HttpClient httpClient;
         public Client()
@@ -97,7 +89,7 @@ namespace PixivAss
         public void DownloadAllIlust()
         {
             int ct = 0;
-            var illustList = database.GetAllIllustFull(false);
+            var illustList = database.GetAllIllustFull();
             foreach (var illust in illustList)
             {
                 string dir = GetDownloadDir(illust);
