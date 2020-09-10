@@ -33,10 +33,10 @@ namespace PixivAss
         private CookieServer cookie_server;
         private PixivAss.Database database;
         private ICIDMLinkTransmitter2 idm;
-        //private HttpClient httpClient;
+        private HttpClient httpClient;
         public Client()
         {
-            //idm = new CIDMLinkTransmitter();
+            idm = new CIDMLinkTransmitter();
             formal_public_dir = "E:/p/pub";
             formal_private_dir = "E:/p/private";
             tmp_dir = "E:/p/tmp";
