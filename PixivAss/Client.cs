@@ -60,7 +60,7 @@ namespace PixivAss
             //RequestSearchResult("染みパン", false);
             //CheckHomePage();
             FetchAllKnownIllust();
-            DownloadAllIlust();
+            //DownloadAllIlust();
             //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
             //FetchAllUser();
@@ -114,6 +114,8 @@ namespace PixivAss
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
             JObject json =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            if (!json.HasValues)
+                return new Illust(illustId,false);
             if (json.Value<Boolean>("error"))
                 return new Illust(illustId, false);
             return new Illust(json.Value<JObject>("body"));
@@ -134,15 +136,25 @@ namespace PixivAss
         //更新指定的作品
         public void FetchIllustByList(List<string> illustIdList)
         {
+            //illustIdList = new List<string> { "47974548" };
             var task_list = new List<Task<Illust>>();
             foreach (var illustId in illustIdList)
+            {
                 task_list.Add(RequestIllustAsync(illustId));
-            Task.WaitAll(task_list.ToArray());
+                
+            }
 
+            Task.WaitAll(task_list.ToArray(),1000*60*60*2);
             var illustList = new List<Illust>();
+            int ct = 0;
             foreach (var task in task_list)
+            {
                 illustList.Add(task.Result);
-            database.UpdateIllustAllCol(illustList);
+                if (task.Status==TaskStatus.RanToCompletion)
+                    ct++;
+            }
+            Console.WriteLine(ct);
+            //database.UpdateIllustAllCol(illustList);
         }
         //获取并更新所有收藏作品
         public void FetchBookMarkIllust(bool pub)
@@ -302,40 +314,51 @@ namespace PixivAss
         }
         public async Task<string> RequestAsync(string url,Uri referer)
         {
-            try
+            int try_ct = 5;
+            while(true)
             {
-                if (string.IsNullOrEmpty(url))
-                    throw new ArgumentNullException("url");
-                if (!url.StartsWith("https"))
-                    throw new ArgumentException("Not SSL");
-                System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                var handler = new HttpClientHandler() { UseCookies = false };
-                handler.ServerCertificateCustomValidationCallback = delegate { return true; };
-                var httpClient = new HttpClient(handler);
-                httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
-                httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.Referrer = referer;
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
-                httpClient.DefaultRequestHeaders.Host = base_host;
-                httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
-                httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
-                HttpResponseMessage response =await httpClient.GetAsync(url).ConfigureAwait(false);
-                //作品已删除
-                if(response.StatusCode==HttpStatusCode.NotFound)
+                try
+                {
+                    if (string.IsNullOrEmpty(url))
+                        throw new ArgumentNullException("url");
+                    if (!url.StartsWith("https"))
+                        throw new ArgumentException("Not SSL");
+                    System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                    var handler = new HttpClientHandler()
+                    {
+                        UseCookies = false,
+                        Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.01", 1081), false)
+                    };
+                    handler.ServerCertificateCustomValidationCallback = delegate { return true; };
+                    var httpClient = new HttpClient(handler);
+                    httpClient.Timeout = new TimeSpan(0,100,0);
+                    httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+                    httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
+                    httpClient.DefaultRequestHeaders.Referrer = referer;
+                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
+                    httpClient.DefaultRequestHeaders.Host = base_host;
+                    httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
+                    httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
+                    httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
+                    httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
+                    HttpResponseMessage response = await httpClient.GetAsync(url).ConfigureAwait(false);
+                    //作品已删除
+                    if (response.StatusCode == HttpStatusCode.NotFound)
+                        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    //未知错误
+                    CheckStatusCode(response);
+                    //正常
                     return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                //未知错误
-                CheckStatusCode(response);
-                //正常
-                return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            }
-            catch (Exception e)
-            {
-                string msg = e.Message;//e.InnerException.InnerException.Message;
-                Console.WriteLine(msg);
-                throw;
-            }
+                }
+                catch (Exception e)
+                {
+                    string msg = e.Message;//e.InnerException.InnerException.Message;
+                    Console.WriteLine(msg+"Re Try "+try_ct.ToString()+" On :"+url);
+                    if (try_ct==0)
+                        throw;
+                    try_ct--;
+                }
+            }       
         }
         public async Task<JObject> RequestJsonAsync(string url,string referer)
         {
