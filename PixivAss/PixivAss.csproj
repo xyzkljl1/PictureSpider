@@ -80,6 +80,9 @@
     <Compile Include="CookieServer.cs" />
     <Compile Include="Database.cs" />
     <Compile Include="Data\IllustGroup.cs" />
+    <Compile Include="Explorer.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="MainWindow.cs">
       <SubType>Form</SubType>
     </Compile>

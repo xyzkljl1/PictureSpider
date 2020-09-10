@@ -14,6 +14,7 @@ namespace PixivAss
 {
     class Client
     {
+        private const string download_dir="E:/p/";
         private int bookmarkLimit=1800;
         private string user_id;
         private string base_url;
@@ -22,6 +23,7 @@ namespace PixivAss
         private string formal_public_dir;
         private string formal_private_dir;
         private string tmp_dir;
+        public string special_dir;
         private CookieServer cookie_server;
         public  Database database;
         private ICIDMLinkTransmitter2 idm;
@@ -29,9 +31,11 @@ namespace PixivAss
         public Client()
         {
             idm = new CIDMLinkTransmitter();
-            formal_public_dir = "E:/p/pub";
-            formal_private_dir = "E:/p/private";
-            tmp_dir = "E:/p/tmp";
+            formal_public_dir = download_dir+"pub";
+            formal_private_dir = download_dir+"private";
+            tmp_dir = download_dir+"tmp";
+            special_dir = download_dir +"special";
+
             database = new Database("root","pixivAss","pass");
             user_id = "16428599";
             user_name = "xyzkljl1";
@@ -47,7 +51,7 @@ namespace PixivAss
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
-            httpClient.Timeout = new TimeSpan(0, 1, 0);
+            httpClient.Timeout = new TimeSpan(0, 60, 0);
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
@@ -64,12 +68,10 @@ namespace PixivAss
         }
         public string Test()
         {
-            //ICIDMLinkTransmitter2 idm=new CIDMLinkTransmitter();
-            //idm.SendLinkToIDM("https://www.dlsite.com/maniax/work/=/product_id/RJ273091.html","","","","","", "E:/MyWebsiteHelper","1.html",0);
             //DownloadBookmarkPrivate();
             //RequestSearchResult("染みパン", false);
             //CheckHomePage();
-            FetchAllKnownIllust();
+            //FetchAllKnownIllust();
             //DownloadAllIlust();
             //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
@@ -146,25 +148,14 @@ namespace PixivAss
         //更新指定的作品
         public void FetchIllustByList(List<string> illustIdList)
         {
-            //illustIdList = new List<string> { "47974548" };
             var task_list = new List<Task<Illust>>();
             foreach (var illustId in illustIdList)
-            {
-
                 task_list.Add(RequestIllustAsync(illustId));
-            }
-
             Task.WaitAll(task_list.ToArray(),1000*60*60*2);
             var illustList = new List<Illust>();
-            int ct = 0;
             foreach (var task in task_list)
-            {
                 illustList.Add(task.Result);
-                if (task.Status==TaskStatus.RanToCompletion)
-                    ct++;
-            }
-            Console.WriteLine(ct);
-            //database.UpdateIllustAllCol(illustList);
+            database.UpdateIllustAllCol(illustList);
         }
         //获取并更新所有收藏作品
         public void FetchBookMarkIllust(bool pub)
@@ -379,7 +370,7 @@ namespace PixivAss
                 string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
                 //referer = String.Format("https://www.pixiv.net/artworks/{0}",id);
                 //0x01:不确认，0x02:稍后下载
-                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", dir, file_name, 0x01);
+                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", dir, file_name, 0x01|0x02);
             }
             catch (Exception e)
             {

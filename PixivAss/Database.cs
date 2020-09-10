@@ -64,7 +64,7 @@ namespace PixivAss
                 }
             }
         }
-        public List<Illust> GetAllIllustFull(bool pub)
+        public List<Illust> GetAllIllustFull()
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {

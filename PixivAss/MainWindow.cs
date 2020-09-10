@@ -1,36 +1,28 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using PixivAss;
 using System.Windows.Forms;
-using System.IO;
-using System.Runtime.InteropServices;
 namespace PixivAss
 {
     public partial class MainWindow : Form
     {
+        private Client pixivClient;
+        private Button GoButton;
         public MainWindow()
         {
             pixivClient = new Client();
             InitializeComponent();
+            MainExplorer.SetClient(pixivClient);
+            GoButton.KeyUp+= new KeyEventHandler(MainExplorer.OnKeyUp);
         }
-        private Client pixivClient;
-        private Button GoButton;
-        private RichTextBox PageTextBox;
         private void onButtonClicked(object sender, EventArgs e)
         {
-            PageTextBox.Text = pixivClient.Test();
+            pixivClient.Test();
         }
         private void InitializeComponent()
         {
             this.GoButton = new System.Windows.Forms.Button();
-            this.PageTextBox = new System.Windows.Forms.RichTextBox();
-            this.MainPictureBox = new System.Windows.Forms.PictureBox();
-            ((System.ComponentModel.ISupportInitialize)(this.MainPictureBox)).BeginInit();
+            this.MainExplorer = new PixivAss.Explorer();
+            ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).BeginInit();
             this.SuspendLayout();
             // 
             // GoButton
@@ -43,35 +35,25 @@ namespace PixivAss
             this.GoButton.UseVisualStyleBackColor = true;
             this.GoButton.Click += new System.EventHandler(this.onButtonClicked);
             // 
-            // PageTextBox
+            // MainExplorer
             // 
-            this.PageTextBox.Location = new System.Drawing.Point(259, 12);
-            this.PageTextBox.Name = "PageTextBox";
-            this.PageTextBox.Size = new System.Drawing.Size(374, 60);
-            this.PageTextBox.TabIndex = 1;
-            this.PageTextBox.Text = "";
-            // 
-            // MainPictureBox
-            // 
-            this.MainPictureBox.Location = new System.Drawing.Point(51, 78);
-            this.MainPictureBox.Name = "MainPictureBox";
-            this.MainPictureBox.Size = new System.Drawing.Size(582, 641);
-            this.MainPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
-            this.MainPictureBox.TabIndex = 2;
-            this.MainPictureBox.TabStop = false;
+            this.MainExplorer.Location = new System.Drawing.Point(51, 92);
+            this.MainExplorer.Name = "MainExplorer";
+            this.MainExplorer.Size = new System.Drawing.Size(1034, 727);
+            this.MainExplorer.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.MainExplorer.TabIndex = 2;
+            this.MainExplorer.TabStop = false;
             // 
             // MainWindow
             // 
-            this.ClientSize = new System.Drawing.Size(1801, 731);
-            this.Controls.Add(this.MainPictureBox);
-            this.Controls.Add(this.PageTextBox);
+            this.ClientSize = new System.Drawing.Size(1097, 831);
+            this.Controls.Add(this.MainExplorer);
             this.Controls.Add(this.GoButton);
             this.Name = "MainWindow";
-            ((System.ComponentModel.ISupportInitialize)(this.MainPictureBox)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).EndInit();
             this.ResumeLayout(false);
-
         }
 
-        private PictureBox MainPictureBox;
+        private Explorer MainExplorer;
     }
 }
