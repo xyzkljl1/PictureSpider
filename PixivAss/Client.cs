@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http;
+using System.Linq;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -12,10 +13,13 @@ using IDManLib;
 
 namespace PixivAss
 {
-    class Client
+    /*
+     * 不要在主线程中对async任务waitall
+     * https://docs.microsoft.com/zh-cn/archive/msdn-magazine/2013/march/async-await-best-practices-in-asynchronous-programming
+     */
+    partial class Client:IDisposable
     {
         private const string download_dir="E:/p/";
-        private int bookmarkLimit=1800;
         private string user_id;
         private string base_url;
         private string base_host;
@@ -28,6 +32,7 @@ namespace PixivAss
         public  Database database;
         private ICIDMLinkTransmitter2 idm;
         private HttpClient httpClient;
+        private HashSet<string> banned_keyword;
         public Client()
         {
             idm = new CIDMLinkTransmitter();
@@ -45,13 +50,16 @@ namespace PixivAss
 
             System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
-            {
-                UseCookies = false,
-                Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.01", 1081), false)
-            };
+                                        {
+                                            MaxConnectionsPerServer = 256,
+                                            UseCookies = false,
+                                            Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.0.1", 1081), false)
+                                        };            
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
-            httpClient.Timeout = new TimeSpan(0, 60, 0);
+            
+            //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
+            httpClient.Timeout = new TimeSpan(0, 0, 35);
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
@@ -60,55 +68,69 @@ namespace PixivAss
             httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
             httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
             httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
+            httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            Task.Run(CheckHomePage);
+            banned_keyword = database.GetBannedKeyword();
         }
-        public void CheckStatusCode(HttpResponseMessage response)
+        public void Dispose()
         {
-            if (!response.IsSuccessStatusCode)
-                throw new Exception("HTTP Not Success");
+            httpClient.Dispose();
         }
-        public string Test()
+        public async Task<string> Test()
         {
             //DownloadBookmarkPrivate();
-            //RequestSearchResult("染みパン", false);
-            //CheckHomePage();
-            //FetchAllKnownIllust();
-            DownloadAllIlust();
+            Task.Run(()=> { this.DownloadAllIlust(); });
+            //await FetchAllKeywordSearchResult().ConfigureAwait(false);
+            //await FetchAllFollowedUserIllust().ConfigureAwait(false);
+            //await FetchAllKnownIllust().ConfigureAwait(false);
+            //DownloadAllIlust();
             //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
             //FetchAllUser();
             //FetchIllustByList(new List<string>{ "76278759"});
-            //RequestIllustAsync("47974548");
+            //RequestIllustAsync("44302315");
             return "12s3";
         }
 
         /*
-         * Request:Query from remote and return result
-         * Fetch:Request and Save to Local
-         * Get:Find in Local,if not exists ,Fetch then find.
+         * Request:从远端查询并返回结果
+         * Fetch:从远端查询并存储到数据库
          */
         //同步所有图片到本地，如有必要则进行下载/删除
         //要求Illust信息都已更新过
         public void DownloadAllIlust()
         {
             int ct = 0;
+            //string text="";
             var illustList = database.GetAllIllustFull();
-            foreach (var illust in illustList)
-            {
-                string dir = GetDownloadDir(illust);
-                for (int i = 0; i < illust.pageCount; ++i)
+            //using (StreamWriter sw = new StreamWriter("E:/0/task.txt"))
+                foreach (var illust in illustList)
                 {
-                    string url = String.Format(illust.urlFormat, i);
-                    string file_name = GetDownloadFileName(illust, i);
-                    bool exist = File.Exists(dir + "/" + file_name);
-                    if (GetShouldDownload(illust,i))
+                    string dir = GetDownloadDir(illust);
+                    for (int i = 0; i < illust.pageCount; ++i)
                     {
-                        if(!exist)
-                            ct += DownloadIllustForce(illust.id, url, dir, file_name) ? 1 : 0;
+                        string url = String.Format(illust.urlFormat, i);
+                        string file_name = GetDownloadFileName(illust, i);
+                        bool exist = File.Exists(dir + "/" + file_name);
+                        if (GetShouldDownload(illust, i))
+                        {
+                            if (!exist)
+                            /*{ 
+                                var text = String.Format("<\n{0}\nreferer: {1}\ncookie: {2}\n{3}\n>\n",
+                                    url, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=17439605",
+                                    cookie_server.cookie, "User-Agent: Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko"
+                                    );
+                                sw.Write(text);
+                            }*/
+                                                           ct += DownloadIllustForce(illust.id, url, dir, file_name) ? 1 : 0;
+                        }
+                        else if (exist && GetShouldDelete(illust, i))
+                            File.Delete(dir + "/" + file_name);
                     }
-                    else if(exist&&GetShouldDelete(illust,i))
-                        File.Delete(dir + "/" + file_name);
                 }
-            }
+
+            //File.WriteAllText(", text);
+
             /*
              * 仔细想想似乎并没有监视的必要
             FileSystemWatcher watcher=new FileSystemWatcher();
@@ -116,52 +138,130 @@ namespace PixivAss
             watcher.IncludeSubdirectories = false;
             watcher.EnableRaisingEvents = true;
             */
-            Console.WriteLine("Downloaded "+ ct);
+            Console.WriteLine(String.Format("Downloaded {0}", ct));
         }
         //更新所有已知的作品状态
-        public void FetchAllKnownIllust()
+        public async Task FetchAllKnownIllust()
         {
-            FetchIllustByList(database.GetAllIllustId());
+            await FetchIllustByIdList(database.GetAllIllustId()).ConfigureAwait(false);
         }
 
-        public async Task<Illust> RequestIllustAsync(string illustId)
-        {
-            string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
-            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
-            JObject json =await RequestJsonAsync(url, referer).ConfigureAwait(false);
-            if (!json.HasValues)
-                return new Illust(illustId,false);
-            if (json.Value<Boolean>("error"))
-                return new Illust(illustId, false);
-            return new Illust(json.Value<JObject>("body"));
+        //搜索结果太多,必须分段进行
+        public async Task FetchAllKeywordSearchResult()
+        {            
+            var key_word_list=new List<string>();
+            var task_list = new Dictionary<string, Task<List<string>>>();
+            var tmp = "";
+            //用or合并关键字可以减少重复
+            foreach (var word in database.GetAllKeyword())
+            {
+                tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
+                if (tmp.Length > 1600)
+                {
+                    key_word_list.Add(tmp);
+                    tmp = "";
+                }
+            }
+            int start_page = 700;
+            int step = 100;
+            var set = new HashSet<string>();
+            while(key_word_list.Count>0)
+            {
+                foreach(var key in key_word_list)
+                {
+                    var task= RequestSearchResult(key, false, start_page, start_page + step);
+                    task.ConfigureAwait(false);
+                    task_list[key] = task;
+                }
+                await Task.WhenAll(task_list.Values).ConfigureAwait(false);
+                //丢掉已经搜索完的
+                foreach (var key in task_list.Keys)
+                    if (task_list[key].Result.Count == 0)
+                    {
+                        key_word_list.Remove(key);
+                        Console.WriteLine("Keyword " + key.Substring(0,20)+" Done");
+                    }
+                //合并结果
+                foreach (var task in task_list.Values)
+                    foreach (var id in task.Result)
+                        set.Add(id);
+                task_list.Clear();
+                if (set.Count > 30000)
+                {
+                    await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+                    Console.WriteLine("Update Search Res " + set.Count.ToString());
+                    set.Clear();
+                }
+                else
+                    Console.WriteLine("Search Res: " + set.Count.ToString());
+                start_page += step;
+            }
+            if (set.Count > 0)
+            {
+                await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+                Console.WriteLine("Update Search Res " + set.Count.ToString());
+            }
+            Console.WriteLine("Update Search Res  Done");
+            return;
         }
+        public async Task FetchAllFollowedUserIllust()
+        {
+            var task_list=new List<Task<List<string>>>();
+            foreach(var user in database.GetUser(true,false))
+            {
+                var task=RequestAllByUserId(user.userId);
+                task.ConfigureAwait(false);
+                task_list.Add(task);
+            }
+            await Task.WhenAll(task_list.ToArray()).ConfigureAwait(false);
+            var set = new HashSet<string>();
+            foreach (var task in task_list)
+                foreach (var id in task.Result)
+                    set.Add(id);
+            await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+        }
+
         //获取并更新该作者的所有作品
-        public void FetchAllByUserId(string userId)
+        public async Task<List<string>> RequestAllByUserId(string userId)
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret = RequestJsonAsync(url, referer).Result;
+            JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get All By User Fail");
             var idList = new List<string>();
             foreach (var illust in ret.GetValue("body").Value<JObject>("illusts"))
                 idList.Add(illust.Key.ToString());
-            FetchIllustByList(idList);
+            return idList;
         }
-        //更新指定的作品
-        public void FetchIllustByList(List<string> illustIdList)
+        //先从本地去重再FetchIllustByIdList
+        public async Task FetchIllustByIdSetReduce(HashSet<string> id_list)
         {
-            var task_list = new List<Task<Illust>>();
+            var local_illust = new HashSet<string>();
+            DateTime timeline = DateTime.UtcNow.AddDays(-7);
+            foreach (var illust in database.GetAllIllustFull())
+                if (illust.updateTime > timeline)
+                    local_illust.Add(illust.id);
+            var all_illust = new List<string>();
+            foreach (var id in id_list)
+                if (!local_illust.Contains(id))
+                    all_illust.Add(id);
+            await FetchIllustByIdList(all_illust).ConfigureAwait(false);
+        }
+        //获取并更新指定的作品
+        public async Task FetchIllustByIdList(List<string> illustIdList)
+        {
+            var queue = new TaskQueue<Illust>(3000);
             foreach (var illustId in illustIdList)
-                task_list.Add(RequestIllustAsync(illustId));
-            Task.WaitAll(task_list.ToArray(),1000*60*60*2);
+                await queue.Add(RequestIllustAsync(illustId)).ConfigureAwait(false);
+            await queue.Done().ConfigureAwait(false);
             var illustList = new List<Illust>();
-            foreach (var task in task_list)
+            foreach (var task in queue.done_task_list)
                 illustList.Add(task.Result);
-            database.UpdateIllustAllCol(illustList);
+            database.UpdateIllustOriginalData(illustList);
         }
         //获取并更新所有收藏作品
-        public void FetchBookMarkIllust(bool pub)
+        public async Task FetchBookMarkIllust(bool pub)
         {
             int total = 0;
             int offset = 0;
@@ -174,7 +274,7 @@ namespace PixivAss
                 string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset={2}&limit={3}&rest={4}",
                                             base_url, user_id,offset,page_size, pub ? "show" : "hide");
                 string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-                JObject ret = RequestJsonAsync(url, referer).Result;
+                JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 //获取总数,仅用于提示
@@ -193,46 +293,19 @@ namespace PixivAss
             foreach (var illust_id in database.GetBookmarkIllustId(pub))
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
-            FetchIllustByList(idList);
+            await FetchIllustByIdList(idList).ConfigureAwait(false);
             Console.Write(String.Format("Fetch {0}/{1} {2} Bookmarks",pub?"Public":"Private",tmp,total));
         }
-
-        public async Task<User> RequestUserAsync(string userId)
-        {
-            string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
-            string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
-            if (ret.Value<Boolean>("error"))
-                throw new Exception("Get User Fail");
-            var userName = ret.GetValue("body").Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
-            if (ret.GetValue("body").Value<JObject>("illusts").Count > 0)
-                foreach(var illustId in ret.GetValue("body").Value<JObject>("illusts"))
-                {
-                    var illust = await RequestIllustAsync(illustId.Key);
-                    userName = illust.userName;
-                    break;
-                }
-            return new User(userId,userName ,false);
-        }
-        public int RequestFollowedUserCount()
-        {
-            string url = String.Format("{0}ajax/user/{1}/following?offset=0&limit=1&rest=show", base_url, user_id);
-            string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-            JObject ret = RequestJsonAsync(url, referer).Result;
-            if (ret.Value<Boolean>("error"))
-                throw new Exception("Get Bookmark Fail");
-            return ret.GetValue("body").Value<int>("total");
-        }
         //获取并更新关注的作者状态
-        public void FetchAllFollowedUser()
+        public async Task FetchFollowedUserList()
         {
-            int total = RequestFollowedUserCount();
+            int total = await RequestFollowedUserCount().ConfigureAwait(false);
             var userList = new List<User>();
             for (int i = 0; i < total; i += 100)
             {
                 string url = String.Format("{0}ajax/user/{1}/following?offset={2}&limit=100&rest=show", base_url, user_id,i);
                 string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-                JObject ret = RequestJsonAsync(url, referer).Result;
+                JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 foreach (var user in ret.GetValue("body").Value<JArray>("users"))
@@ -242,187 +315,72 @@ namespace PixivAss
             Console.Write("Fetch " + userList.Count.ToString() + " followings");
         }
         //更新所有已知的未关注作者状态
-        public void FetchAllKnownUnfollowedUserName()
+        public async Task FetchAllUnfollowedUserStatus()
         {
             var user_list = database.GetUser(false, true);
             var task_list = new List<Task<User>>();
             foreach (var user in user_list)
-                task_list.Add(RequestUserAsync(user.userId));
-            Task.WaitAll(task_list.ToArray());
-
+            {
+                var task = RequestUserAsync(user.userId);
+                task.ConfigureAwait(false);
+                task_list.Add(task);
+            }
+            await Task.WhenAll(task_list.ToArray()).ConfigureAwait(false);
             user_list.Clear();
             foreach (var task in task_list)
                 user_list.Add(task.Result);
             database.UpdateUserName(user_list);
         }
-        public void FetchAllUser()
+        public async Task FetchAllUserStatus()
         {
-            FetchAllFollowedUser();
-            FetchAllKnownUnfollowedUserName();
+            await FetchFollowedUserList().ConfigureAwait(false);
+            await FetchAllUnfollowedUserStatus().ConfigureAwait(false);
         }
-
-        public async Task<List<string>> RequestSearchPage(string word,int page,bool text_mode)
+        //获取搜索结果
+        //!:key_word需要以URL编码
+        public async Task<List<string>> RequestSearchResult(string key_word, bool text_mode,int start_page, int end_page)
         {
-            string url = String.Format("{0}search.php?{1}word={2}&order=popular_d&p={3}",base_url,
-                                    text_mode? "s_mode=s_tc&":"", word, page);
-            string referer = String.Format("{0}search.php?{1}word={2}&order=popular_d&p={3}", base_url,
-                                    text_mode ? "s_mode=s_tc&" : "", word, page>1?page-1:2);
-            HtmlDocument doc = await RequestHtmlAsync(url, referer).ConfigureAwait(false);
-            var node = doc.DocumentNode.SelectSingleNode("//input[@id='js-mount-point-search-result-list']");            
-            var ret= new List<string>();
-            JArray list_json=(JArray)JsonConvert.DeserializeObject(
-                                                System.Web.HttpUtility.HtmlDecode(
-                                                    node.GetAttributeValue("data-items", "[]")));
-            foreach(var ill in list_json)
+            var ret = new List<string>();
+            try
             {
-                var id=ill.ToObject<JObject>().Value<string>("illustId");
-                var bookmarkCount= ill.ToObject<JObject>().Value<int>("bookmarkCount");
-                if (bookmarkCount > bookmarkLimit)
-                    ret.Add(id);
+                var queue = new TaskQueue<List<string>>(25);
+                for (int i = start_page; i < end_page; ++i)//页数从1开始，在RequestSearchPage里面加1了
+                    await queue.Add(RequestSearchPage(key_word, i, text_mode)).ConfigureAwait(false);
+                await queue.Done().ConfigureAwait(false);
+                foreach (var task in queue.done_task_list)
+                    ret.AddRange(task.Result);
+                Console.WriteLine("Search {0}:{1}_{2}", key_word.Substring(0, 20), ret.Count.ToString(),ret.Count>0?ret[0]:"None");
+                return ret;
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.Message);
             }
             return ret;
         }
-        public void RequestSearchResult(string word,bool text_mode)
-        {
-            var ret = new List<string>();
-            int start_page = 0;
-            word=System.Web.HttpUtility.UrlEncode(word);
-            while (start_page>=0)
-            {
-                var task_list = new List<Task<List<string>>>();
-                for(int i=0;i<10;++i)
-                    task_list.Add(RequestSearchPage(word,start_page+i, text_mode));
-                Task.WaitAll(task_list.ToArray());
-                start_page += 10;
-                foreach (var task in task_list)
-                {
-                    var page = task.Result;
-                    if (page.Count == 0)
-                        start_page = -1;
-                    ret.AddRange(page);
-                }
-            }
-            Console.WriteLine(ret.ToString());
-        }
 
-        public void CheckHomePage()
+        //确认是否成功登录
+        public async Task CheckHomePage()
         {
             string url = base_url;
-            string referer = String.Format("{0}search.php?word=%E5%85%A8%E8%A3%B8&s_mode=s_tag_full&order=popular_d&p=1",base_url);
-            var doc = RequestHtmlAsync(base_url,referer).Result;
-            HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//a[@class='user-name js-click-trackable-later']");
+            string referer = String.Format("{0}", base_url);
+            var doc =await RequestHtmlAsync(base_url,referer).ConfigureAwait(false);
+            HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
             if (headNode != null)
-                if (headNode.InnerText == this.user_name)
-                    return;
-            throw new Exception("Login Not Success");
-        }
-        public async Task<string> RequestAsync(string url,Uri referer)
-        {
-            int try_ct = 5;
-            while(true)
             {
-                try
-                {
-                    Console.WriteLine("Begin " + try_ct.ToString() + " " + url);
-                    if (string.IsNullOrEmpty(url))
-                        throw new ArgumentNullException("url");
-                    if (!url.StartsWith("https"))
-                        throw new ArgumentException("Not SSL");
-                    httpClient.DefaultRequestHeaders.Referrer = referer;
-                    HttpResponseMessage response = await httpClient.GetAsync(url).ConfigureAwait(false);
-                    //作品已删除
-                    if (response.StatusCode == HttpStatusCode.NotFound)
-                        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    //未知错误
-                    CheckStatusCode(response);
-                    //正常
-                    return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
+                if (json_object!=null&& json_object.Value<JObject>("userData")!=null)
+                {                    
+                    var name = json_object.Value<JObject>("userData").Value<String>("name");
+                    if (name == this.user_name)
+                    {
+                        Console.WriteLine("Login Success !!!!!!");
+                        return;
+                    }
                 }
-                catch (Exception e)
-                {
-                    string msg = e.Message;//e.InnerException.InnerException.Message;
-                    Console.WriteLine(msg+"Re Try "+try_ct.ToString()+" On :"+url);
-                    if (try_ct==0)
-                        throw;
-                    try_ct--;
-                }
-            }       
-        }
-        public async Task<JObject> RequestJsonAsync(string url,string referer)
-        {
-            JObject jsonobj = (JObject)JsonConvert.DeserializeObject(await RequestAsync(url, new Uri(referer)).ConfigureAwait(false));
-            return jsonobj;
-        }
-        public async Task<HtmlDocument> RequestHtmlAsync(string url, string referer)
-        {
-            var doc = new HtmlDocument();
-            var ret = await RequestAsync(url, new Uri(referer)).ConfigureAwait(false);
-            doc.LoadHtml(ret);
-            return doc;
-        }
-        //将指定图片下载到本地
-        //如已存在则先删除
-        public bool DownloadIllustForce(string id,string url, string dir,string file_name)
-        {
-            string path = dir + "/" + file_name;
-            try
-            {
-                if (File.Exists(path))
-                    File.Delete(path);
-                Console.WriteLine("Begin:" + file_name);
-                string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, id);
-                //referer = String.Format("https://www.pixiv.net/artworks/{0}",id);
-                //0x01:不确认，0x02:稍后下载
-                idm.SendLinkToIDM(url,referer,cookie_server.cookie,"","","", dir, file_name, 0x01|0x02);
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                return false;
-            }
-            return true;
-        }
-
-        //必须在GetShouldDownload返回false的情况下使用
-        public bool GetShouldDelete(Illust illust, int page)
-        {
-            if (illust.bookmarked)//已收藏作品里只有不喜欢和已删除的图不需要下载
-                return illust.valid;//如果是不喜欢的则删掉，否则留着
-            else if (illust.readed)//已看过且未收藏的作品无论是哪种都可以删
-                return true;
-            return false;//未读作品留着
-        }
-
-        public bool GetShouldDownload(Illust illust, int page)
-        {
-            if (!illust.valid)
-                return false;
-            if(illust.bookmarked)
-            {
-                //illust.bookmarkEach
-                return true;
-            }
-            if (illust.readed)
-                return false;
-            return true;
-        }
-
-        public string GetDownloadFileName(Illust illust, int page)
-        {
-            string ext = "";
-            int pos = illust.urlFormat.LastIndexOf(".");
-            if (pos >= 0)
-                ext = illust.urlFormat.Substring(pos + 1);
-            return String.Format("{0}_p{1}.{2}", illust.id, page, ext);
-        }
-
-        public string GetDownloadDir(Illust illust)
-        {
-            if (illust.bookmarked && illust.bookmarkPrivate)
-                return this.formal_private_dir;
-            else if (illust.bookmarked && !illust.bookmarkPrivate)
-                return this.formal_public_dir;
-            return this.tmp_dir;
+            Console.WriteLine("Login Fail !!!!!!");
+            throw new ArgumentOutOfRangeException("Login Not Success");
         }
     }
 }

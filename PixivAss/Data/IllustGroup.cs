@@ -40,6 +40,9 @@ namespace PixivAss.Data
         public int pageCount;
         public Boolean bookmarked;//整体
         public Boolean bookmarkPrivate;
+        public int likeCount = 0;
+        public int bookmarkCount=0;
+        public bool valid;//不在json里,获取不到(即已删除)则为无效
         //Modified data
         public string urlFormat;//Lets assume url of each page has same format as p0 and they never change
         public string urlThumbFormat;
@@ -47,10 +50,8 @@ namespace PixivAss.Data
         public Boolean readed;
         public string bookmarkEach;//分别,0:no,1:Pub,2:Private
         public DateTime updateTime;
-        public bool valid;
         //tmp
         public string userName;
-        public int bookmarkCount;
         public Illust(string _id,bool _valid)
         {
             id = _id;
@@ -69,6 +70,8 @@ namespace PixivAss.Data
             id = json.Value<string>("illustId");
             title = json.Value<string>("illustTitle");
             description = json.Value<string>("illustComment");
+            if (description.Length > 6000)
+                description = description.Substring(0, 5999);
             xRestrict = json.Value<int>("xRestrict");
             this.tags = new List<string>();
             if (json.Value<JObject>("tags").Value<JArray>("tags") != null)
@@ -80,6 +83,7 @@ namespace PixivAss.Data
             height = json.Value<int>("height");
             pageCount = json.Value<int>("pageCount");
             bookmarkCount = json.Value<int>("bookmarkCount");
+            likeCount = json.Value<int>("likeCount");
             if (json.Value<JObject>("bookmarkData") != null)
             {
                 bookmarked = true;
@@ -89,13 +93,21 @@ namespace PixivAss.Data
                 bookmarked = bookmarkPrivate = false;
             {
                 urlFormat = json.Value<JObject>("urls").Value<string>("original");
-                int idx = urlFormat.LastIndexOf("p0") + 1;
-                urlFormat=urlFormat.Insert(idx, "{").Insert(idx + 2, "}");
+                int idx = urlFormat.LastIndexOf("ugoira0");
+                if (idx>=0)
+                    urlFormat = urlFormat.Insert(idx+6, "{").Insert(idx + 8, "}");
+                else
+                {
+                    idx = urlFormat.LastIndexOf("p0")+1;
+                    if (idx>= 0)
+                        urlFormat = urlFormat.Insert(idx, "{").Insert(idx + 2, "}");
+                }
             }
             {
                 urlThumbFormat = json.Value<JObject>("urls").Value<string>("regular");
                 int idx = urlThumbFormat.LastIndexOf("p0") + 1;
-                urlThumbFormat = urlThumbFormat.Insert(idx, "{").Insert(idx + 2, "}");
+                if(idx>=1)
+                    urlThumbFormat = urlThumbFormat.Insert(idx, "{").Insert(idx + 2, "}");
             }
             updateTime = DateTime.UtcNow;
             readed = false;

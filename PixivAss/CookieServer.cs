@@ -6,7 +6,7 @@ namespace PixivAss
     class CookieServer
     {
         public string cookie = "";
-        private string cookie_path = "./pixiv_ass_cookie.txt";
+        private string cookie_path = "../pixiv_ass_cookie.txt";
         public CookieServer()
         {
             ReadCookie();
@@ -16,8 +16,9 @@ namespace PixivAss
         {
             using (HttpListener listerner = new HttpListener())
             {
+                //通过HKEY_LOCAL_MACHINE/SYSTEM/CurrentControlSet/Services/Tcpip/Parameters/ReservedPorts项将端口设为保留
                 listerner.AuthenticationSchemes = AuthenticationSchemes.Anonymous;//指定身份验证 Anonymous匿名访问
-                listerner.Prefixes.Add("http://127.0.0.1:5678/");
+                listerner.Prefixes.Add("http://127.0.0.1:56791/");
                 listerner.Start();
                 Console.WriteLine("WebServer Start Successed.......");
                 while (true)
