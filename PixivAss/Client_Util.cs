@@ -61,7 +61,7 @@ namespace PixivAss
         }
         //将指定图片下载到本地
         //如已存在则先删除
-        public bool DownloadIllustForce(string id, string url, string dir, string file_name)
+        public bool DownloadIllustForce(ICIDMLinkTransmitter idm,string id, string url, string dir, string file_name)
         {
             string path = dir + "/" + file_name;
             try
@@ -102,14 +102,14 @@ namespace PixivAss
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
                     httpClient.DefaultRequestHeaders.Referrer = referer;
-                    HttpResponseMessage response = await httpClient.GetAsync(url).ConfigureAwait(false);
+                    HttpResponseMessage response = await httpClient.GetAsync(url);
                     //作品已删除
                     if (response.StatusCode == HttpStatusCode.NotFound)
-                        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        return await response.Content.ReadAsStringAsync();
                     //未知错误
                     CheckStatusCode(response);
                     //正常
-                    return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    return await response.Content.ReadAsStringAsync();
                     /*
                         HttpWebRequest http = WebRequest.CreateHttp(url);
                         http.Method = "GET";
@@ -117,11 +117,11 @@ namespace PixivAss
                         http.Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.0.1", 8000), false);
                         http.Referer = referer.ToString();
                         http.Headers["Cookie"] = this.cookie_server.cookie;
-                        var response = await http.GetResponseAsync().ConfigureAwait(false);
+                        var response = await http.GetResponseAsync();
                         //await Task.Delay(10 * 1000);
                         //return "{\"error\":true}";
                         StreamReader reader = new StreamReader(response.GetResponseStream());
-                        return await reader.ReadToEndAsync().ConfigureAwait(false);
+                        return await reader.ReadToEndAsync();
                     */
                 }
                 //用HttpWebRequest时404会抛出异常
@@ -141,12 +141,12 @@ namespace PixivAss
         }
         public async Task<JObject> RequestJsonAsync(string url, string referer)
         {
-            return (JObject)JsonConvert.DeserializeObject(await RequestAsync(url, new Uri(referer)).ConfigureAwait(false));
+            return (JObject)JsonConvert.DeserializeObject(await RequestAsync(url, new Uri(referer)));
         }
         public async Task<HtmlDocument> RequestHtmlAsync(string url, string referer)
         {
             var doc = new HtmlDocument();
-            var ret = await RequestAsync(url, new Uri(referer)).ConfigureAwait(false);
+            var ret = await RequestAsync(url, new Uri(referer));
             doc.LoadHtml(ret);
             return doc;
         }
@@ -154,14 +154,14 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret = await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            JObject ret = await RequestJsonAsync(url, referer);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get User Fail");
             var userName = ret.GetValue("body").Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
             if (ret.GetValue("body").Value<JObject>("illusts").Count > 0)
                 foreach (var illustId in ret.GetValue("body").Value<JObject>("illusts"))
                 {
-                    var illust = await RequestIllustAsync(illustId.Key).ConfigureAwait(false);
+                    var illust = await RequestIllustAsync(illustId.Key);
                     userName = illust.userName;
                     break;
                 }
@@ -171,7 +171,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/following?offset=0&limit=1&rest=show", base_url, user_id);
             string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-            JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            JObject ret =await RequestJsonAsync(url, referer);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get Bookmark Fail");
             return ret.GetValue("body").Value<int>("total");
@@ -186,7 +186,7 @@ namespace PixivAss
             string url = String.Format("{0}ajax/search/artworks/{1}?word={1}&order=popular_male_d&mode=all&p={2}&s_mode={3}&type=all&blt=1000",
                                     base_url,word, page+1,text_mode ? "s_tc" : "s_tag");
             string referer = String.Format("{0}tags/{1}/artworks?s_mode=s_tag_full", base_url,word);
-            JObject json =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            JObject json =await RequestJsonAsync(url, referer);
             List<string> ret = new List<string>();
             //排除包含非法关键字的图片
             foreach (var ill in json.GetValue("body").Value<JObject>().Value<JObject>("illustManga").Value<JArray>("data")) //这里返回的illust信息不全
@@ -206,7 +206,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);            
-            JObject json = await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            JObject json = await RequestJsonAsync(url, referer);
             if (!json.HasValues)
                 return new Illust(illustId, false);
             if (json.Value<Boolean>("error"))

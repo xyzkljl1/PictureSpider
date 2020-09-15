@@ -17,11 +17,10 @@ namespace PixivAss
         }
         public async Task Add(Task t)
         {
-            t.ConfigureAwait(false);
             running_task_list.Add(t);
             if(running_task_list.Count>size)
             {
-                await Task.WhenAll(running_task_list).ConfigureAwait(false);
+                await Task.WhenAll(running_task_list);
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
@@ -30,7 +29,7 @@ namespace PixivAss
         {
             if (running_task_list.Count > 0)
             {
-                await Task.WhenAll(running_task_list).ConfigureAwait(false);
+                await Task.WhenAll(running_task_list);
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
@@ -47,11 +46,10 @@ namespace PixivAss
         }
         public async Task Add(Task<T> t)
         {
-            t.ConfigureAwait(false);
             running_task_list.Add(t);
             if (running_task_list.Count > size)
             {
-                await Task.WhenAll(running_task_list).ConfigureAwait(false);
+                await Task.WhenAll(running_task_list);
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
@@ -60,7 +58,7 @@ namespace PixivAss
         {
             if (running_task_list.Count > 0)
             {
-                await Task.WhenAll(running_task_list).ConfigureAwait(false);
+                await Task.WhenAll(running_task_list);
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }

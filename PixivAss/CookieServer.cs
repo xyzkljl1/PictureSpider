@@ -1,15 +1,18 @@
 ﻿using System;
 using System.Net;
 using System.IO;
+using System.Threading.Tasks;
+
 namespace PixivAss
 {
     class CookieServer
     {
         public string cookie = "";
-        private string cookie_path = "../pixiv_ass_cookie.txt";
-        public CookieServer()
+        private Database database;
+        public CookieServer(Database _database)
         {
-            ReadCookie();
+            database = _database;
+            ReadCookie().Wait();
             Run();
         }
         private async void Run()
@@ -38,7 +41,7 @@ namespace PixivAss
                         {
                             Console.WriteLine("Receive Cookie");
                             this.cookie = data;
-                            SaveCookie();
+                            await database.UpdateCookie(cookie);
                         }
                         reader.Close();
                     }
@@ -50,19 +53,11 @@ namespace PixivAss
                         ctx.Response.Close();
                     }
                 }
-                //listerner.Stop();
             }
         }
-        private void SaveCookie()
+        private async Task ReadCookie()
         {
-            if (File.Exists(cookie_path))
-                File.Delete(cookie_path);
-            File.WriteAllText(cookie_path, cookie);
-        }
-        private void ReadCookie()
-        {
-            if (File.Exists(cookie_path))
-                cookie=File.ReadAllText(cookie_path);
+            cookie = await database.GetCookie();
         }
     }
 }

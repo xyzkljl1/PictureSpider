@@ -4,8 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PixivAss.Data;
-using MySql.Data;
 using MySql.Data.MySqlClient;
+using System.Data.Common;
 
 namespace PixivAss
 {
@@ -17,76 +17,20 @@ namespace PixivAss
             connect_str = String.Format("server=127.0.0.1;port=4321;UID={0};pwd={1};database={2};",
                 user,pwd,database);
         }
-        public List<string> GetAllIllustId()
+        public async Task<List<string>> GetAllIllustId()
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    var ret = new List<string>();
-                    connection.Open();
-                    using (var cmd = new MySqlCommand("select id from illust", connection))
-                    {
-                        MySqlDataReader dataReader = cmd.ExecuteReader();
-                        while (dataReader.Read())
-                            ret.Add(dataReader.GetString("id"));
-                        Console.WriteLine("Selected:" + ret.Count);
-                        return ret;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+            return await StandardQuery(String.Format("select id from illust "),
+                        (DbDataReader reader) => { return reader.GetString(0); });
         }
-        public List<string> GetBookmarkIllustId(bool pub)
+        public async Task<List<string>> GetBookmarkIllustId(bool pub)
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    var ret =new List<string>();
-                    connection.Open();
-                    using (var cmd = new MySqlCommand("select id from illust where bookmarked=true and bookmarkPrivate=" + (pub ? "false" : "true"), connection))
-                    {
-                        MySqlDataReader dataReader = cmd.ExecuteReader();
-                        while (dataReader.Read())
-                            ret.Add(dataReader.GetString("id"));
-                        Console.WriteLine("Selected:" + ret.Count);
-                        return ret;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+            return await StandardQuery(String.Format("select id from illust where bookmarked=true and bookmarkPrivate={0}",!pub),
+                        (DbDataReader reader) => { return reader.GetString(0); });
         }
-        public HashSet<String> GetBannedKeyword()
+        public async Task<HashSet<String>> GetBannedKeyword()
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    connection.Open();
-                    var ret = new HashSet<String>();
-                    string cmdText = "select word from invalidkeyword";
-                    var cmd = new MySqlCommand(cmdText, connection);
-                    MySqlDataReader dataReader = cmd.ExecuteReader();
-                    while (dataReader.Read())
-                        ret.Add(dataReader.GetString("word"));
-                    Console.WriteLine("Selected:" + ret.Count);
-                    return ret;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+            return new HashSet<String>(await StandardQuery("select word from invalidkeyword",
+                        (DbDataReader reader) => { return reader.GetString(0); }));
         }
         public List<Illust> GetAllIllustFull()
         {
@@ -135,81 +79,27 @@ namespace PixivAss
                 throw;
             }
         }
-        public List<string> GetAllKeyword()
+        public async Task<List<string>> GetAllKeyword()
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    connection.Open();
-                    var ret = new List<string>();
-                    string cmdText = "select * from keyword";
-                    var cmd = new MySqlCommand(cmdText, connection);
-                    MySqlDataReader dataReader = cmd.ExecuteReader();
-                    while (dataReader.Read())
-                        ret.Add(dataReader.GetString("word"));
-                    Console.WriteLine("Selected:" + ret.Count);
-                    return ret;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+            return await StandardQuery("select word from keyword",
+                        (DbDataReader reader) => { return reader.GetString(0); });
         }
-        public User GetUserByIllustId(string illustId)
-        {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    User ret = null;
-                    connection.Open();
-                    var cmd = new MySqlCommand("select * from user where userId in (select userId from illust where id=@0)", connection);
-                    cmd.Parameters.AddWithValue("@0", illustId);
-                    MySqlDataReader dataReader = cmd.ExecuteReader();
-                    if (dataReader.Read())
-                        ret = new User(dataReader.GetString("userId"), dataReader.GetString("userName"), dataReader.GetBoolean("followed"));
-                    return ret;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+        public async Task<User> GetUserByIllustId(string illustId)
+        {   //这里一定能找到user
+            return (await StandardQuery(String.Format("select userId,userName,followed from user where userId in (select userId from illust where id={0})", illustId),
+                        (DbDataReader reader) => { return new User(reader.GetString(0), reader.GetString(1), reader.GetBoolean(2)); }))[0];
         }
-        public List<User> GetUser(bool followed,bool unfollowed)
+        public async Task<List<User>> GetUser(bool followed,bool unfollowed)
         {
             if (followed == false && unfollowed == false)
                 return new List<User>();
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                try
-                {
-                    connection.Open();
-                    var ret = new List<User>();
-                    string cmdText = "select * from user";
-                    if (followed == true && unfollowed == true)
-                        ;
-                    else if (followed == true)
-                        cmdText += " where followed=true";
-                    else
-                        cmdText += " where followed=false";
-                    var cmd = new MySqlCommand(cmdText, connection);
-                    MySqlDataReader dataReader = cmd.ExecuteReader();
-                    while(dataReader.Read())
-                        ret.Add( new User(dataReader.GetString("userId"),dataReader.GetString("userName"),dataReader.GetBoolean("followed")));
-                    Console.WriteLine("Selected:" + ret.Count);
-                    return ret;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
-            }
+            string condition = "";
+            if (followed&&!unfollowed)
+                condition += " where followed=true";
+            else if(unfollowed && !followed)
+                condition += " where followed=false";
+            return await StandardQuery(String.Format("select userId,userName,followed from user{0})", unfollowed),
+                       (DbDataReader reader) => { return new User(reader.GetString(0), reader.GetString(1), reader.GetBoolean(2)); });
         }
         public void UpdateFollowedUser(List<User> data) {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
@@ -361,6 +251,60 @@ namespace PixivAss
                     ts.Rollback();
                     throw;
                 }
+            }
+        }
+        
+        public async Task<string> GetCookie()
+        {
+            var ret=await StandardQuery<string>("select CookieCache from status where id=\"Current\"",
+                (DbDataReader reader)  =>{ return reader.GetString(0); });
+            if (ret.Count == 0)
+                return "";
+            return ret[0];
+        }
+        public async Task UpdateCookie(string cookie)
+        {
+            var ret=await StandardNonQuery(String.Format("update status set CookieCache=\"{0}\" where id=\"Current\"",""));
+            if (ret < 1)
+                throw new ArgumentOutOfRangeException("Cant Update Cookie");
+        }
+
+        public async Task<List<T>> StandardQuery<T>(String cmd_text,Func<DbDataReader, T> converter)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    var ret = new List<T>();
+                    var cmd = new MySqlCommand(cmd_text, connection);
+                    using (var dataReader = await cmd.ExecuteReaderAsync())
+                        while (dataReader.Read())
+                            ret.Add(converter(dataReader));
+                    return ret;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Database Exception {0}",e.Message);
+                throw;
+            }
+        }
+        public async Task<int> StandardNonQuery(String cmd_text)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    var cmd = new MySqlCommand(cmd_text, connection);
+                    return await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Database Exception {0}", e.Message);
+                throw;
             }
         }
     }

@@ -10,36 +10,40 @@ namespace PixivAss
         public MainWindow()
         {
             InitializeComponent();
-            //初始化
-            pixivClient = new Client();
-            MainExplorer.SetClient(pixivClient);
-            //UI
-            //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
-            PageLabel.Parent = this.MainExplorer;
-            PageLabel.Location = new System.Drawing.Point(PageLabel.Location.X - MainExplorer.Location.X, PageLabel.Location.Y - MainExplorer.Location.Y);
-            NextButton.Parent = this.MainExplorer;
-            NextButton.Location = new System.Drawing.Point(NextButton.Location.X - MainExplorer.Location.X, NextButton.Location.Y - MainExplorer.Location.Y);
-            PrevButton.Parent = this.MainExplorer;
-            PrevButton.Location = new System.Drawing.Point(PrevButton.Location.X - MainExplorer.Location.X, PrevButton.Location.Y - MainExplorer.Location.Y);
-            FavoriteButton.Parent = this.MainExplorer;
-            FavoriteButton.Location = new System.Drawing.Point(FavoriteButton.Location.X - MainExplorer.Location.X, FavoriteButton.Location.Y - MainExplorer.Location.Y);
-            //设置事件
-            KeyUp+= new KeyEventHandler(MainExplorer.OnKeyUp);
-            NextButton.Click+= new EventHandler(MainExplorer.SlideRight);
-            PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
-            idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
-            FavCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-            FavPrivateCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-            QueueCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-            //绑定属性
-            PageLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IndexText"));
-            DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer, "DescText"));
-            PlayButton.DataBindings.Add(new Binding("Text", MainExplorer, "TotalPageText"));
-            idLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IdText"));
-            FavoriteButton.DataBindings.Add(new Binding("Image", MainExplorer, "FavIcon"));
-            TagLabel.DataBindings.Add(new Binding("Text", MainExplorer, "TagText"));
-            //Debug
-            onListCheckBoxClick(null,null);
+            using (BlockSyncContext.Enter())
+            {
+                //UI
+                //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
+                PageLabel.Parent = this.MainExplorer;
+                PageLabel.Location = new System.Drawing.Point(PageLabel.Location.X - MainExplorer.Location.X, PageLabel.Location.Y - MainExplorer.Location.Y);
+                NextButton.Parent = this.MainExplorer;
+                NextButton.Location = new System.Drawing.Point(NextButton.Location.X - MainExplorer.Location.X, NextButton.Location.Y - MainExplorer.Location.Y);
+                PrevButton.Parent = this.MainExplorer;
+                PrevButton.Location = new System.Drawing.Point(PrevButton.Location.X - MainExplorer.Location.X, PrevButton.Location.Y - MainExplorer.Location.Y);
+                FavoriteButton.Parent = this.MainExplorer;
+                FavoriteButton.Location = new System.Drawing.Point(FavoriteButton.Location.X - MainExplorer.Location.X, FavoriteButton.Location.Y - MainExplorer.Location.Y);
+                //设置事件
+                KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
+                NextButton.Click += new EventHandler(MainExplorer.SlideRight);
+                PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
+                idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
+                FavCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
+                FavPrivateCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
+                QueueCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
+                //绑定属性
+                PageLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IndexText"));
+                DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer, "DescText"));
+                PlayButton.DataBindings.Add(new Binding("Text", MainExplorer, "TotalPageText"));
+                idLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IdText"));
+                FavoriteButton.DataBindings.Add(new Binding("Image", MainExplorer, "FavIcon"));
+                TagLabel.DataBindings.Add(new Binding("Text", MainExplorer, "TagText"));
+                //初始化
+                pixivClient = new Client();
+                MainExplorer.SetClient(pixivClient);
+                //Debug
+                onListCheckBoxClick(null,null);
+                this.Hide();
+            }            
         }
         protected override bool ProcessDialogKey(Keys keyData)
         {
@@ -49,13 +53,17 @@ namespace PixivAss
         }
         private void onButtonClicked(object sender, EventArgs e)
         {
-            //MainExplorer.Play();
-            pixivClient.Test().ConfigureAwait(false);
+            using (BlockSyncContext.Enter())
+            {
+                //MainExplorer.Play();
+                pixivClient.Test();
+            }
         }
 
         private void onListCheckBoxClick(object sender, EventArgs e)
         {
-            MainExplorer.SetList(FavCheckBox.Checked,FavPrivateCheckBox.Checked,QueueCheckBox.Checked);
+            using (BlockSyncContext.Enter())
+                MainExplorer.SetList(FavCheckBox.Checked,FavPrivateCheckBox.Checked,QueueCheckBox.Checked);
         }
         private void InitializeComponent()
         {
@@ -252,7 +260,6 @@ namespace PixivAss
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
-
         }
 
         private Explorer MainExplorer;

@@ -30,12 +30,10 @@ namespace PixivAss
         public string special_dir;
         private CookieServer cookie_server;
         public  Database database;
-        private ICIDMLinkTransmitter2 idm;
         private HttpClient httpClient;
         private HashSet<string> banned_keyword;
         public Client()
         {
-            idm = new CIDMLinkTransmitter();
             formal_public_dir = download_dir+"pub";
             formal_private_dir = download_dir+"private";
             tmp_dir = download_dir+"tmp";
@@ -46,7 +44,7 @@ namespace PixivAss
             user_name = "xyzkljl1";
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
-            cookie_server = new CookieServer();
+            cookie_server = new CookieServer(database);
 
             System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -70,7 +68,7 @@ namespace PixivAss
             httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
             Task.Run(CheckHomePage);
-            banned_keyword = database.GetBannedKeyword();
+            banned_keyword =database.GetBannedKeyword().GetAwaiter().GetResult();
         }
         public void Dispose()
         {
@@ -80,9 +78,9 @@ namespace PixivAss
         {
             //DownloadBookmarkPrivate();
             Task.Run(()=> { this.DownloadAllIlust(); });
-            //await FetchAllKeywordSearchResult().ConfigureAwait(false);
-            //await FetchAllFollowedUserIllust().ConfigureAwait(false);
-            //await FetchAllKnownIllust().ConfigureAwait(false);
+            //await FetchAllKeywordSearchResult();
+            //await FetchAllFollowedUserIllust();
+            //await FetchAllKnownIllust();
             //DownloadAllIlust();
             //FetchBookMarkIllust(true);
             //FetchBookMarkIllust(false);
@@ -100,6 +98,7 @@ namespace PixivAss
         //要求Illust信息都已更新过
         public void DownloadAllIlust()
         {
+            var idm = new CIDMLinkTransmitter();
             int ct = 0;
             //string text="";
             var illustList = database.GetAllIllustFull();
@@ -122,15 +121,12 @@ namespace PixivAss
                                     );
                                 sw.Write(text);
                             }*/
-                                                           ct += DownloadIllustForce(illust.id, url, dir, file_name) ? 1 : 0;
+                            ct += DownloadIllustForce(idm,illust.id, url, dir, file_name) ? 1 : 0;
                         }
                         else if (exist && GetShouldDelete(illust, i))
                             File.Delete(dir + "/" + file_name);
                     }
                 }
-
-            //File.WriteAllText(", text);
-
             /*
              * 仔细想想似乎并没有监视的必要
             FileSystemWatcher watcher=new FileSystemWatcher();
@@ -143,7 +139,7 @@ namespace PixivAss
         //更新所有已知的作品状态
         public async Task FetchAllKnownIllust()
         {
-            await FetchIllustByIdList(database.GetAllIllustId()).ConfigureAwait(false);
+            await FetchIllustByIdList(await database.GetAllIllustId());
         }
 
         //搜索结果太多,必须分段进行
@@ -153,7 +149,7 @@ namespace PixivAss
             var task_list = new Dictionary<string, Task<List<string>>>();
             var tmp = "";
             //用or合并关键字可以减少重复
-            foreach (var word in database.GetAllKeyword())
+            foreach (var word in await database.GetAllKeyword())
             {
                 tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
                 if (tmp.Length > 1600)
@@ -170,10 +166,9 @@ namespace PixivAss
                 foreach(var key in key_word_list)
                 {
                     var task= RequestSearchResult(key, false, start_page, start_page + step);
-                    task.ConfigureAwait(false);
                     task_list[key] = task;
                 }
-                await Task.WhenAll(task_list.Values).ConfigureAwait(false);
+                await Task.WhenAll(task_list.Values);
                 //丢掉已经搜索完的
                 foreach (var key in task_list.Keys)
                     if (task_list[key].Result.Count == 0)
@@ -188,7 +183,7 @@ namespace PixivAss
                 task_list.Clear();
                 if (set.Count > 30000)
                 {
-                    await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+                    await FetchIllustByIdSetReduce(set);
                     Console.WriteLine("Update Search Res " + set.Count.ToString());
                     set.Clear();
                 }
@@ -198,7 +193,7 @@ namespace PixivAss
             }
             if (set.Count > 0)
             {
-                await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+                await FetchIllustByIdSetReduce(set);
                 Console.WriteLine("Update Search Res " + set.Count.ToString());
             }
             Console.WriteLine("Update Search Res  Done");
@@ -206,19 +201,15 @@ namespace PixivAss
         }
         public async Task FetchAllFollowedUserIllust()
         {
-            var task_list=new List<Task<List<string>>>();
-            foreach(var user in database.GetUser(true,false))
-            {
-                var task=RequestAllByUserId(user.userId);
-                task.ConfigureAwait(false);
-                task_list.Add(task);
-            }
-            await Task.WhenAll(task_list.ToArray()).ConfigureAwait(false);
+            var queue=new TaskQueue<List<string>>(1000);
+            foreach(var user in await database.GetUser(true,false))
+                await queue.Add(RequestAllByUserId(user.userId));
+            await queue.Done();
             var set = new HashSet<string>();
-            foreach (var task in task_list)
+            foreach (var task in queue.done_task_list)
                 foreach (var id in task.Result)
                     set.Add(id);
-            await FetchIllustByIdSetReduce(set).ConfigureAwait(false);
+            await FetchIllustByIdSetReduce(set);
         }
 
         //获取并更新该作者的所有作品
@@ -226,7 +217,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+            JObject ret =await RequestJsonAsync(url, referer);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get All By User Fail");
             var idList = new List<string>();
@@ -246,15 +237,15 @@ namespace PixivAss
             foreach (var id in id_list)
                 if (!local_illust.Contains(id))
                     all_illust.Add(id);
-            await FetchIllustByIdList(all_illust).ConfigureAwait(false);
+            await FetchIllustByIdList(all_illust);
         }
         //获取并更新指定的作品
         public async Task FetchIllustByIdList(List<string> illustIdList)
         {
             var queue = new TaskQueue<Illust>(3000);
             foreach (var illustId in illustIdList)
-                await queue.Add(RequestIllustAsync(illustId)).ConfigureAwait(false);
-            await queue.Done().ConfigureAwait(false);
+                await queue.Add(RequestIllustAsync(illustId));
+            await queue.Done();
             var illustList = new List<Illust>();
             foreach (var task in queue.done_task_list)
                 illustList.Add(task.Result);
@@ -274,7 +265,7 @@ namespace PixivAss
                 string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset={2}&limit={3}&rest={4}",
                                             base_url, user_id,offset,page_size, pub ? "show" : "hide");
                 string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-                JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+                JObject ret =await RequestJsonAsync(url, referer);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 //获取总数,仅用于提示
@@ -290,22 +281,22 @@ namespace PixivAss
             //将当前有效的已收藏作品和可能已无效/已移除收藏的作品(即本地存储的已收藏作品)一起更新状态
             //FetchIllust时会获取Illust是否已收藏状态，所以不需要另行更新收藏状态
             int tmp = idList.Count;
-            foreach (var illust_id in database.GetBookmarkIllustId(pub))
+            foreach (var illust_id in await database.GetBookmarkIllustId(pub))
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
-            await FetchIllustByIdList(idList).ConfigureAwait(false);
+            await FetchIllustByIdList(idList);
             Console.Write(String.Format("Fetch {0}/{1} {2} Bookmarks",pub?"Public":"Private",tmp,total));
         }
         //获取并更新关注的作者状态
         public async Task FetchFollowedUserList()
         {
-            int total = await RequestFollowedUserCount().ConfigureAwait(false);
+            int total = await RequestFollowedUserCount();
             var userList = new List<User>();
             for (int i = 0; i < total; i += 100)
             {
                 string url = String.Format("{0}ajax/user/{1}/following?offset={2}&limit=100&rest=show", base_url, user_id,i);
                 string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-                JObject ret =await RequestJsonAsync(url, referer).ConfigureAwait(false);
+                JObject ret =await RequestJsonAsync(url, referer);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 foreach (var user in ret.GetValue("body").Value<JArray>("users"))
@@ -317,15 +308,14 @@ namespace PixivAss
         //更新所有已知的未关注作者状态
         public async Task FetchAllUnfollowedUserStatus()
         {
-            var user_list = database.GetUser(false, true);
+            var user_list = await database.GetUser(false, true);
             var task_list = new List<Task<User>>();
             foreach (var user in user_list)
             {
                 var task = RequestUserAsync(user.userId);
-                task.ConfigureAwait(false);
                 task_list.Add(task);
             }
-            await Task.WhenAll(task_list.ToArray()).ConfigureAwait(false);
+            await Task.WhenAll(task_list.ToArray());
             user_list.Clear();
             foreach (var task in task_list)
                 user_list.Add(task.Result);
@@ -333,8 +323,8 @@ namespace PixivAss
         }
         public async Task FetchAllUserStatus()
         {
-            await FetchFollowedUserList().ConfigureAwait(false);
-            await FetchAllUnfollowedUserStatus().ConfigureAwait(false);
+            await FetchFollowedUserList();
+            await FetchAllUnfollowedUserStatus();
         }
         //获取搜索结果
         //!:key_word需要以URL编码
@@ -345,8 +335,8 @@ namespace PixivAss
             {
                 var queue = new TaskQueue<List<string>>(25);
                 for (int i = start_page; i < end_page; ++i)//页数从1开始，在RequestSearchPage里面加1了
-                    await queue.Add(RequestSearchPage(key_word, i, text_mode)).ConfigureAwait(false);
-                await queue.Done().ConfigureAwait(false);
+                    await queue.Add(RequestSearchPage(key_word, i, text_mode));
+                await queue.Done();
                 foreach (var task in queue.done_task_list)
                     ret.AddRange(task.Result);
                 Console.WriteLine("Search {0}:{1}_{2}", key_word.Substring(0, 20), ret.Count.ToString(),ret.Count>0?ret[0]:"None");
@@ -364,7 +354,7 @@ namespace PixivAss
         {
             string url = base_url;
             string referer = String.Format("{0}", base_url);
-            var doc =await RequestHtmlAsync(base_url,referer).ConfigureAwait(false);
+            var doc =await RequestHtmlAsync(base_url,referer);
             HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
             if (headNode != null)
             {
