@@ -44,11 +44,32 @@ namespace PixivAss
                     MySqlDataReader dataReader = cmd.ExecuteReader();
                     while (dataReader.Read())
                     {
-                        Illust illust = new Illust("", true);
+                        //Illust illust = new Illust("", true);
+                        var illust = new Illust(dataReader.GetString("id"), dataReader.GetBoolean("valid"))
+                        {
+                            title = dataReader.GetString(dataReader.GetOrdinal("title")),
+                            description = dataReader.GetString(dataReader.GetOrdinal("description")),
+                            xRestrict = dataReader.GetInt32(dataReader.GetOrdinal("xRestrict")),
+                            tags = dataReader.GetString(dataReader.GetOrdinal("tags")).Split('`').ToList(),
+                            userId = dataReader.GetString(dataReader.GetOrdinal("userId")),
+                            width = dataReader.GetInt32(dataReader.GetOrdinal("width")),
+                            height = dataReader.GetInt32(dataReader.GetOrdinal("height")),
+                            pageCount = dataReader.GetInt32(dataReader.GetOrdinal("pageCount")),
+                            bookmarked = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarked")),
+                            bookmarkPrivate = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarkPrivate")),
+                            urlFormat = dataReader.GetString(dataReader.GetOrdinal("urlFormat")),
+                            urlThumbFormat = dataReader.GetString(dataReader.GetOrdinal("urlThumbFormat")),
+                            readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
+                            bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
+                            updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
+                            valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
+                            likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
+                            bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount"))
+                        };
                         /*id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
                                              "userId=@5,width=@6,height=@7,pageCount=@8,bookmarked=@9,bookmarkPrivate=@10," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW();*/
-                        illust.id = dataReader.GetString("id");
+                        /*illust.id = dataReader.GetString("id");
                         illust.title = dataReader.GetString("title");
                         illust.description = dataReader.GetString("description");
                         illust.xRestrict = dataReader.GetInt32("xRestrict");
@@ -66,7 +87,7 @@ namespace PixivAss
                         illust.updateTime = Convert.ToDateTime(dataReader.GetString("updateTime"));
                         illust.valid = dataReader.GetBoolean("valid");
                         illust.likeCount = dataReader.GetInt32("likeCount");
-                        illust.bookmarkCount = dataReader.GetInt32("bookmarkCount");
+                        illust.bookmarkCount = dataReader.GetInt32("bookmarkCount");*/
                         ret.Add(illust);
                     }
                     Console.WriteLine("Selected:" + ret.Count);
@@ -307,5 +328,31 @@ namespace PixivAss
                 throw;
             }
         }
+        public int StandardNonQuery(List<String> cmd_list)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    int affected = 0;
+                    MySqlTransaction ts = null;
+                    ts = connection.BeginTransaction();
+                    foreach(var cmd_text in cmd_list)
+                    {
+                        var cmd = new MySqlCommand(cmd_text, connection);
+                        affected+=cmd.ExecuteNonQuery();
+                    }
+                    ts.Commit();
+                    return affected;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Database Exception {0}", e.Message);
+                throw;
+            }
+        }
+
     }
 }

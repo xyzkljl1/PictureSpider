@@ -37,6 +37,7 @@ namespace PixivAss
                 idLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IdText"));
                 FavoriteButton.DataBindings.Add(new Binding("Image", MainExplorer, "FavIcon"));
                 TagLabel.DataBindings.Add(new Binding("Text", MainExplorer, "TagText"));
+                this.DataBindings.Add(new Binding("Text", pixivClient, "VerifyState"));
                 //初始化
                 pixivClient = new Client();
                 MainExplorer.SetClient(pixivClient);

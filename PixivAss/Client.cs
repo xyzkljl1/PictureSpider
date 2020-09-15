@@ -10,15 +10,20 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PixivAss.Data;
 using IDManLib;
+using System.ComponentModel;
 
 namespace PixivAss
 {
-    /*
-     * 不要在主线程中对async任务waitall
-     * https://docs.microsoft.com/zh-cn/archive/msdn-magazine/2013/march/async-await-best-practices-in-asynchronous-programming
-     */
-    partial class Client:IDisposable
+    partial class Client:IDisposable,INotifyPropertyChanged
     {
+        public string VerifyState { get=>verify_state;
+            set
+            {
+                verify_state = value;
+                PropertyChanged(this, new PropertyChangedEventArgs("VerifyState"));
+            }
+        }
+        private string verify_state="Waiting";
         private const string download_dir="E:/p/";
         private string user_id;
         private string base_url;
@@ -32,6 +37,8 @@ namespace PixivAss
         public  Database database;
         private HttpClient httpClient;
         private HashSet<string> banned_keyword;
+
+        public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Client()
         {
             formal_public_dir = download_dir+"pub";
@@ -352,6 +359,7 @@ namespace PixivAss
         //确认是否成功登录
         public async Task CheckHomePage()
         {
+            VerifyState = "Checking";
             string url = base_url;
             string referer = String.Format("{0}", base_url);
             var doc =await RequestHtmlAsync(base_url,referer);
@@ -364,12 +372,12 @@ namespace PixivAss
                     var name = json_object.Value<JObject>("userData").Value<String>("name");
                     if (name == this.user_name)
                     {
-                        Console.WriteLine("Login Success !!!!!!");
+                        VerifyState = "Login Success";
                         return;
                     }
                 }
             }
-            Console.WriteLine("Login Fail !!!!!!");
+            Console.WriteLine("Login Fail");
             throw new ArgumentOutOfRangeException("Login Not Success");
         }
     }
