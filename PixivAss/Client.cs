@@ -105,36 +105,33 @@ namespace PixivAss
         //要求Illust信息都已更新过
         public void DownloadAllIlust()
         {
+            /*IDM真是一言难尽,可能是因为任务要排序/一个个添加到表格里，还全阻塞主线程，导致任务一多就各种卡
+             * 界面卡，SendLinkToIDM也卡，把任务输出成文件再导入也会卡，一卡几十分钟
+             * api又没有清除已完成任务的功能，所以创建任务时必须关掉界面
+             * 然后创建任务期间会停掉下载，内存也会疯涨
+             * 只能分几次下载了，每下完一波清任务
+            */
             var idm = new CIDMLinkTransmitter();
             int ct = 0;
-            //string text="";
             var illustList = database.GetAllIllustFull();
-            //using (StreamWriter sw = new StreamWriter("E:/0/task.txt"))
-                foreach (var illust in illustList)
+            foreach (var illust in illustList)
+            {
+                string dir = GetDownloadDir(illust);
+                for (int i = 0; i < illust.pageCount; ++i)
                 {
-                    string dir = GetDownloadDir(illust);
-                    for (int i = 0; i < illust.pageCount; ++i)
+                    string url = String.Format(illust.urlFormat, i);
+                    string file_name = GetDownloadFileName(illust, i);
+                    bool exist = File.Exists(dir + "/" + file_name);
+                    if (GetShouldDownload(illust, i))
                     {
-                        string url = String.Format(illust.urlFormat, i);
-                        string file_name = GetDownloadFileName(illust, i);
-                        bool exist = File.Exists(dir + "/" + file_name);
-                        if (GetShouldDownload(illust, i))
-                        {
-                            if (!exist)
-                            /*{ 
-                                var text = String.Format("<\n{0}\nreferer: {1}\ncookie: {2}\n{3}\n>\n",
-                                    url, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=17439605",
-                                    cookie_server.cookie, "User-Agent: Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko"
-                                    );
-                                sw.Write(text);
-                            }*/
+                        if (!exist)
                             ct += DownloadIllustForce(idm,illust.id, url, dir, file_name) ? 1 : 0;
-                        }
-                        else if (exist && GetShouldDelete(illust, i))
-                            File.Delete(dir + "/" + file_name);
                     }
+                    else if (exist && GetShouldDelete(illust, i))
+                        File.Delete(dir + "/" + file_name);
                 }
-            /*
+            }
+        /*
              * 仔细想想似乎并没有监视的必要
             FileSystemWatcher watcher=new FileSystemWatcher();
             watcher.Path = path;
