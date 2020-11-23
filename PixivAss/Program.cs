@@ -13,7 +13,8 @@ namespace PixivAss
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainWindow());
+            using (BlockSyncContext.Enter())
+                Application.Run(new MainWindow());
         }
     }
 }

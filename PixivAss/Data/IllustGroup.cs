@@ -7,34 +7,43 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PixivAss.Data
 {
+    public enum TagStatus
+    {
+        None,
+        Follow,
+        Ignore
+    };
     class User
     {
         //Original Data
-        public string userId;
+        public int userId;
         public string userName;
         public Boolean followed;
-        public User(string _id,string _name,Boolean _f)
+        public Boolean queued;
+        public User(int _id,string _name,Boolean _f, Boolean _q)
         {
             userId = _id;
             userName = _name;
             followed = _f;
+            queued = _q;
         }
         public User(JObject json)
         {
-            userId = json.Value<string>("userId");
+            userId = json.Value<int>("userId");
             userName = json.Value<string>("userName");
             followed = json.Value<Boolean>("following");
+            queued = false;
         }
     }
     class Illust
     {
         //Original Data
-        public string id;//same as illustId
+        public int id;//same as illustId
         public string title;//=illustTitle
         public string description;// same as illustComment
         public int xRestrict;//is not public
         public List<string> tags;//name
-        public string userId;
+        public int userId;
         public int width;
         public int height;
         public int pageCount;
@@ -52,12 +61,13 @@ namespace PixivAss.Data
         public DateTime updateTime;
         //tmp
         public string userName;
-        public Illust(string _id,bool _valid)
+        public int score;
+        public Illust(int _id,bool _valid)
         {
             id = _id;
             valid = _valid;
         }
-        public Illust(string _id,string _urlFormat,int _pageCount)
+        public Illust(int _id,string _urlFormat,int _pageCount)
         {
             urlFormat = _urlFormat;
             id = _id;
@@ -67,7 +77,7 @@ namespace PixivAss.Data
         public Illust(JObject json)
         {
             valid = true;
-            id = json.Value<string>("illustId");
+            id = json.Value<int>("illustId");
             title = json.Value<string>("illustTitle");
             description = json.Value<string>("illustComment");
             if (description.Length > 6000)
@@ -77,7 +87,7 @@ namespace PixivAss.Data
             if (json.Value<JObject>("tags").Value<JArray>("tags") != null)
                 foreach (var tag in json.Value<JObject>("tags").Value<JArray>("tags"))
                     this.tags.Add(tag.ToObject<JObject>().Value<string>("tag"));
-            userId = json.Value<string>("userId");
+            userId = json.Value<int>("userId");
             userName = json.Value<string>("userName");
             width = json.Value<int>("width");
             height = json.Value<int>("height");

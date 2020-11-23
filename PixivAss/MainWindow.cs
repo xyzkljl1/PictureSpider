@@ -1,86 +1,127 @@
 ﻿using System;
 using PixivAss;
 using System.Windows.Forms;
+using System.Threading.Tasks;
 namespace PixivAss
 {
     public partial class MainWindow : Form
     {
+        struct ComboBoxItem {
+            public int id;
+            public string name;
+            public Client.ExploreQueueType type;
+            public ComboBoxItem(Tuple<Client.ExploreQueueType,int,string> data)
+            {
+                this.type = data.Item1;
+                this.id = data.Item2;
+                this.name = data.Item3;
+            }
+            public override string ToString()
+            {
+                if (type == Client.ExploreQueueType.Fav)
+                    return "Fav";
+                else if (type == Client.ExploreQueueType.FavR)
+                    return "FavR";
+                else if (type == Client.ExploreQueueType.Main)
+                    return "Main";
+                else if (type == Client.ExploreQueueType.MainR)
+                    return "MainR";
+                else
+                    return name;
+            }
+        };
+
         private Client pixivClient;
         private Button PlayButton;
+        //生成64位程序会导致无法用设计器编辑
         public MainWindow()
         {
             InitializeComponent();
-            using (BlockSyncContext.Enter())
-            {
-                //UI
-                //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
-                PageLabel.Parent = this.MainExplorer;
-                PageLabel.Location = new System.Drawing.Point(PageLabel.Location.X - MainExplorer.Location.X, PageLabel.Location.Y - MainExplorer.Location.Y);
-                NextButton.Parent = this.MainExplorer;
-                NextButton.Location = new System.Drawing.Point(NextButton.Location.X - MainExplorer.Location.X, NextButton.Location.Y - MainExplorer.Location.Y);
-                PrevButton.Parent = this.MainExplorer;
-                PrevButton.Location = new System.Drawing.Point(PrevButton.Location.X - MainExplorer.Location.X, PrevButton.Location.Y - MainExplorer.Location.Y);
-                FavoriteButton.Parent = this.MainExplorer;
-                FavoriteButton.Location = new System.Drawing.Point(FavoriteButton.Location.X - MainExplorer.Location.X, FavoriteButton.Location.Y - MainExplorer.Location.Y);
-                //设置事件
-                KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
-                NextButton.Click += new EventHandler(MainExplorer.SlideRight);
-                PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
-                idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
-                FavCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-                FavPrivateCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-                QueueCheckBox.CheckedChanged += new EventHandler(this.onListCheckBoxClick);
-                //绑定属性
-                PageLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IndexText"));
-                DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer, "DescText"));
-                PlayButton.DataBindings.Add(new Binding("Text", MainExplorer, "TotalPageText"));
-                idLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IdText"));
-                FavoriteButton.DataBindings.Add(new Binding("Image", MainExplorer, "FavIcon"));
-                TagLabel.DataBindings.Add(new Binding("Text", MainExplorer, "TagText"));
-                this.DataBindings.Add(new Binding("Text", pixivClient, "VerifyState"));
-                //初始化
-                pixivClient = new Client();
-                MainExplorer.SetClient(pixivClient);
-                //Debug
-                onListCheckBoxClick(null,null);
-                this.Hide();
-            }            
+            //初始化
+            pixivClient = new Client();
+            MainExplorer.SetClient(pixivClient);
+            TagBox.SetClient(pixivClient);
+            AuthorBox.SetClient(pixivClient);
+            //UI
+            //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
+            PageLabel.Parent = this.MainExplorer;
+            PageLabel.Location = new System.Drawing.Point(PageLabel.Location.X - MainExplorer.Location.X, PageLabel.Location.Y - MainExplorer.Location.Y);
+            NextButton.Parent = this.MainExplorer;
+            NextButton.Location = new System.Drawing.Point(NextButton.Location.X - MainExplorer.Location.X, NextButton.Location.Y - MainExplorer.Location.Y);
+            PrevButton.Parent = this.MainExplorer;
+            PrevButton.Location = new System.Drawing.Point(PrevButton.Location.X - MainExplorer.Location.X, PrevButton.Location.Y - MainExplorer.Location.Y);
+            SwitchBookmarkButton.Parent = this.MainExplorer;
+            SwitchBookmarkButton.Location = new System.Drawing.Point(SwitchBookmarkButton.Location.X - MainExplorer.Location.X, SwitchBookmarkButton.Location.Y - MainExplorer.Location.Y);
+            queueComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            //设置事件
+            KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
+            //PlayButton.Click += new EventHandler(onButtonClicked);
+            NextButton.Click += new EventHandler(MainExplorer.SlideRight);
+            PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
+            idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
+            OpenLocalLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInLocal);
+            SwitchBookmarkButton.Click += new EventHandler(MainExplorer.SwitchBookmarkStatus);
+            queueComboBox.SelectedIndexChanged+=new EventHandler(onQueueComboBoxChanged);
+            //queueComboBox.key
+            //绑定属性
+            PageLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IndexText"));
+            DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer, "DescText"));
+            PlayButton.DataBindings.Add(new Binding("Text", MainExplorer, "TotalPageText"));
+            idLabel.DataBindings.Add(new Binding("Text", MainExplorer, "IdText"));
+            SwitchBookmarkButton.DataBindings.Add(new Binding("Image", MainExplorer, "FavIcon"));
+            TagBox.DataBindings.Add(new Binding("Tags", MainExplorer, "Tags"));
+            AuthorBox.DataBindings.Add(new Binding("UserId", MainExplorer, "UserId"));
+            DataBindings.Add(new Binding("Text", pixivClient, "VerifyState"));
+
+            //onListCheckBoxClick(null,null);
+            UpdateQueueComboBox();
+            //Debug
+            pixivClient.Test();
         }
-        protected override bool ProcessDialogKey(Keys keyData)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == Keys.Tab)
+                return true;
+            if (keyData == Keys.Up || keyData == Keys.Down || keyData == Keys.Left || keyData == Keys.Right)
                 return true;
             return false;
         }
         private void onButtonClicked(object sender, EventArgs e)
         {
-            using (BlockSyncContext.Enter())
-            {
-                //MainExplorer.Play();
-                pixivClient.Test();
-            }
+            MainExplorer.Play();
+            //pixivClient.Test();
         }
-
-        private void onListCheckBoxClick(object sender, EventArgs e)
+        private async void onQueueComboBoxChanged(object sender, EventArgs e)
         {
             using (BlockSyncContext.Enter())
-                MainExplorer.SetList(FavCheckBox.Checked,FavPrivateCheckBox.Checked,QueueCheckBox.Checked);
+            {
+                var item = (ComboBoxItem)queueComboBox.SelectedItem;
+                await MainExplorer.SetList(await pixivClient.GetExploreQueue(item.type,item.id));
+            }
+        }
+        private async void UpdateQueueComboBox()
+        {
+            queueComboBox.Items.Clear();
+            using (BlockSyncContext.Enter())
+                foreach (var item in await pixivClient.GetExploreQueueName())
+                    queueComboBox.Items.Add(new ComboBoxItem(item));
         }
         private void InitializeComponent()
         {
             System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
-            this.TagLabel = new System.Windows.Forms.Label();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainWindow));
+            this.AuthorBox = new PixivAss.AuthorBox();
+            this.TagBox = new PixivAss.TagBox();
             this.DescBrowser = new System.Windows.Forms.WebBrowser();
             this.PlayButton = new System.Windows.Forms.Button();
             this.PageLabel = new System.Windows.Forms.Label();
-            this.MainExplorer = new PixivAss.Explorer();
             this.NextButton = new System.Windows.Forms.Label();
             this.PrevButton = new System.Windows.Forms.Label();
             this.idLabel = new System.Windows.Forms.LinkLabel();
-            this.FavoriteButton = new System.Windows.Forms.Label();
-            this.FavCheckBox = new System.Windows.Forms.CheckBox();
-            this.FavPrivateCheckBox = new System.Windows.Forms.CheckBox();
-            this.QueueCheckBox = new System.Windows.Forms.CheckBox();
+            this.OpenLocalLabel = new System.Windows.Forms.LinkLabel();
+            this.SwitchBookmarkButton = new System.Windows.Forms.Label();
+            this.MainExplorer = new PixivAss.Explorer();
+            this.queueComboBox = new System.Windows.Forms.ComboBox();
             flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             flowLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).BeginInit();
@@ -91,7 +132,8 @@ namespace PixivAss
             flowLayoutPanel1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
             flowLayoutPanel1.BackColor = System.Drawing.Color.Transparent;
-            flowLayoutPanel1.Controls.Add(this.TagLabel);
+            flowLayoutPanel1.Controls.Add(this.AuthorBox);
+            flowLayoutPanel1.Controls.Add(this.TagBox);
             flowLayoutPanel1.Controls.Add(this.DescBrowser);
             flowLayoutPanel1.Location = new System.Drawing.Point(12, 148);
             flowLayoutPanel1.Margin = new System.Windows.Forms.Padding(0);
@@ -99,29 +141,38 @@ namespace PixivAss
             flowLayoutPanel1.Size = new System.Drawing.Size(164, 446);
             flowLayoutPanel1.TabIndex = 14;
             // 
-            // TagLabel
+            // AuthorBox
             // 
-            this.TagLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            this.AuthorBox.Location = new System.Drawing.Point(3, 3);
+            this.AuthorBox.Name = "AuthorBox";
+            this.AuthorBox.Size = new System.Drawing.Size(154, 20);
+            this.AuthorBox.TabIndex = 12;
+            this.AuthorBox.UserId = 0;
+            // 
+            // TagBox
+            // 
+            this.TagBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.TagLabel.AutoSize = true;
-            this.TagLabel.Location = new System.Drawing.Point(3, 0);
-            this.TagLabel.MaximumSize = new System.Drawing.Size(167, 0);
-            this.TagLabel.Name = "TagLabel";
-            this.TagLabel.Size = new System.Drawing.Size(119, 12);
-            this.TagLabel.TabIndex = 12;
-            this.TagLabel.Text = "#Tag #Tag #Tag #Tag";
+            this.TagBox.CausesValidation = false;
+            this.TagBox.Location = new System.Drawing.Point(3, 29);
+            this.TagBox.Name = "TagBox";
+            this.TagBox.Size = new System.Drawing.Size(161, 68);
+            this.TagBox.TabIndex = 9;
+            this.TagBox.Tags = ((System.Collections.Generic.List<string>)(resources.GetObject("TagBox.Tags")));
             // 
             // DescBrowser
             // 
             this.DescBrowser.AllowWebBrowserDrop = false;
+            this.DescBrowser.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.DescBrowser.CausesValidation = false;
             this.DescBrowser.IsWebBrowserContextMenuEnabled = false;
-            this.DescBrowser.Location = new System.Drawing.Point(0, 12);
+            this.DescBrowser.Location = new System.Drawing.Point(0, 100);
             this.DescBrowser.Margin = new System.Windows.Forms.Padding(0);
             this.DescBrowser.MinimumSize = new System.Drawing.Size(20, 20);
             this.DescBrowser.Name = "DescBrowser";
             this.DescBrowser.ScrollBarsEnabled = false;
-            this.DescBrowser.Size = new System.Drawing.Size(164, 454);
+            this.DescBrowser.Size = new System.Drawing.Size(164, 326);
             this.DescBrowser.TabIndex = 7;
             this.DescBrowser.TabStop = false;
             // 
@@ -148,18 +199,6 @@ namespace PixivAss
             this.PageLabel.Size = new System.Drawing.Size(124, 64);
             this.PageLabel.TabIndex = 6;
             this.PageLabel.Text = "0/0";
-            // 
-            // MainExplorer
-            // 
-            this.MainExplorer.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.MainExplorer.Location = new System.Drawing.Point(182, 12);
-            this.MainExplorer.Name = "MainExplorer";
-            this.MainExplorer.Size = new System.Drawing.Size(850, 582);
-            this.MainExplorer.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
-            this.MainExplorer.TabIndex = 2;
-            this.MainExplorer.TabStop = false;
             // 
             // NextButton
             // 
@@ -189,65 +228,63 @@ namespace PixivAss
             // 
             // idLabel
             // 
-            this.idLabel.Location = new System.Drawing.Point(13, 9);
+            this.idLabel.Location = new System.Drawing.Point(10, 9);
             this.idLabel.Name = "idLabel";
-            this.idLabel.Size = new System.Drawing.Size(163, 23);
+            this.idLabel.Size = new System.Drawing.Size(74, 23);
             this.idLabel.TabIndex = 10;
             this.idLabel.TabStop = true;
             this.idLabel.Text = "pid0000000";
             this.idLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // FavoriteButton
+            // OpenLocalLabel
             // 
-            this.FavoriteButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.FavoriteButton.BackColor = System.Drawing.Color.Transparent;
-            this.FavoriteButton.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.FavoriteButton.Image = global::PixivAss.Properties.Resources.NotFav;
-            this.FavoriteButton.Location = new System.Drawing.Point(941, 520);
-            this.FavoriteButton.Name = "FavoriteButton";
-            this.FavoriteButton.Size = new System.Drawing.Size(91, 74);
-            this.FavoriteButton.TabIndex = 11;
+            this.OpenLocalLabel.Location = new System.Drawing.Point(90, 12);
+            this.OpenLocalLabel.Name = "OpenLocalLabel";
+            this.OpenLocalLabel.Size = new System.Drawing.Size(83, 20);
+            this.OpenLocalLabel.TabIndex = 18;
+            this.OpenLocalLabel.TabStop = true;
+            this.OpenLocalLabel.Text = "Open Local File";
+            this.OpenLocalLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // FavCheckBox
+            // SwitchBookmarkButton
             // 
-            this.FavCheckBox.AutoSize = true;
-            this.FavCheckBox.Location = new System.Drawing.Point(12, 129);
-            this.FavCheckBox.Name = "FavCheckBox";
-            this.FavCheckBox.Size = new System.Drawing.Size(48, 16);
-            this.FavCheckBox.TabIndex = 15;
-            this.FavCheckBox.Text = "收藏";
-            this.FavCheckBox.UseVisualStyleBackColor = true;
+            this.SwitchBookmarkButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.SwitchBookmarkButton.BackColor = System.Drawing.Color.Transparent;
+            this.SwitchBookmarkButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.SwitchBookmarkButton.Image = global::PixivAss.Properties.Resources.NotFav;
+            this.SwitchBookmarkButton.Location = new System.Drawing.Point(941, 520);
+            this.SwitchBookmarkButton.Name = "SwitchBookmarkButton";
+            this.SwitchBookmarkButton.Size = new System.Drawing.Size(91, 74);
+            this.SwitchBookmarkButton.TabIndex = 11;
             // 
-            // FavPrivateCheckBox
+            // MainExplorer
             // 
-            this.FavPrivateCheckBox.AutoSize = true;
-            this.FavPrivateCheckBox.Location = new System.Drawing.Point(66, 129);
-            this.FavPrivateCheckBox.Name = "FavPrivateCheckBox";
-            this.FavPrivateCheckBox.Size = new System.Drawing.Size(54, 16);
-            this.FavPrivateCheckBox.TabIndex = 16;
-            this.FavPrivateCheckBox.Text = "收藏R";
-            this.FavPrivateCheckBox.UseVisualStyleBackColor = true;
+            this.MainExplorer.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.MainExplorer.Location = new System.Drawing.Point(182, 12);
+            this.MainExplorer.Name = "MainExplorer";
+            this.MainExplorer.Size = new System.Drawing.Size(850, 582);
+            this.MainExplorer.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.MainExplorer.TabIndex = 2;
+            this.MainExplorer.TabStop = false;
             // 
-            // QueueCheckBox
+            // queueComboBox
             // 
-            this.QueueCheckBox.AutoSize = true;
-            this.QueueCheckBox.Checked = true;
-            this.QueueCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.QueueCheckBox.Location = new System.Drawing.Point(126, 129);
-            this.QueueCheckBox.Name = "QueueCheckBox";
-            this.QueueCheckBox.Size = new System.Drawing.Size(48, 16);
-            this.QueueCheckBox.TabIndex = 17;
-            this.QueueCheckBox.Text = "队列";
-            this.QueueCheckBox.UseVisualStyleBackColor = true;
+            this.queueComboBox.FormattingEnabled = true;
+            this.queueComboBox.Location = new System.Drawing.Point(12, 125);
+            this.queueComboBox.Name = "queueComboBox";
+            this.queueComboBox.Size = new System.Drawing.Size(164, 20);
+            this.queueComboBox.TabIndex = 19;
+            this.queueComboBox.TabStop = false;
             // 
             // MainWindow
             // 
             this.ClientSize = new System.Drawing.Size(1044, 606);
-            this.Controls.Add(this.QueueCheckBox);
-            this.Controls.Add(this.FavPrivateCheckBox);
-            this.Controls.Add(this.FavCheckBox);
+            this.Controls.Add(this.queueComboBox);
+            this.Controls.Add(this.OpenLocalLabel);
             this.Controls.Add(flowLayoutPanel1);
-            this.Controls.Add(this.FavoriteButton);
+            this.Controls.Add(this.SwitchBookmarkButton);
             this.Controls.Add(this.idLabel);
             this.Controls.Add(this.PageLabel);
             this.Controls.Add(this.PrevButton);
@@ -257,10 +294,10 @@ namespace PixivAss
             this.KeyPreview = true;
             this.Name = "MainWindow";
             flowLayoutPanel1.ResumeLayout(false);
-            flowLayoutPanel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
 
         private Explorer MainExplorer;
@@ -269,11 +306,10 @@ namespace PixivAss
         private Label NextButton;
         private Label PrevButton;
         private LinkLabel idLabel;
-        private Label FavoriteButton;
-        private Label TagLabel;
-
-        private CheckBox FavCheckBox;
-        private CheckBox FavPrivateCheckBox;
-        private CheckBox QueueCheckBox;
+        private Label SwitchBookmarkButton;
+        private LinkLabel OpenLocalLabel;
+        private TagBox TagBox;
+        private ComboBox queueComboBox;
+        private AuthorBox AuthorBox;
     }
 }

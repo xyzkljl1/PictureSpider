@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -34,6 +36,23 @@ namespace PixivAss
                 running_task_list.Clear();
             }
         }
+        public static async Task<HashSet<string>> GetResultSet(TaskQueue<List<string>> queue)
+        {
+            await queue.Done();
+            var ret = new HashSet<string>();
+            foreach (var task in queue.done_task_list)
+                foreach (var item in task.Result)
+                    ret.Add(item);
+            return ret;
+        }
+        public static async Task<HashSet<string>> GetResultSet(TaskQueue<string> queue)
+        {
+            await queue.Done();
+            var ret = new HashSet<string>();
+            foreach (var task in queue.done_task_list)
+                ret.Add(task.Result);
+            return ret;
+        }
     }
     class TaskQueue<T>
     {
@@ -62,6 +81,29 @@ namespace PixivAss
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
+        }
+        public async Task<HashSet<int>> GetResultSet()
+        {//暂时想不到更好的写法
+            var converter = TypeDescriptor.GetConverter(typeof(T));
+            if (typeof(T) == typeof(int))
+            {
+                await Done();
+                var ret = new HashSet<int>();
+                foreach (var task in done_task_list)
+                    ret.Add((int)Convert.ChangeType(task.Result, typeof(int)));
+                return ret;
+            }
+            else if (typeof(T) == typeof(List<int>))
+            {
+                await Done();
+                var ret = new HashSet<int>();
+                foreach (var task in done_task_list)
+                    foreach (var item in (List<int>)Convert.ChangeType(task.Result, typeof(List<string>)))
+                        ret.Add(item);
+                return ret;
+            }
+            else
+                return null;
         }
     }
 }

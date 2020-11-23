@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -16,6 +17,14 @@ namespace PixivAss
 {
     partial class Client:IDisposable,INotifyPropertyChanged
     {
+        public enum ExploreQueueType
+        {
+            Fav,
+            FavR,
+            Main,
+            MainR,
+            User
+        };
         public string VerifyState { get=>verify_state;
             set
             {
@@ -24,41 +33,45 @@ namespace PixivAss
             }
         }
         private string verify_state="Waiting";
-        private const string download_dir="E:/p/";
+        private string download_dir_root="G:/p/";
         private string user_id;
         private string base_url;
         private string base_host;
         private string user_name;
-        private string formal_public_dir;
-        private string formal_private_dir;
-        private string tmp_dir;
+        private string download_dir_bookmark_pub;
+        private string download_dir_bookmark_private;
+        public string download_dir_main;
         public string special_dir;
         private CookieServer cookie_server;
         public  Database database;
         private HttpClient httpClient;
         private HashSet<string> banned_keyword;
+        private Uri aria2_rpc_addr =new Uri("http://127.0.0.1:4322/jsonrpc");
+        private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
+        private string request_proxy = "127.0.0.1:1081";
+        private string download_proxy = "127.0.0.1:8000";
 
         public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Client()
         {
-            formal_public_dir = download_dir+"pub";
-            formal_private_dir = download_dir+"private";
-            tmp_dir = download_dir+"tmp";
-            special_dir = download_dir +"special";
+            download_dir_bookmark_pub = download_dir_root+"pub";
+            download_dir_bookmark_private = download_dir_root+"private";
+            download_dir_main = download_dir_root+"tmp";
+            special_dir = download_dir_root +"special";
 
             database = new Database("root","pixivAss","pass");
             user_id = "16428599";
             user_name = "xyzkljl1";
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
-            cookie_server = new CookieServer(database);
+            cookie_server = new CookieServer(database,request_proxy);
 
             System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
                                         {
                                             MaxConnectionsPerServer = 256,
                                             UseCookies = false,
-                                            Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.0.1", 1081), false)
+                                            Proxy = new WebProxy(request_proxy, false)
                                         };            
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
@@ -74,86 +87,238 @@ namespace PixivAss
             httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "none");
             httpClient.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
+
             Task.Run(CheckHomePage);
-            banned_keyword =database.GetBannedKeyword().GetAwaiter().GetResult();
+            banned_keyword = database.GetBannedKeyword().GetAwaiter().GetResult();
         }
         public void Dispose()
         {
             httpClient.Dispose();
         }
         public async Task<string> Test()
-        {
-            //DownloadBookmarkPrivate();
-            Task.Run(()=> { this.DownloadAllIlust(); });
-            //await FetchAllKeywordSearchResult();
-            //await FetchAllFollowedUserIllust();
-            //await FetchAllKnownIllust();
-            //DownloadAllIlust();
-            //FetchBookMarkIllust(true);
-            //FetchBookMarkIllust(false);
-            //FetchAllUser();
-            //FetchIllustByList(new List<string>{ "76278759"});
-            //RequestIllustAsync("44302315");
+        {/*            
+            var list = await RequestAllByUserId(55875);
+            var queue = new TaskQueue<Illust>(500);
+            foreach (var illust in list)
+                await queue.Add(RequestIllustAsync(illust));
+            await queue.Done();
+            var process = new System.Diagnostics.Process();
+            //右斜杠和左斜杠都可以但是不能混用(不知道为什么)
+            process.StartInfo.WorkingDirectory = System.IO.Directory.GetCurrentDirectory() + @"\aria2";
+            process.StartInfo.FileName = "aria2c(PixivAss).exe";
+            process.StartInfo.RedirectStandardOutput = false;
+            process.StartInfo.UseShellExecute = true;
+            process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --http-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy, cookie_server.cookie);
+            process.Start();
+            var d_queue = new TaskQueue<bool>(500);
+            foreach (var task in queue.done_task_list)
+            {
+                var illust = task.Result;
+                var dir ="G:/p0/" + illust.title.Substring(0,3) + illust.id.ToString();
+                Directory.CreateDirectory(dir);
+                for (int i = 0; i < illust.pageCount; ++i)
+                {
+                    string url = String.Format(illust.urlFormat, i);
+                    string file_name = GetDownloadFileName(illust, i);
+                    await d_queue.Add(DownloadIllustForceAria2(url, dir, file_name));
+                }
+            }
+            await d_queue.Done();*/
+            return "";
+           // var list = await database.GetBookmarkIllustId(true);
+//            await PushAllBookMark();
+            var new_list=await RequestBookMarkIllust(true);
+            await PushBookmark(false, 258, true,new_list[258]);
+            var new_list_2 = await RequestBookMarkIllust(true);
+            /*
+            Console.WriteLine(list.Count.ToString()+" -> "+new_list.Count.ToString());
+            foreach (var i in new_list)
+                if (!list.Contains(i.Key))
+                    Console.WriteLine(i.Key);
+            */
             return "12s3";
+        }
+
+        public async Task<List<Tuple<ExploreQueueType,int,string>>> GetExploreQueueName()
+        {
+            var ret = new List<Tuple<ExploreQueueType, int, string>>();
+            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.Fav, 0,""));
+            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.FavR, 0,""));
+            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.Main, 0,""));
+            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.MainR, 0,""));
+            foreach(var user in await database.GetQueuedUser())
+                ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.User, user.userId,user.userName));
+            return ret;
+        }
+        public async Task<List<Illust>> GetExploreQueue(ExploreQueueType type,int userId)
+        {
+            var list = new List<Illust>();
+            if (type == Client.ExploreQueueType.Main || type == Client.ExploreQueueType.MainR)
+            {
+                bool is_private = type == Client.ExploreQueueType.MainR;
+                var id_list = (await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                            .ToList<string>()
+                            .Select<string, int>(x => Int32.Parse(x))
+                            .ToList<int>();
+                foreach (var illust in await database.GetIllustFull(id_list))
+                    if ((illust.xRestrict > 0) == is_private && !illust.readed && !illust.bookmarked)
+                        list.Add(illust);
+            }
+            else if (type == Client.ExploreQueueType.Fav || type == Client.ExploreQueueType.FavR)
+            {
+                bool is_private = type == Client.ExploreQueueType.FavR;
+                list = await database.GetIllustFull(await database.GetBookmarkIllustId(!is_private));
+            }
+            else
+            {
+                list = await database.GetIllustFullByUser(userId);
+            }
+            return list;
+        }
+
+        public async Task RunSchedule()
+        {
+            //在每日1点执行定时任务
+            //假定任务耗时不会超过23小时，即每天都会触发一次
+            do
+            {
+                DateTime next = DateTime.Today.AddDays(1).AddHours(1.0); //次日1：00
+                int waiting_time = (int)((next - DateTime.Now).TotalMilliseconds);
+                await Task.Delay(waiting_time);
+                var illust_list = new HashSet<int>();
+                bool do_week_task = DateTime.Now.DayOfWeek == System.DayOfWeek.Monday;//每周一次
+                if (do_week_task)//需要在FetchIllust之前
+                {
+                    await FetchFollowedUserList();//需要在RequestAllFollowedUserIllust之前
+                    illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
+                    illust_list.UnionWith(await RequestAllKeywordSearchIllust());
+                    illust_list.UnionWith(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-7)));
+                }
+                //每天一次
+                illust_list.UnionWith(await RequestAllCurrentRankIllust());
+                //FetchIllust
+                await FetchIllustByIdWhenNeccessary(illust_list);
+                if (do_week_task)//需要在FetchIllust之后
+                {
+                    await GenerateQueue();
+                    await FetchAllUnfollowedUserStatus();
+                    await DownloadAllIlust();
+                }
+            }
+            while (true);
+        }
+
+        private async Task GenerateQueue(bool force=false)
+        {
+            const int UpdateInterval = 7 * 24 * 60 * 60;//每超过这个时间才刷新
+            const int MaxSize = 10000;
+            if (force||(await database.GetQueueUpdateInterval())>UpdateInterval||(await database.GetQueue()).Length<2)
+            {
+                var illust_list =await database.GetAllUnreadedIllustFull();
+                var followed_user = new HashSet<int>();
+                foreach (var user in await database.GetFollowedUser())
+                    followed_user.Add(user.userId);
+                foreach (var illust in illust_list)
+                {
+                    illust.score = 0;
+                    if (followed_user.Contains(illust.userId))
+                        illust.score += 1000000;
+                    illust.score += illust.bookmarkCount / 100 + illust.likeCount / 1000;
+                    if (illust.xRestrict > 0)//R18倒序排序
+                        illust.score = -illust.score;
+                }
+                illust_list.Sort((l, r) => r.score.CompareTo(l.score));
+                if (illust_list.Count > MaxSize*2)//取头尾各固定长，如果R18部分数量不足会取到评分低的非R图，但是无所谓
+                    illust_list=illust_list.Take<Illust>(MaxSize).Concat(illust_list.Reverse<Illust>().Take<Illust>(MaxSize)).ToList<Illust>();
+                string queue = "";
+                foreach (var illust in illust_list)
+                    queue += " "+illust.id;
+                await database.UpdateQueue(queue);
+            }
         }
 
         /*
          * Request:从远端查询并返回结果
          * Fetch:从远端查询并存储到数据库
+         * Push:将本地结果推送到远端
          */
-        //同步所有图片到本地，如有必要则进行下载/删除
-        //要求Illust信息都已更新过
-        public void DownloadAllIlust()
+        //同步所有图片到本地，如有必要则进行下载/删除，要求Illust信息都已更新过
+        //IDM下载更快，但是各行为耗时且互相阻塞和报错中断下载的问题，Aria2更加稳定灵活，因此采用Aria2
+        //所有图片都存储到dir_main,再拷贝到dir_bookmark
+        private async Task DownloadAllIlust()
         {
-            /*IDM真是一言难尽,可能是因为任务要排序/一个个添加到表格里，还全阻塞主线程，导致任务一多就各种卡
-             * 界面卡，SendLinkToIDM也卡，把任务输出成文件再导入也会卡，一卡几十分钟
-             * api又没有清除已完成任务的功能，所以创建任务时必须关掉界面
-             * 然后创建任务期间会停掉下载，内存也会疯涨
-             * 只能分几次下载了，每下完一波清任务
-            */
-            var idm = new CIDMLinkTransmitter();
-            int ct = 0;
-            var illustList = database.GetAllIllustFull();
-            foreach (var illust in illustList)
+            try
             {
-                string dir = GetDownloadDir(illust);
-                for (int i = 0; i < illust.pageCount; ++i)
-                {
-                    string url = String.Format(illust.urlFormat, i);
-                    string file_name = GetDownloadFileName(illust, i);
-                    bool exist = File.Exists(dir + "/" + file_name);
-                    if (GetShouldDownload(illust, i))
-                    {
-                        if (!exist)
-                            ct += DownloadIllustForce(idm,illust.id, url, dir, file_name) ? 1 : 0;
-                    }
-                    else if (exist && GetShouldDelete(illust, i))
-                        File.Delete(dir + "/" + file_name);
+                //关闭旧的aria2，已有任务没有重复利用的必要，全部放弃
+                foreach (var process in System.Diagnostics.Process.GetProcessesByName("aria2c(PixivAss)"))
+                    process.CloseMainWindow();
+                {//启动aria2
+                    var process = new System.Diagnostics.Process();
+                    //右斜杠和左斜杠都可以但是不能混用(不知道为什么)
+                    process.StartInfo.WorkingDirectory = System.IO.Directory.GetCurrentDirectory() + @"\aria2";
+                    process.StartInfo.FileName = "aria2c(PixivAss).exe";
+                    process.StartInfo.RedirectStandardOutput = false;
+                    process.StartInfo.UseShellExecute = true;
+                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --http-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy,cookie_server.cookie);
+                    process.Start();
                 }
+                var queue = new TaskQueue<bool>(3000);
+                var illustList = await database.GetAllIllustFull();
+                //移除aria2临时文件
+                foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))
+                    File.Delete(file);
+                //创建下载任务
+                foreach (var illust in illustList)
+                {
+                    for (int i = 0; i < illust.pageCount; ++i)
+                    {
+                        string url = String.Format(illust.urlFormat, i);
+                        string file_name = GetDownloadFileName(illust, i);
+                        bool exist = File.Exists(download_dir_main + "/" + file_name);
+                        if (GetShouldDownload(illust, i))
+                        {//要有大括号
+                            if (!exist)
+                                await queue.Add(DownloadIllustForceAria2(url, download_dir_main, file_name));
+                        }
+                        else if (exist && GetShouldDelete(illust, i))//假定没有垃圾文件
+                            File.Delete(download_dir_main + "/" + file_name);
+                    }
+                }
+                await queue.Done();
+                int ct = 0;
+                queue.done_task_list.ForEach((Task<bool> task)=> { ct+= task.Result ? 1 : 0; });
+                Console.WriteLine(String.Format("Downloaded Begin{0}", ct));
+                //等待完成并查询状态
+                while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 30));
+                //完成后拷贝
+                foreach (var illust in illustList)
+                    if(illust.bookmarked)
+                    {
+                        string dir = illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub;
+                        for (int i = 0; i < illust.pageCount; ++i)
+                        {
+                            string file_name = GetDownloadFileName(illust, i);
+                            if(File.Exists(download_dir_main + "/" + file_name))
+                                File.Copy(download_dir_main + "/" + file_name, dir+"/"+file_name,true);
+                        }
+                    }
             }
-        /*
-             * 仔细想想似乎并没有监视的必要
-            FileSystemWatcher watcher=new FileSystemWatcher();
-            watcher.Path = path;
-            watcher.IncludeSubdirectories = false;
-            watcher.EnableRaisingEvents = true;
-            */
-            Console.WriteLine(String.Format("Downloaded {0}", ct));
-        }
-        //更新所有已知的作品状态
-        public async Task FetchAllKnownIllust()
-        {
-            await FetchIllustByIdList(await database.GetAllIllustId());
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                throw;
+            }
         }
 
-        //搜索结果太多,必须分段进行
-        public async Task FetchAllKeywordSearchResult()
-        {            
+        private async Task<HashSet<int>> RequestAllKeywordSearchIllust()
+        {
+            var ret =new HashSet<int>();
             var key_word_list=new List<string>();
-            var task_list = new Dictionary<string, Task<List<string>>>();
+            var task_list = new Dictionary<string, Task<List<int>>>();
             var tmp = "";
             //用or合并关键字可以减少重复
-            foreach (var word in await database.GetAllKeyword())
+            foreach (var word in await database.GetFollowedTags())
             {
                 tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
                 if (tmp.Length > 1600)
@@ -162,9 +327,8 @@ namespace PixivAss
                     tmp = "";
                 }
             }
-            int start_page = 700;
+            int start_page = 0;
             int step = 100;
-            var set = new HashSet<string>();
             while(key_word_list.Count>0)
             {
                 foreach(var key in key_word_list)
@@ -178,73 +342,67 @@ namespace PixivAss
                     if (task_list[key].Result.Count == 0)
                     {
                         key_word_list.Remove(key);
-                        Console.WriteLine("Keyword " + key.Substring(0,20)+" Done");
+                        Console.WriteLine("Keyword(Tag) " + key.Substring(0,20)+" Done");
                     }
                 //合并结果
                 foreach (var task in task_list.Values)
                     foreach (var id in task.Result)
-                        set.Add(id);
+                        ret.Add(id);
                 task_list.Clear();
-                if (set.Count > 30000)
-                {
-                    await FetchIllustByIdSetReduce(set);
-                    Console.WriteLine("Update Search Res " + set.Count.ToString());
-                    set.Clear();
-                }
-                else
-                    Console.WriteLine("Search Res: " + set.Count.ToString());
+                Console.WriteLine(String.Format("Search Res {0}: {1}",start_page,ret.Count));
                 start_page += step;
             }
-            if (set.Count > 0)
-            {
-                await FetchIllustByIdSetReduce(set);
-                Console.WriteLine("Update Search Res " + set.Count.ToString());
-            }
-            Console.WriteLine("Update Search Res  Done");
-            return;
+            Console.WriteLine("Final Search Res: " + ret.Count.ToString());
+            return ret;
         }
-        public async Task FetchAllFollowedUserIllust()
+        private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
         {
-            var queue=new TaskQueue<List<string>>(1000);
-            foreach(var user in await database.GetUser(true,false))
+            var queue = new TaskQueue<List<int>>(1000);
+            foreach (var user in await database.GetFollowedUser())
                 await queue.Add(RequestAllByUserId(user.userId));
-            await queue.Done();
-            var set = new HashSet<string>();
-            foreach (var task in queue.done_task_list)
-                foreach (var id in task.Result)
-                    set.Add(id);
-            await FetchIllustByIdSetReduce(set);
+            foreach (var user in await database.GetQueuedUser())
+                await queue.Add(RequestAllByUserId(user.userId));
+            return await queue.GetResultSet();
+        }
+        private async Task<HashSet<int>> RequestAllCurrentRankIllust()
+        {
+            var queue = new TaskQueue<List<int>>(100);
+            //一般每种排行总数在500左右浮动，一页50，RequestRankPage可以获得总数。
+            //但是反正页数很少并且只需要固定数量，没有必要知道总共几页
+            foreach (var mode in new List<string> { "daily", "weekly","monthly","male","daily_r18","weekly_r18","male_r18"})
+                for(int p=0;p<5;++p)
+                    await queue.Add(RequestRankPage(mode,p));
+            return await queue.GetResultSet();
         }
 
         //获取并更新该作者的所有作品
-        public async Task<List<string>> RequestAllByUserId(string userId)
+        private async Task<List<int>> RequestAllByUserId(int userId)
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
             JObject ret =await RequestJsonAsync(url, referer);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get All By User Fail");
-            var idList = new List<string>();
+            var idList = new List<int>();
             foreach (var illust in ret.GetValue("body").Value<JObject>("illusts"))
-                idList.Add(illust.Key.ToString());
+               idList.Add(Int32.Parse(illust.Key));
+            //只看插画,不看漫画
+//            foreach (var illust in ret.GetValue("body").Value<JObject>("manga"))
+//                idList.Add(Int32.Parse(illust.Key));
             return idList;
         }
         //先从本地去重再FetchIllustByIdList
-        public async Task FetchIllustByIdSetReduce(HashSet<string> id_list)
+        private async Task FetchIllustByIdWhenNeccessary(HashSet<int> id_list)
         {
-            var local_illust = new HashSet<string>();
-            DateTime timeline = DateTime.UtcNow.AddDays(-7);
-            foreach (var illust in database.GetAllIllustFull())
-                if (illust.updateTime > timeline)
-                    local_illust.Add(illust.id);
-            var all_illust = new List<string>();
+            var no_need_update_illust =new HashSet<int>(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-7), true));
+            var all_illust = new List<int>();
             foreach (var id in id_list)
-                if (!local_illust.Contains(id))
+                if (!no_need_update_illust.Contains(id))
                     all_illust.Add(id);
-            await FetchIllustByIdList(all_illust);
+            await FetchIllustByIdForce(all_illust);
         }
         //获取并更新指定的作品
-        public async Task FetchIllustByIdList(List<string> illustIdList)
+        private async Task FetchIllustByIdForce(List<int> illustIdList)
         {
             var queue = new TaskQueue<Illust>(3000);
             foreach (var illustId in illustIdList)
@@ -255,21 +413,20 @@ namespace PixivAss
                 illustList.Add(task.Result);
             database.UpdateIllustOriginalData(illustList);
         }
-        //获取并更新所有收藏作品
-        public async Task FetchBookMarkIllust(bool pub)
+        private async Task<Dictionary<int,Int64>> RequestBookMarkIllust(bool pub,bool get_bookmark_id=false)
         {
             int total = 0;
             int offset = 0;
             int page_size = 48;
-            var idList = new List<string>();
+            var idList = new Dictionary<int, Int64>();
             //查询收藏作品的id
-            while (offset==0||offset<total)
+            while (offset == 0 || offset < total)
             {
                 //和获取其它用户的收藏不同，limit不能过高
                 string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset={2}&limit={3}&rest={4}",
-                                            base_url, user_id,offset,page_size, pub ? "show" : "hide");
+                                            base_url, user_id, offset, page_size, pub ? "show" : "hide");
                 string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-                JObject ret =await RequestJsonAsync(url, referer);
+                JObject ret = await RequestJsonAsync(url, referer);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 //获取总数,仅用于提示
@@ -279,28 +436,59 @@ namespace PixivAss
                     total = ret.GetValue("body").Value<int>("total");
                 //获取该页的id
                 foreach (var illust in ret.GetValue("body").Value<JArray>("works"))
-                    idList.Add(illust.Value<string>("id"));
+                    idList[illust.Value<int>("id")]=Int64.Parse(illust.Value<JObject>("bookmarkData").Value<string>("id"));
                 offset += page_size;
             }
+            return idList;
+        }
+
+        //获取并更新所有收藏作品
+        //只在最初使用
+        private async Task FetchBookMarkIllust(bool pub)
+        {
+            var idList =(await RequestBookMarkIllust(pub)).Keys.ToList<int>();
             //将当前有效的已收藏作品和可能已无效/已移除收藏的作品(即本地存储的已收藏作品)一起更新状态
             //FetchIllust时会获取Illust是否已收藏状态，所以不需要另行更新收藏状态
             int tmp = idList.Count;
             foreach (var illust_id in await database.GetBookmarkIllustId(pub))
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
-            await FetchIllustByIdList(idList);
-            Console.Write(String.Format("Fetch {0}/{1} {2} Bookmarks",pub?"Public":"Private",tmp,total));
+            await FetchIllustByIdForce(idList);
+            Console.Write(String.Format("Fetch {0}/{1}  Bookmarks",pub?"Public":"Private",tmp));
         }
+        //WIP
+        private async Task PushAllBookMark()
+        {
+            var remote_list = await RequestBookMarkIllust(true);
+            remote_list = remote_list.Union(await RequestBookMarkIllust(false)).ToDictionary<KeyValuePair<int,Int64>,int, Int64>(kv => kv.Key, kv => kv.Value);
+            var local_list_pub = await database.GetBookmarkIllustId(true);
+            var local_list_private = await database.GetBookmarkIllustId(false);
+            var queue = new TaskQueue<bool>(50);
+            foreach (var pair in remote_list)
+                if ((!local_list_pub.Contains(pair.Key)) && !local_list_private.Contains(pair.Key))
+                    await queue.Add(PushBookmark(false,pair.Key,false,pair.Value));
+            foreach (var id in local_list_pub)
+                await queue.Add(PushBookmark(true, id, true));
+            foreach (var id in local_list_private)
+                await queue.Add(PushBookmark(true, id, false));
+        }
+
         //获取并更新关注的作者状态
-        public async Task FetchFollowedUserList()
+        private async Task FetchFollowedUserList()
         {
             int total = await RequestFollowedUserCount();
             var userList = new List<User>();
-            for (int i = 0; i < total; i += 100)
+            var queue = new TaskQueue<JObject>(50);
+            for (int i = 0; i < total; i += 100)//因为关注作者本来就少，还是一次获取一页，其实可以不用TaskQueue
             {
                 string url = String.Format("{0}ajax/user/{1}/following?offset={2}&limit=100&rest=show", base_url, user_id,i);
                 string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-                JObject ret =await RequestJsonAsync(url, referer);
+                await queue.Add(RequestJsonAsync(url, referer));
+            }
+            await queue.Done();
+            foreach(var task in queue.done_task_list)
+            {
+                JObject ret = task.Result;
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 foreach (var user in ret.GetValue("body").Value<JArray>("users"))
@@ -310,51 +498,29 @@ namespace PixivAss
             Console.Write("Fetch " + userList.Count.ToString() + " followings");
         }
         //更新所有已知的未关注作者状态
-        public async Task FetchAllUnfollowedUserStatus()
+        private async Task FetchAllUnfollowedUserStatus()
         {
-            var user_list = await database.GetUser(false, true);
-            var task_list = new List<Task<User>>();
-            foreach (var user in user_list)
-            {
-                var task = RequestUserAsync(user.userId);
-                task_list.Add(task);
-            }
-            await Task.WhenAll(task_list.ToArray());
-            user_list.Clear();
-            foreach (var task in task_list)
-                user_list.Add(task.Result);
-            database.UpdateUserName(user_list);
-        }
-        public async Task FetchAllUserStatus()
-        {
-            await FetchFollowedUserList();
-            await FetchAllUnfollowedUserStatus();
-        }
-        //获取搜索结果
-        //!:key_word需要以URL编码
-        public async Task<List<string>> RequestSearchResult(string key_word, bool text_mode,int start_page, int end_page)
-        {
-            var ret = new List<string>();
             try
             {
-                var queue = new TaskQueue<List<string>>(25);
-                for (int i = start_page; i < end_page; ++i)//页数从1开始，在RequestSearchPage里面加1了
-                    await queue.Add(RequestSearchPage(key_word, i, text_mode));
+                var user_list = await database.GetFollowedUser(false);
+                var queue = new TaskQueue<User>(2000);
+                foreach (var user in user_list)
+                    await queue.Add(RequestUserAsync(user.userId));
                 await queue.Done();
+                user_list.Clear();
                 foreach (var task in queue.done_task_list)
-                    ret.AddRange(task.Result);
-                Console.WriteLine("Search {0}:{1}_{2}", key_word.Substring(0, 20), ret.Count.ToString(),ret.Count>0?ret[0]:"None");
-                return ret;
+                    user_list.Add(task.Result);
+                database.UpdateUserName(user_list);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                throw;
             }
-            return ret;
         }
 
         //确认是否成功登录
-        public async Task CheckHomePage()
+        private async Task CheckHomePage()
         {
             VerifyState = "Checking";
             string url = base_url;
