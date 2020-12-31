@@ -13,6 +13,7 @@ namespace PixivAss
 {
     partial class AuthorBox : UserControl
     {
+        public event EventHandler AuthorModified;
         public int UserId
         {
             get { return user_id; }
@@ -72,6 +73,7 @@ namespace PixivAss
                 return;
             var user = new User(user_id, nameLabel.Text, followCheckBox.CheckState == CheckState.Checked, followCheckBox.CheckState == CheckState.Indeterminate);
             client.database.UpdateUser(user).Wait();
+            AuthorModified(this,new EventArgs());
         }
     }
 }

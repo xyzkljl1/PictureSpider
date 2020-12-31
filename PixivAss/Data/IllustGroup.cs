@@ -7,6 +7,14 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PixivAss.Data
 {
+    public enum ExploreQueueType
+    {
+        Fav,
+        FavR,
+        Main,
+        MainR,
+        User
+    };
     public enum TagStatus
     {
         None,
@@ -57,7 +65,9 @@ namespace PixivAss.Data
         public string urlThumbFormat;
         //My Data
         public Boolean readed;
-        public string bookmarkEach;//分别,0:no,1:Pub,2:Private
+        public string bookmarkEach="";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
+                                        string浪费空间且修改消耗大，但是考虑到读远比写次数多，且多数illust的bookmarkEach为空，直接使用string以方便数据库交互
+                                        */
         public DateTime updateTime;
         //tmp
         public string userName;
@@ -122,6 +132,27 @@ namespace PixivAss.Data
             updateTime = DateTime.UtcNow;
             readed = false;
             bookmarkEach = "";
+        }
+        public bool isPageValid(int page)
+        {
+            return bookmarkEach.Count()==pageCount? bookmarkEach[page] == '0':true;
+        }
+        public void switchPageValid(int page)
+        {
+            if(bookmarkEach.Count()!=pageCount)//长度不一致时旧的作废
+                bookmarkEach =new String('0', pageCount);
+            if (pageCount < 2)//只有一页的没有单标的意义
+                return;
+            if (bookmarkEach[page]=='0')
+                bookmarkEach = bookmarkEach.Remove(page, 1).Insert(page, "1");
+            else
+                bookmarkEach = bookmarkEach.Remove(page, 1).Insert(page, "0");
+        }
+        public int validPageCount()
+        {
+            if (bookmarkEach.Count() == pageCount)
+                return bookmarkEach.Sum(x=>x=='0'?1:0);
+            return pageCount;
         }
     }
 }

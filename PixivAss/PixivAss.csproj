@@ -107,6 +107,8 @@
     <Compile Include="AuthorBox.Designer.cs">
       <DependentUpon>AuthorBox.cs</DependentUpon>
     </Compile>
+    <Compile Include="BindHandleProvider.cs" />
+    <Compile Include="QueueComboBox.cs" />
     <Compile Include="TagBox.cs">
       <SubType>Component</SubType>
     </Compile>

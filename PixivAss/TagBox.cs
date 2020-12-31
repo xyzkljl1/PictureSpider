@@ -15,8 +15,8 @@ namespace PixivAss
     {
         public List<string> Tags
         {
-            get { return new List<string>(); }
-            set { SetTags(value); }
+            get { return null; }
+            set {SetTags(value); }
         }
         private Client client;
         private Dictionary<string, TagStatus> tags_status;
@@ -38,6 +38,7 @@ namespace PixivAss
             this.AutoScroll = true;
             this.WrapContents = false;
         }
+
         public void SetClient(Client _client)
         {
             client = _client;
@@ -46,10 +47,12 @@ namespace PixivAss
         }
         private void SetTags(List<string> tags)
         {
+            if (tags is null)
+                return;
             block_signal = true;
-            if(tags.Count> Controls.Count)//添加控件，多余的无需删除
+            this.SuspendLayout();
+            if (tags.Count> Controls.Count)//添加控件，多余的无需删除
             {
-                this.SuspendLayout();
                 while(tags.Count> Controls.Count)
                 {
                     var item = new CheckBox();
@@ -57,9 +60,9 @@ namespace PixivAss
                     item.ThreeState = true;
                     item.Margin= new System.Windows.Forms.Padding(0);
                     item.Padding = new System.Windows.Forms.Padding(0);
+                    item.AutoSize = true;
                     this.Controls.Add(item);
                 }
-                this.ResumeLayout();
             }
             foreach(CheckBox item in Controls)
             {
@@ -77,17 +80,20 @@ namespace PixivAss
                     tag_group[CheckState.Unchecked].Add(tag);
             //按未关注->已关注->忽略的顺序
             var iterator = Controls.GetEnumerator();
-            iterator.MoveNext();
             foreach (var state in new List<CheckState>{ CheckState.Unchecked,CheckState.Checked, CheckState.Indeterminate })
                 foreach (var tag in tag_group[state])
                 {
+                    iterator.MoveNext();
                     if (tags_desc.ContainsKey(tag) && !string.IsNullOrEmpty(tags_desc[tag]))
                         ((CheckBox)iterator.Current).Text = String.Format("{0}`{1}", tag, tags_desc[tag]);
                     else
                         ((CheckBox)iterator.Current).Text = tag;
                     ((CheckBox)iterator.Current).CheckState = state;
-                    iterator.MoveNext();
+                    ((CheckBox)iterator.Current).Visible = true;
                 }
+            while (iterator.MoveNext())
+                ((CheckBox)iterator.Current).Visible = false;            
+            this.ResumeLayout();
             block_signal = false;
         }
         private void ItemCheckHandler(object sender, EventArgs e)

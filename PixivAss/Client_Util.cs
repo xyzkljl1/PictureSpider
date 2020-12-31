@@ -130,9 +130,10 @@ namespace PixivAss
                 throw;
             }
         }
-        public async Task<string> RequestPixivAsyncGet(string url, Uri referer)
+        public async Task<string> RequestPixivAsyncGet(string url, Uri referer, bool anonymous = false)
         {
-            int try_ct = 5;
+            int try_ct = 8;
+            HttpClient client=anonymous?httpClient_anonymous:httpClient;
             while (true)
             {
                 try
@@ -142,8 +143,8 @@ namespace PixivAss
                         throw new ArgumentNullException("url");
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
-                    httpClient.DefaultRequestHeaders.Referrer = referer;
-                    HttpResponseMessage response = await httpClient.GetAsync(url);
+                    client.DefaultRequestHeaders.Referrer = referer;
+                    HttpResponseMessage response = await client.GetAsync(url);
                     //可能是作品已删除，此时仍然返回结果
                     if (response.StatusCode == HttpStatusCode.NotFound)
                         return await response.Content.ReadAsStringAsync();
@@ -151,38 +152,22 @@ namespace PixivAss
                     CheckStatusCode(response);
                     //正常
                     return await response.Content.ReadAsStringAsync();
-                    /*
-                        HttpWebRequest http = WebRequest.CreateHttp(url);
-                        http.Method = "GET";
-                        http.KeepAlive = true;
-                        http.Proxy = new WebProxy(string.Format("{0}:{1}", "127.0.0.1", 8000), false);
-                        http.Referer = referer.ToString();
-                        http.Headers["Cookie"] = this.cookie_server.cookie;
-                        var response = await http.GetResponseAsync();
-                        //await Task.Delay(10 * 1000);
-                        //return "{\"error\":true}";
-                        StreamReader reader = new StreamReader(response.GetResponseStream());
-                        return await reader.ReadToEndAsync();
-                    */
                 }
-                //用HttpWebRequest时404会抛出异常
-                //catch(System.Net.WebException )
-                //{
-                //     return "{\"error\":true}";
-                // }
                 catch (Exception e)
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
-                    Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                    if(try_ct<4)
+                        Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     if (try_ct == 0)
-                        throw;
+                        //throw;
+                        return "{\"error\":true}";
                     try_ct--;
                 }
             }
         }
         public async Task<string> RequestPixivAsyncPost(string url,Uri referer,string data)
         {
-            for (int try_ct = 5; try_ct >= 0; --try_ct)
+            for (int try_ct = 8; try_ct >= 0; --try_ct)
                 try
                 {
                     if (string.IsNullOrEmpty(url))
@@ -198,15 +183,17 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message + "Re Try " + try_ct.ToString() + " On :" + url);
+                    if (try_ct < 4)
+                        Console.WriteLine(e.Message + "Re Try " + try_ct.ToString() + " On :" + url);
                     if (try_ct == 0)
-                        throw;
+                        //throw;
+                        return "";
                 }
             return "";
         }
-        public async Task<JObject> RequestJsonAsync(string url, string referer)
+        public async Task<JObject> RequestJsonAsync(string url, string referer,bool anonymous=false)
         {
-            var r = await RequestPixivAsyncGet(url, new Uri(referer));
+            var r = await RequestPixivAsyncGet(url, new Uri(referer),anonymous);
             return (JObject)JsonConvert.DeserializeObject(r);
         }
         public async Task<HtmlDocument> RequestHtmlAsync(string url, string referer)
@@ -218,31 +205,27 @@ namespace PixivAss
         }
         public async Task<User> RequestUserAsync(int userId)
         {
-            try
+            string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
+            string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
+            JObject ret = await RequestJsonAsync(url, referer);
+            if (ret.Value<Boolean>("error"))//可能是作者跑路了所以不抛出
             {
-                string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
-                string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-                JObject ret = await RequestJsonAsync(url, referer);
-                if (ret.Value<Boolean>("error"))
-                    throw new Exception("Get User Fail");
-                var body = ret.Value<JObject>("body");
-                var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
-                foreach (var type in new List<string>{ "illusts","manga"})
-                    if(body.GetValue(type)!=null)
-                        if(body.GetValue(type).Type==JTokenType.Object)//必须判断类型，因为空的时候是个空array而非object，很迷
-                            foreach (var illustId in body.Value<JObject>(type))
-                            {
-                                var illust = await RequestIllustAsync(Int32.Parse(illustId.Key));
-                                userName = illust.userName;
-                                break;
-                            }
-                return new User(userId, userName, false,false);
+                Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
+                //throw new Exception("Get User Fail " + userId);
+                return null;
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                throw;
-            }            
+            var body = ret.Value<JObject>("body");
+            var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
+            foreach (var type in new List<string>{ "illusts","manga"})
+                if(body.GetValue(type)!=null)
+                    if(body.GetValue(type).Type==JTokenType.Object)//必须判断类型，因为空的时候是个空array而非object，很迷
+                        foreach (var illustId in body.Value<JObject>(type))
+                        {
+                            var illust = await RequestIllustAsync(Int32.Parse(illustId.Key));
+                            userName = illust.userName;
+                            break;
+                        }
+            return new User(userId, userName, false,false);            
         }
         public async Task<int> RequestFollowedUserCount()
         {
@@ -311,8 +294,12 @@ namespace PixivAss
             string referer = String.Format("{0}tags/{1}/artworks?s_mode=s_tag_full", base_url,word);
             JObject json =await RequestJsonAsync(url, referer);
             var ret = new List<int>();
+            //检查是否超出最后一页，超出时会返回最后一页的内容
+            var total=json.Value<JObject>("body").Value<JObject>("illustManga").Value<int>("total");//illust和manga都在一起
+            if (page >= Math.Ceiling(total / SEARCH_PAGE_SIZE))
+                return ret;
             //排除包含非法关键字的图片
-            foreach (var ill in json.GetValue("body").Value<JObject>().Value<JObject>("illustManga").Value<JArray>("data")) //这里返回的illust信息不全
+            foreach (var ill in json.Value<JObject>("body").Value<JObject>("illustManga").Value<JArray>("data")) //这里返回的illust信息不全
             {
                 bool valid = true;
                 var tags = ill.ToObject<JObject>().Value<JArray>("tags");
@@ -321,7 +308,7 @@ namespace PixivAss
                         if (this.banned_keyword.Contains(tag.ToString()))
                             valid = false;
                 if(valid)
-                    ret.Add(ill.ToObject<JObject>().Value<int>("illustId"));
+                    ret.Add(ill.ToObject<JObject>().Value<int>("id"));
             }
             return ret;
         }
@@ -364,7 +351,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);            
-            JObject json = await RequestJsonAsync(url, referer);
+            JObject json = await RequestJsonAsync(url, referer,true);
             if (!json.HasValues)
                 return new Illust(illustId, false);
             if (json.Value<Boolean>("error"))

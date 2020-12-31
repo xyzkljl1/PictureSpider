@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace PixivAss
 {
+    /*
     class TaskQueue
     {
         private List<Task> running_task_list = new List<Task>();
@@ -20,22 +21,22 @@ namespace PixivAss
         public async Task Add(Task t)
         {
             running_task_list.Add(t);
-            if(running_task_list.Count>size)
-            {
-                await Task.WhenAll(running_task_list);
-                done_task_list.AddRange(running_task_list);
-                running_task_list.Clear();
-            }
+            await Wait(size);
         }
         public async Task Done()
         {
-            if (running_task_list.Count > 0)
+            await Wait(0);
+        }
+        private async Task Wait(int target)//当队列大于target时清空
+        {
+            if (running_task_list.Count > target)
             {
                 await Task.WhenAll(running_task_list);
                 done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
         }
+
         public static async Task<HashSet<string>> GetResultSet(TaskQueue<List<string>> queue)
         {
             await queue.Done();
@@ -53,57 +54,74 @@ namespace PixivAss
                 ret.Add(task.Result);
             return ret;
         }
-    }
+    }*/
     class TaskQueue<T>
     {
         public List<Task<T>> running_task_list=new List<Task<T>>();
         public List<Task<T>> done_task_list = new List<Task<T>>();
-        private int size = 0;
-        public TaskQueue(int _size)
+        private Action<List<Task<T>>> processor=null;
+        private int queue_size = 0;//并发限制，即running_task_list大小限制
+        private int storage_size = 0;//存储限制，即done_task_list大小限制，仅当processor不为空时有效
+        public TaskQueue(int _size,int _psize=0, Action<List<Task<T>>> _processor =null)
         {
-            size = _size;
+            queue_size = _size;
+            storage_size = _psize;
+            processor = _processor;
         }
         public async Task Add(Task<T> t)
         {
             running_task_list.Add(t);
-            if (running_task_list.Count > size)
-            {
-                await Task.WhenAll(running_task_list);
-                done_task_list.AddRange(running_task_list);
-                running_task_list.Clear();
-            }
+            await WaitUntil(queue_size,storage_size);
         }
         public async Task Done()
         {
-            if (running_task_list.Count > 0)
+            await WaitUntil(0,0);
+        }
+        private async Task WaitUntil(int queue_target,int storage_size)//当队列大于target时清空
+        {
+            if (running_task_list.Count > queue_target)
             {
                 await Task.WhenAll(running_task_list);
-                done_task_list.AddRange(running_task_list);
+                    done_task_list.AddRange(running_task_list);
                 running_task_list.Clear();
             }
+            if (!(processor is null))
+                if (done_task_list.Count > storage_size)
+                {
+                    processor(done_task_list);
+                    done_task_list.Clear();
+                }
         }
         public async Task<HashSet<int>> GetResultSet()
         {//暂时想不到更好的写法
-            var converter = TypeDescriptor.GetConverter(typeof(T));
-            if (typeof(T) == typeof(int))
+            try
             {
-                await Done();
-                var ret = new HashSet<int>();
-                foreach (var task in done_task_list)
-                    ret.Add((int)Convert.ChangeType(task.Result, typeof(int)));
-                return ret;
+                var converter = TypeDescriptor.GetConverter(typeof(T));
+                if (typeof(T) == typeof(int))
+                {
+                    await Done();
+                    var ret = new HashSet<int>();
+                    foreach (var task in done_task_list)
+                        ret.Add((int)Convert.ChangeType(task.Result, typeof(int)));
+                    return ret;
+                }
+                else if (typeof(T) == typeof(List<int>))
+                {
+                    await Done();
+                    var ret = new HashSet<int>();
+                    foreach (var task in done_task_list)
+                        foreach (var item in (List<int>)Convert.ChangeType(task.Result, typeof(List<int>)))
+                            ret.Add((int)Convert.ChangeType(item, typeof(int)));
+                    return ret;
+                }
+                else
+                    return null;
             }
-            else if (typeof(T) == typeof(List<int>))
+            catch (Exception e)
             {
-                await Done();
-                var ret = new HashSet<int>();
-                foreach (var task in done_task_list)
-                    foreach (var item in (List<int>)Convert.ChangeType(task.Result, typeof(List<string>)))
-                        ret.Add(item);
-                return ret;
-            }
-            else
+                Console.WriteLine(e.Message);
                 return null;
+            }
         }
     }
 }

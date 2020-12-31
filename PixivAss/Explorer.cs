@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using PixivAss.Data;
+using PixivAss;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,8 +11,9 @@ using System.ComponentModel;
 
 namespace PixivAss
 {
-    class Explorer : PictureBox, INotifyPropertyChanged
-    {
+    class Explorer : PictureBox,IBindHandleProvider
+    {  
+        public BindHandleProvider provider { get; set; } = new BindHandleProvider();
         class ImageCache:IDisposable
         {
             public Illust illust;
@@ -30,19 +32,26 @@ namespace PixivAss
         private int index = 0;
         private int sub_index = 0;
         private Image empty_image;
-        public Client pixivClient;        
+        public Client pixivClient;
+        public bool random_slide = false;
         private Timer timer = new Timer();
         private bool playing = false;
 
-        public event PropertyChangedEventHandler PropertyChanged;//=delegate { };
         [Bindable(true)]
-        public string IndexText{get { return illust_list.Count>0? (sub_index+1).ToString()+"/"+ illust_list[index].pageCount.ToString():""; }}
+        public string IndexText{get {
+                if (illust_list.Count <= 0)
+                    return "";
+                int count_1 = illust_list[index].validPageCount();
+                int count_2 = illust_list[index].pageCount;
+                return (sub_index+1).ToString()+"/"+ 
+                       (count_1 == count_2 ? count_1.ToString():(count_1.ToString()+"("+count_2.ToString()+")"));
+            } }
         [Bindable(true)]
         public string DescText{get { return illust_list.Count > 0 ? illust_list[index].title + "</br>" + illust_list[index].description : "";} }
         [Bindable(true)]
         public string TotalPageText{get { return (playing?"Pause":"Play")+"\n"+(illust_list.Count > 0 ? (index+1).ToString()+"/"+illust_list.Count.ToString() : ""); }}
         [Bindable(true)]
-        public string IdText {get { return (illust_list.Count > 0 ? "pid="+illust_list[index].id : "None");}}
+        public string IdText {get { return (illust_list.Count > 0 ? "["+illust_list[index].id+"]" : "None");}}
         [Bindable(true)]
         public List<string> Tags{get { return illust_list.Count > 0 ? illust_list[index].tags : new List<string>(); }}
         [Bindable(true)]
@@ -57,6 +66,23 @@ namespace PixivAss
                 if (illust_list[index].bookmarked)
                     return illust_list[index].bookmarkPrivate ? Properties.Resources.FavPrivate : Properties.Resources.Fav;
                 return Properties.Resources.NotFav;
+            }
+        }
+        [Bindable(true)]
+        public bool PageInvalid
+        {
+            get
+            {
+                if (illust_list.Count == 0)
+                    return false;
+                if (!illust_list[index].bookmarked)
+                    return false;
+                if (this.Image == null)
+                    return false;
+                int p = (int)this.Image.Tag;
+                if(index<illust_list.Count&&p>=0&&p<illust_list[index].pageCount)
+                    return !illust_list[index].isPageValid(p);
+                return false;
             }
         }
 
@@ -75,13 +101,7 @@ namespace PixivAss
                 empty_image = Image.FromFile(path);
             else
                 empty_image = new Bitmap(1, 1);
-        }
-        //通知界面刷新
-        public void UpdateUI()
-        {
-            //不知道为什么，调用一次就会通知所有属性
-            //通知次数等于PropertyChangedEventArgs的参数能匹配的属性个数，所以参数必须能且仅能匹配一个属性
-            PropertyChanged(this, new PropertyChangedEventArgs("IndexText"));
+            empty_image.Tag = -1;
         }
         //播放
         public void Play()
@@ -91,10 +111,10 @@ namespace PixivAss
             else
                 timer.Start();
             playing = !playing;
-            UpdateUI();
+            this.NotifyChange<string>("TotalPageText");
         }
         //设置当前列表
-        public async Task SetList(List<Illust> list)
+        public void SetList(List<Illust> list)
         {
             this.Image = null;
             cache_pool.ForEach(y => y.Dispose());
@@ -116,7 +136,7 @@ namespace PixivAss
                 if (pass)
                     illust_list.Add(illust);
             }
-            SlideTo(0,0);
+            SlideTo(0,0,true);
         }
         //载入某个Illust的全部图片
         private ImageCache Load(Illust illust)
@@ -134,6 +154,8 @@ namespace PixivAss
                 cache.data = new List<Image>();
                 for (int i = 0; i < illust.pageCount; i++)
                 {
+                    if (illust.bookmarked && !illust.isPageValid(i))
+                        continue;
                     string path = String.Format("{0}/{1}", pixivClient.download_dir_main, Client.GetDownloadFileName(illust, i));
                     if (File.Exists(path))
                     {
@@ -161,10 +183,15 @@ namespace PixivAss
                             img.Dispose();
                             img = new_img;
                         }
+                        img.Tag = i;//图片在illust中的原本index
                         cache.data.Add(img);
                     }
                     else
-                        cache.data.Add(empty_image);
+                    {
+                        var img = (Image)empty_image.Clone();
+                        img.Tag = -1;
+                        cache.data.Add(img);
+                    }
                 }
                 cache_pool.Add(cache);
                 while (cache_pool.Count > cache_size)
@@ -178,21 +205,31 @@ namespace PixivAss
             }
         }
         //切图实现
-        private void SlideTo(int i, int j)
+        private void SlideTo(int i, int j,bool force_update=false)
         {
             if (i >= illust_list.Count || i < 0)
                 return;
             Illust illust = illust_list[i];
             ImageCache cache = Load(illust);
-//            if (j < cache.data.Count)
-//               this.Image = cache.data[j];
-//            else
-//               this.Image = empty_image;
-            index = i;
+            if (j < cache.data.Count)
+               this.Image = cache.data[j];
+            else
+               this.Image = empty_image;
+            bool index_changed = index != i;
+            bool sub_index_changed = sub_index!=j;
+            index = i;//index和sub_index需要都更新完才能刷新
             sub_index = j;
-            UpdateUI();
+            if (index_changed || force_update)
+            {
+                this.NotifyChangeRange<string>(new List<string> { "IdText", "DescText", "TotalPageText" });
+                this.NotifyChange<int>("UserId");
+                this.NotifyChange<List<string>>("Tags");
+                this.NotifyChange<Bitmap>("FavIcon");
+            }
+            this.NotifyChange<bool>("PageInvalid");
+            this.NotifyChange<string>("IndexText");
             for (int idx = i - 5; idx < i + 5; ++idx)
-                if (idx >= 0 && idx <= illust_list.Count)
+                if (idx >= 0 && idx < illust_list.Count)
                     Load(illust_list[idx]);
         }
         //标记当前为已读
@@ -205,38 +242,54 @@ namespace PixivAss
                 pixivClient.database.UpdateIllustReaded(illust.id).Wait();
             }
         }
-        //切图的UI响应,通过UI切图时先将当前标记为已读
-        private bool SlideHorizon(int i,bool to_end=false)
+        private bool SlideRandom()
         {
+            if (illust_list.Count < 1)
+                return false;
+            var random = new Random();
+            int new_index = random.Next(0,illust_list.Count());
+            int new_sub_index =random.Next(0,Load(illust_list[new_index]).data.Count);
+            MarkReaded();
+            SlideTo(new_index, new_sub_index);
+            return true;
+        }
+        //切图的UI响应,通过UI切图时先将当前标记为已读
+        private bool SlideVertical(int i,bool to_end=false)
+        {
+            if (random_slide)
+                return SlideRandom();
             int new_index = index + i;
             if (new_index >= 0 && new_index < illust_list.Count)
             {
                 MarkReaded();
-                SlideTo(new_index, to_end?illust_list[new_index].pageCount-1:0);
+                SlideTo(new_index, to_end? Load(illust_list[new_index]).data.Count - 1: 0);
                 return true;
             }
             return false;
         }
-        private bool SlideVertical(int i)
+        private bool SlideHorizon(int i)
         {
-            int new_index = sub_index + i;
-            if (new_index >= 0 && new_index < illust_list[index].pageCount)
-            {
-                MarkReaded();
-                SlideTo(index, new_index);
-                return true;
-            }
+            if (random_slide)
+                return SlideRandom();
+            int new_sub_index = sub_index + i;
+            if (new_sub_index >= 0 && new_sub_index < illust_list[index].pageCount
+                &&new_sub_index < Load(illust_list[index]).data.Count)
+                {
+                    MarkReaded();
+                    SlideTo(index, new_sub_index);
+                    return true;
+                }
             return false;
         }
         public void SlideRight(object sender,EventArgs args)
         {
-            if (!SlideVertical(1))
-                SlideHorizon(1);
+            if (!SlideHorizon(1))
+                SlideVertical(1);
         }
         public void SlideLeft(object sender, EventArgs args)
         {
-            if (!SlideVertical(-1))
-                SlideHorizon(-1, true);
+            if (!SlideHorizon(-1))
+                SlideVertical(-1, true);
         }
         /*
         public void SlideUp(object sender, EventArgs args)
@@ -249,19 +302,33 @@ namespace PixivAss
         }
         */ 
         //切换书签状态，无->bookmark->bookmarkPrivate
-        public void SwitchBookmarkStatus(object sender, EventArgs args)
+        public void SwitchBookmarkStatus(object sender, MouseEventArgs args)
         {
             if (index < 0 || index >= illust_list.Count)
                 return;
             var illust = illust_list[index];
-            if (!illust.bookmarked)//0->1
-                illust.bookmarked = true;
-            else if (illust.bookmarkPrivate)//2->0
-                illust.bookmarked = illust.bookmarkPrivate = false;
-            else//1->2
-                illust.bookmarkPrivate = true;
-            pixivClient.database.UpdateIllustBookmarked(illust.id,illust.bookmarked,illust.bookmarkPrivate);
-            UpdateUI();
+            if (args.Button == MouseButtons.Left)//左键切换整组是否收藏
+            {
+                if (!illust.bookmarked)//0->1
+                    illust.bookmarked = true;
+                else if (illust.bookmarkPrivate)//2->0
+                    illust.bookmarked = illust.bookmarkPrivate = false;
+                else//1->2
+                    illust.bookmarkPrivate = true;
+                pixivClient.database.UpdateIllustBookmarked(illust.id, illust.bookmarked, illust.bookmarkPrivate).Wait();
+                this.NotifyChange<Bitmap>("FavIcon");
+                this.NotifyChange<bool>("PageInvalid");
+                this.NotifyChange<string>("IndexText");
+            }
+            else if (args.Button == MouseButtons.Right&&illust.bookmarked&&illust.validPageCount()>1)//右键切换单张收藏，不允许全部屏蔽
+            {
+                int i_index = (int)this.Image.Tag;
+                illust.switchPageValid(i_index);
+                pixivClient.database.UpdateIllustBookmarkEach(illust.id,illust.bookmarkEach).Wait();
+                this.NotifyChange<Bitmap>("FavIcon");
+                this.NotifyChange<bool>("PageInvalid");
+                this.NotifyChange<string>("IndexText");
+            }
         }
         //在浏览器中打开当前图片
         public void OpenInBrowser(object sender, EventArgs args)
@@ -291,19 +358,18 @@ namespace PixivAss
             //上下键直接进入下一组
             if (e.KeyCode == Keys.Left)
             {
-                if(!SlideVertical(-1))
-                    SlideHorizon(-1,true);
+                if(!SlideHorizon(-1))
+                    SlideVertical(-1,true);
             }
             else if (e.KeyCode == Keys.Right)
             {
-                if (!SlideVertical(1))
-                    SlideHorizon(1);
+                if (!SlideHorizon(1))
+                    SlideVertical(1);
             }
             else if (e.KeyCode == Keys.Up)
-                SlideHorizon(-1);
+                SlideVertical(-1);
             else if (e.KeyCode == Keys.Down)
-                SlideHorizon(1);
+                SlideVertical(1);
         }
-
     }
 }

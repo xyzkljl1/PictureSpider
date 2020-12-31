@@ -67,6 +67,7 @@ namespace PixivAss
         private async Task Init()
         {
             cookie = await database.GetCookie();
+
             csrf_token = await database.GetCSRFToken();
             if (string.IsNullOrEmpty(csrf_token) && !string.IsNullOrEmpty(cookie))
                 await FetchCSRFToken();

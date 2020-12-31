@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -38,6 +39,10 @@ namespace PixivAss
             return new HashSet<String>(await StandardQuery("select word from invalidkeyword",
                         (DbDataReader reader) => { return reader.GetString(0); }));
         }
+        public async Task<List<Illust>> GetAllIllustFullOfQueuedOrFollowedUser()
+        {
+            return await GetAllIllustFull("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
+        }
         public async Task<List<Illust>> GetAllIllustFull(string condition="")//id是int，但是可以直接GetString
         {
             return await StandardQuery<Illust>(String.Format("select * from illust {0}",condition),
@@ -65,8 +70,8 @@ namespace PixivAss
                            };
                });
         }
-        public async Task<List<Illust>> GetIllustFullByUser(int userId)
-        { return await GetAllIllustFull(String.Format("where `userId`={0}",userId)); }
+        public async Task<List<Illust>> GetIllustFullSortedByUser(int userId)//按id排序，实际等于按时间排序
+        { return await GetAllIllustFull(String.Format("where `userId`={0} order by `id` DESC", userId)); }
         public async Task<List<Illust>> GetIllustFull(List<int> id_list)
         {   //要保持顺序
             var cmd=new List<String>();
@@ -172,6 +177,7 @@ namespace PixivAss
             return await StandardQuery(String.Format("select userId,userName,followed,queued from user where queued=true;"),
                        (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
         }
+
         public async Task UpdateTagStatus(string tag, TagStatus followed)
         {
             await StandardNoneQuery("insert into keyword(`word`,`type`,`status`) values(@0,'tag',@1) on duplicate key update `status`=@1",
@@ -184,7 +190,6 @@ namespace PixivAss
                         cmd.Parameters.AddWithValue("@1", "None");
                 });
         }
-
         public async Task UpdateIllustReaded(int id)
         {
             await StandardNoneQuery("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
@@ -196,6 +201,14 @@ namespace PixivAss
                     cmd.Parameters.AddWithValue("@0", enable?1:0);
                     cmd.Parameters.AddWithValue("@1", is_private ? 1:0);
                     cmd.Parameters.AddWithValue("@2", id);
+                });
+        }
+        public async Task UpdateIllustBookmarkEach(int id,string bookmarkEach)
+        {
+            await StandardNoneQuery("update illust set bookmarkEach=@0 where id=@1",
+                (cmd) => {
+                    cmd.Parameters.AddWithValue("@0", bookmarkEach);
+                    cmd.Parameters.AddWithValue("@1", id);
                 });
         }
         public async Task UpdateQueue(string queue)
