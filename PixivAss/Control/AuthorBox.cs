@@ -26,10 +26,13 @@ namespace PixivAss
         private int user_id=-1;
         private Client client;
         private Boolean frozen = false;
+        private Dictionary<CheckState, String> CheckState2Text = new Dictionary<CheckState, String> {
+            { CheckState.Checked, "已关注" }, {  CheckState.Indeterminate, "已入列"  }, { CheckState.Unchecked, "未关注" } };
+
         public AuthorBox()
         {
             InitializeComponent();
-            followCheckBox.CheckedChanged += onCheckedChange;
+            followCheckBox.CheckStateChanged += onCheckedChange;
         }
 
         public void SetClient(Client _client)
@@ -44,20 +47,12 @@ namespace PixivAss
                 var user = client.database.GetUserById(UserId).ConfigureAwait(false).GetAwaiter().GetResult();
                 nameLabel.Text = user.userName;
                 if (user.followed)
-                {
                     followCheckBox.CheckState = CheckState.Checked;
-                    followCheckBox.Text="已关注";
-                }
                 else if(user.queued)
-                {
                     followCheckBox.CheckState = CheckState.Indeterminate;
-                    followCheckBox.Text = "已入列";
-                }
                 else
-                {
                     followCheckBox.CheckState = CheckState.Unchecked;
-                    followCheckBox.Text = "未关注";
-                }
+                followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
             }
             else
             {
@@ -71,6 +66,7 @@ namespace PixivAss
         {
             if (frozen)
                 return;
+            followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
             var user = new User(user_id, nameLabel.Text, followCheckBox.CheckState == CheckState.Checked, followCheckBox.CheckState == CheckState.Indeterminate);
             client.database.UpdateUser(user).Wait();
             AuthorModified(this,new EventArgs());
