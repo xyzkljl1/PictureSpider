@@ -37,6 +37,7 @@ namespace PixivAss
             BookmarkPageLabel.Parent = SwitchBookmarkButton;
             BookmarkPageLabel.Location = new System.Drawing.Point(0,0);
             //设置事件
+            FormClosing += OnClose;//关闭按钮不关闭，而是最小化
             KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
             NextButton.Click += new EventHandler(MainExplorer.SlideRight);
             PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
@@ -49,7 +50,7 @@ namespace PixivAss
             RandomSlideCheckBox.Click += (object sender, EventArgs e) => MainExplorer.random_slide=RandomSlideCheckBox.Checked;
             InitButton.Click += (object sender, EventArgs e) =>pixiv_client.InitTask().Wait();
             SystemTrayIcon.DoubleClick += (object sender, EventArgs e) => this.Visible = !this.Visible;
-            ExitAction.Click+= (object sender, EventArgs e) => this.Close(); 
+            ExitAction.Click += (object sender, EventArgs e) => { FormClosing -= OnClose; this.Close(); };//退出时先移除阻止关闭的handle
             //绑定属性
             PageLabel.DataBindings.Add(new Binding("Text", MainExplorer.GetBindHandle<string>("IndexText"), "Content"));
             DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer.GetBindHandle<string>("DescText"), "Content"));
@@ -63,11 +64,10 @@ namespace PixivAss
 
             //onListCheckBoxClick(null,null);
         }
-
-        protected override void OnFormClosing(FormClosingEventArgs e)
+        private void OnClose(object sender, FormClosingEventArgs e)
         {
-            this.Hide();
             e.Cancel = true;
+            this.Hide();
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
