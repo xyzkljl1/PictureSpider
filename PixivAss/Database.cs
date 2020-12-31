@@ -15,10 +15,9 @@ namespace PixivAss
         private string connect_str;
         private Dictionary<string, TagStatus> String2TagStatus = new Dictionary<string, TagStatus> { { "Follow", TagStatus.Follow }, { "Ignore", TagStatus.Ignore }, { "None", TagStatus.None } };
 
-        public Database(string user,string pwd,string database)
+        public Database(string _connect_str)
         {
-            connect_str = String.Format("server=127.0.0.1;port=4321;UID={0};pwd={1};database={2};",
-                user,pwd,database);
+            connect_str = _connect_str;
         }
         public async Task<List<int>> GetAllIllustId(string condition="")
         {

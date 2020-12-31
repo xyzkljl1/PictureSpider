@@ -1,6 +1,8 @@
 ﻿{
   "Proxy": "127.0.0.1:1081",
   "DownloadDir": "G:/p/",
-  "UserName": "name",
-  "UserId": "123"
+  "UserName": "0",
+  "UserId": "0",
+  "ConnectStr": "server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=pass;",
+  "ShowInitButton": false
 }

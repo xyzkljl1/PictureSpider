@@ -55,7 +55,7 @@ namespace PixivAss
             download_dir_main = download_dir_root+"tmp";
             special_dir = download_dir_root +"special";
 
-            database = new Database("root","pixivAss","pass");
+            database = new Database(config.ConnectStr);
             request_proxy = config.Proxy;
             user_id = config.UserId;
             user_name = config.UserName;
@@ -95,10 +95,7 @@ namespace PixivAss
 
             CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = database.GetBannedKeyword().GetAwaiter().GetResult();
-            //DailyTask();
-            //InitTask();
             //RunSchedule();
-            //DownloadIllusts(true);
         }
         public void Dispose()
         {
@@ -613,6 +610,7 @@ namespace PixivAss
                     }
                 }
             }
+            VerifyState = "Login Fail";
             Console.WriteLine("Login Fail");
             throw new ArgumentOutOfRangeException("Login Not Success");
         }

@@ -16,7 +16,9 @@ namespace PixivAss
         {
             InitializeComponent();
             //初始化
-            pixiv_client = new Client(LoadConfig());
+            var config = LoadConfig();
+            InitButton.Visible = config.ShowInitButton;
+            pixiv_client = new Client(config);
             MainExplorer.SetClient(pixiv_client);
             TagBox.SetClient(pixiv_client);
             AuthorBox.SetClient(pixiv_client);
@@ -44,6 +46,7 @@ namespace PixivAss
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             RandomSlideCheckBox.Click += (object sender, EventArgs e) => MainExplorer.random_slide=RandomSlideCheckBox.Checked;
+            InitButton.Click += (object sender, EventArgs e) =>pixiv_client.InitTask().Wait();
             //绑定属性
             PageLabel.DataBindings.Add(new Binding("Text", MainExplorer.GetBindHandle<string>("IndexText"), "Content"));
             DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer.GetBindHandle<string>("DescText"), "Content"));
@@ -74,6 +77,7 @@ namespace PixivAss
         {
             System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
             PixivAss.BindHandleProvider bindHandleProvider2 = new PixivAss.BindHandleProvider();
+            this.RandomSlideCheckBox = new System.Windows.Forms.CheckBox();
             this.DescBrowser = new System.Windows.Forms.WebBrowser();
             this.PlayButton = new System.Windows.Forms.Button();
             this.PageLabel = new System.Windows.Forms.Label();
@@ -87,7 +91,7 @@ namespace PixivAss
             this.AuthorBox = new PixivAss.AuthorBox();
             this.TagBox = new PixivAss.TagBox();
             this.MainExplorer = new PixivAss.Explorer();
-            this.RandomSlideCheckBox = new System.Windows.Forms.CheckBox();
+            this.InitButton = new System.Windows.Forms.Button();
             flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             flowLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).BeginInit();
@@ -98,6 +102,7 @@ namespace PixivAss
             flowLayoutPanel1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
             flowLayoutPanel1.BackColor = System.Drawing.Color.Transparent;
+            flowLayoutPanel1.Controls.Add(this.InitButton);
             flowLayoutPanel1.Controls.Add(this.queueComboBox);
             flowLayoutPanel1.Controls.Add(this.RandomSlideCheckBox);
             flowLayoutPanel1.Controls.Add(this.AuthorBox);
@@ -109,6 +114,17 @@ namespace PixivAss
             flowLayoutPanel1.Size = new System.Drawing.Size(164, 469);
             flowLayoutPanel1.TabIndex = 14;
             // 
+            // RandomSlideCheckBox
+            // 
+            this.RandomSlideCheckBox.Location = new System.Drawing.Point(107, 80);
+            this.RandomSlideCheckBox.Margin = new System.Windows.Forms.Padding(0);
+            this.RandomSlideCheckBox.Name = "RandomSlideCheckBox";
+            this.RandomSlideCheckBox.Size = new System.Drawing.Size(50, 24);
+            this.RandomSlideCheckBox.TabIndex = 20;
+            this.RandomSlideCheckBox.Text = "Rock";
+            this.RandomSlideCheckBox.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.RandomSlideCheckBox.UseVisualStyleBackColor = true;
+            // 
             // DescBrowser
             // 
             this.DescBrowser.AllowWebBrowserDrop = false;
@@ -116,7 +132,7 @@ namespace PixivAss
             | System.Windows.Forms.AnchorStyles.Right)));
             this.DescBrowser.CausesValidation = false;
             this.DescBrowser.IsWebBrowserContextMenuEnabled = false;
-            this.DescBrowser.Location = new System.Drawing.Point(0, 184);
+            this.DescBrowser.Location = new System.Drawing.Point(0, 264);
             this.DescBrowser.Margin = new System.Windows.Forms.Padding(0);
             this.DescBrowser.MinimumSize = new System.Drawing.Size(20, 20);
             this.DescBrowser.Name = "DescBrowser";
@@ -224,14 +240,14 @@ namespace PixivAss
             | System.Windows.Forms.AnchorStyles.Right)));
             this.queueComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.queueComboBox.FormattingEnabled = true;
-            this.queueComboBox.Location = new System.Drawing.Point(3, 3);
+            this.queueComboBox.Location = new System.Drawing.Point(3, 83);
             this.queueComboBox.Name = "queueComboBox";
             this.queueComboBox.Size = new System.Drawing.Size(101, 20);
             this.queueComboBox.TabIndex = 19;
             // 
             // AuthorBox
             // 
-            this.AuthorBox.Location = new System.Drawing.Point(3, 29);
+            this.AuthorBox.Location = new System.Drawing.Point(3, 109);
             this.AuthorBox.Name = "AuthorBox";
             this.AuthorBox.Size = new System.Drawing.Size(154, 20);
             this.AuthorBox.TabIndex = 12;
@@ -245,7 +261,7 @@ namespace PixivAss
             this.TagBox.BackColor = System.Drawing.Color.Transparent;
             this.TagBox.CausesValidation = false;
             this.TagBox.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
-            this.TagBox.Location = new System.Drawing.Point(0, 52);
+            this.TagBox.Location = new System.Drawing.Point(0, 132);
             this.TagBox.Margin = new System.Windows.Forms.Padding(0);
             this.TagBox.Name = "TagBox";
             this.TagBox.Size = new System.Drawing.Size(161, 132);
@@ -266,16 +282,15 @@ namespace PixivAss
             this.MainExplorer.TabIndex = 2;
             this.MainExplorer.TabStop = false;
             // 
-            // RandomSlideCheckBox
+            // InitButton
             // 
-            this.RandomSlideCheckBox.Location = new System.Drawing.Point(107, 0);
-            this.RandomSlideCheckBox.Margin = new System.Windows.Forms.Padding(0);
-            this.RandomSlideCheckBox.Name = "RandomSlideCheckBox";
-            this.RandomSlideCheckBox.Size = new System.Drawing.Size(50, 24);
-            this.RandomSlideCheckBox.TabIndex = 20;
-            this.RandomSlideCheckBox.Text = "Rock";
-            this.RandomSlideCheckBox.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.RandomSlideCheckBox.UseVisualStyleBackColor = true;
+            this.InitButton.Location = new System.Drawing.Point(3, 3);
+            this.InitButton.Name = "InitButton";
+            this.InitButton.Size = new System.Drawing.Size(158, 74);
+            this.InitButton.TabIndex = 20;
+            this.InitButton.Text = "RunInitTask";
+            this.InitButton.UseVisualStyleBackColor = true;
+            this.InitButton.Visible = false;
             // 
             // MainWindow
             // 
@@ -310,7 +325,10 @@ namespace PixivAss
                     config.UserName = jsonObject["UserName"].ToString();
                     config.UserId = jsonObject["UserId"].ToString();
                     config.DownloadDir = jsonObject["DownloadDir"].ToString();
-                }
+                    config.ConnectStr = jsonObject["ConnectStr"].ToString();
+                    config.ShowInitButton = jsonObject.Value<Boolean>("ShowInitButton");
+                    return config;
+                }                
             }
             return new Config();
         }
@@ -328,5 +346,6 @@ namespace PixivAss
         private QueueComboBox queueComboBox;
         private Label BookmarkPageLabel;
         private CheckBox RandomSlideCheckBox;
+        private Button InitButton;
     }
 }
