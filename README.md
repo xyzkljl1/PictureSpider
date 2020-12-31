@@ -1,7 +1,7 @@
 # PixivAss
 P站本地助手，预下载图片到本地，标记看过的图，定时搜索可能感兴趣的图生成浏览队列，本地收藏图片(可分P收藏)和关注。
 
-![image](./other/0.png)
+![image](other/0.PNG)
 
 # 运行前需要
 在config.json填写用户名和用户id(用于RunInitTask,不影响其它)
