@@ -1,12 +1,13 @@
 # PixivAss
-P站本地助手，用aria2预下载图片到本地，标记看过的图，定时搜索可能感兴趣的图生成浏览队列，本地收藏图片(可分P收藏)和关注。
+Pixiv本地助手，用aria2预下载图片到本地，标记看过的图，定时搜索可能感兴趣的图生成浏览队列，本地收藏图片(可分P收藏)和关注。
+
 
 ![image](other/0.PNG)
 
 # 运行前需要
 安装VS2017与.Net Framework 4.7.1
 
-在config.json填写用户名和用户id(用于RunInitTask,不影响其它)
+在config.json填写用户名和用户id(用于RunInitTask和访问测试,不影响其它功能)
 
 在config.json填写下载目录
 
@@ -18,20 +19,20 @@ P站本地助手，用aria2预下载图片到本地，标记看过的图，定�
 
 在数据库invalidkeyword表里添加不想看到的tag(非必须)
 
-用premium会员账号登录pixiv(premium会员用于搜索时提供排序权限，不影响其它)
+用premium会员账号登录pixiv(premium会员用于搜索时提供排序权限，不影响其它功能)
 
-在chrome上登录pixiv并运行pixivHelper插件(作用是向本地5678端口发送cookie)，或手动把cookie填到数据库的status表中
+在chrome上登录pixiv并运行[pixivHelper](https://github.com/xyzkljl1/PixivHelper)插件(作用是向本地5678端口发送cookie)，或手动把cookie填到数据库的status表中
 
 用VS打开工程，用nuget还原依赖库
 
 # 界面功能
 ![image](other/1.PNG)
 
-1:尝试用cookie访问pixiv主页并验证用户名，成功则显示Success
+1:访问测试，访问pixiv主页并验证用户名，成功则显示Success
 
 2:图片pid,点击则用默认浏览器打开图片所在页
 
-3:用默认方式打开本地图片
+3:打开本地文件(用系统默认方式)
 
 4:浏览队列中图片总数及当前位置，点击则开始自动播放
 
@@ -59,15 +60,23 @@ P站本地助手，用aria2预下载图片到本地，标记看过的图，定�
 
 每日一次，获取排行榜上的图片信息
 
+每日一次，下载位于所有浏览队列中且不在本地的图片
+
 每周一次，获取包含已关注tag且收藏数大于一定值的图片信息，获取已关注/已入列作者的所有图片信息，获取本地超过一定时间未更新的图片信息
 
-每周一次，将已知图片排序生成Main/MainR浏览队列
+每周一次，将已获取的图片排序生成Main/MainR浏览队列
 
-每周一次，下载位于任意浏览队列里的图到本地
 
 # 其它
 
-收藏和关注数据均存储在数据库，不上传到pixiv。
+一旦在浏览队列中离开某张图，它就会被标记已读，并且不再出现在今后的Main/MainR队列中
+
+收藏和关注数据均存储在本地数据库，不影响pixiv账号的状态。
+
+将DownloadIllusts参数改为false可以下载所有已知图片而非仅下载队列中的图片，但是不建议这么干
 
 在config.json将ShowInitButton改为true显示RunInitTask按钮，点击后从pixiv将收藏的作者和图片并同步到本地。
 
+过于频繁拉取图片可能会收到pixiv的警告信
+
+代码胡逼写的，仅供参考
