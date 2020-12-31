@@ -1,25 +1,26 @@
-﻿using System;
-using PixivAss;
+﻿using PixivAss;
 using PixivAss.Data;
+using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 namespace PixivAss
 {
     public partial class MainWindow : Form
     {
-        private Client pixivClient;
-        private Button PlayButton;
+        private Client pixiv_client;
         //生成64位程序会导致无法用设计器编辑
         public MainWindow()
         {
             InitializeComponent();
             //初始化
-            pixivClient = new Client();
-            MainExplorer.SetClient(pixivClient);
-            TagBox.SetClient(pixivClient);
-            AuthorBox.SetClient(pixivClient);
-            queueComboBox.SetClient(pixivClient);
+            pixiv_client = new Client(LoadConfig());
+            MainExplorer.SetClient(pixiv_client);
+            TagBox.SetClient(pixiv_client);
+            AuthorBox.SetClient(pixiv_client);
+            queueComboBox.SetClient(pixiv_client);
             //UI
             //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
             PageLabel.Parent = this.MainExplorer;
@@ -39,7 +40,7 @@ namespace PixivAss
             idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
             OpenLocalLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInLocal);
             SwitchBookmarkButton.MouseClick += new MouseEventHandler(MainExplorer.SwitchBookmarkStatus);
-            queueComboBox.QueueChanged+=new EventHandler<QueueChangeEventArgs>(onQueueComboBoxChanged);
+            queueComboBox.QueueChanged+=new EventHandler<QueueChangeEventArgs>(OnQueueComboBoxChanged);
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             RandomSlideCheckBox.Click += (object sender, EventArgs e) => MainExplorer.random_slide=RandomSlideCheckBox.Checked;
@@ -52,12 +53,9 @@ namespace PixivAss
             BookmarkPageLabel.DataBindings.Add(new Binding("Visible", MainExplorer.GetBindHandle<bool>("PageInvalid"), "Content"));
             TagBox.DataBindings.Add(new Binding("Tags", MainExplorer.GetBindHandle<List<string>>("Tags"), "Content"));
             AuthorBox.DataBindings.Add(new Binding("UserId", MainExplorer.GetBindHandle<int>("UserId"), "Content"));
-            DataBindings.Add(new Binding("Text", pixivClient.GetBindHandle<string>("VerifyState"), "Content"));
+            DataBindings.Add(new Binding("Text", pixiv_client.GetBindHandle<string>("VerifyState"), "Content"));
 
             //onListCheckBoxClick(null,null);
-            //Debug
-            //pixivClient.Test();
-            this.Hide();
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -67,10 +65,10 @@ namespace PixivAss
                 return true;
             return false;
         }
-        private void onQueueComboBoxChanged(object sender, QueueChangeEventArgs e)
+        private void OnQueueComboBoxChanged(object sender, QueueChangeEventArgs e)
         {
             using (BlockSyncContext.Enter())
-               MainExplorer.SetList(pixivClient.GetExploreQueue(e.type,e.name).Result);
+               MainExplorer.SetList(pixiv_client.GetExploreQueue(e.type,e.name).Result);
         }
         private void InitializeComponent()
         {
@@ -300,7 +298,23 @@ namespace PixivAss
             this.PerformLayout();
 
         }
-
+        private Config LoadConfig()
+        {
+            if(System.IO.File.Exists(@"config.json"))
+            {
+                using (JsonReader reader = new JsonTextReader(new System.IO.StreamReader("config.json")))
+                {
+                    JObject jsonObject = (JObject)JToken.ReadFrom(reader);
+                    var config = new Config();
+                    config.Proxy = jsonObject["Proxy"].ToString();
+                    config.UserName = jsonObject["UserName"].ToString();
+                    config.UserId = jsonObject["UserId"].ToString();
+                    config.DownloadDir = jsonObject["DownloadDir"].ToString();
+                }
+            }
+            return new Config();
+        }
+        private Button PlayButton;
         private Explorer MainExplorer;
         private Label PageLabel;
         private WebBrowser DescBrowser;

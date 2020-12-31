@@ -10,7 +10,6 @@ using System.ComponentModel;
 
 namespace PixivAss
 {
-
     class TagBox : System.Windows.Forms.FlowLayoutPanel
     {
         public List<string> Tags

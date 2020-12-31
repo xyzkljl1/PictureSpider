@@ -27,7 +27,7 @@ namespace PixivAss
         }
         private float SEARCH_PAGE_SIZE = 60;//不知如何获得，暂用常数表示;为计算方便使用float
         private string verify_state="Waiting";
-        private string download_dir_root="G:/p/";
+        private string download_dir_root;
         private string user_id;
         private string base_url;
         private string base_host;
@@ -43,20 +43,22 @@ namespace PixivAss
         private HashSet<string> banned_keyword;
         private Uri aria2_rpc_addr =new Uri("http://127.0.0.1:4322/jsonrpc");
         private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
-        private string request_proxy = "127.0.0.1:1081";
-        //private string download_proxy = "127.0.0.1:8000";
+        private string request_proxy;
+        //private string download_proxy = "127.0.0.1:8000";下载图片不需要代理
 
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
-        public Client()
+        public Client(Config config)
         {
+            download_dir_root = config.DownloadDir;
             download_dir_bookmark_pub = download_dir_root+"pub";
             download_dir_bookmark_private = download_dir_root+"private";
             download_dir_main = download_dir_root+"tmp";
             special_dir = download_dir_root +"special";
 
             database = new Database("root","pixivAss","pass");
-            user_id = "16428599";
-            user_name = "xyzkljl1";
+            request_proxy = config.Proxy;
+            user_id = config.UserId;
+            user_name = config.UserName;
             base_url = "https://www.pixiv.net/";
             base_host = "www.pixiv.net";
             cookie_server = new CookieServer(database,request_proxy);
@@ -223,6 +225,7 @@ namespace PixivAss
             await DownloadIllusts(true);
             Console.WriteLine("Fetch Task Done");
         }
+        //初次执行，将收藏的作者和图同步到本地
         public async Task InitTask()
         {
             var illust_list = new HashSet<int>();
@@ -230,13 +233,9 @@ namespace PixivAss
             await FetchAllBookMarkIllust(true);
             await FetchAllBookMarkIllust(false);
             illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-            illust_list.UnionWith(await RequestAllKeywordSearchIllust());
-            illust_list.UnionWith(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-7)));
-            illust_list.UnionWith(await RequestAllCurrentRankIllust());
             await FetchIllustByIdWhenNeccessary(illust_list);
-            await GenerateQueue();
             await FetchAllUnfollowedUserStatus();
-            await DownloadIllusts();
+            await DownloadIllusts(true);
             Console.WriteLine("Fetch Task Done");
         }
 

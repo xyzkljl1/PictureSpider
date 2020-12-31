@@ -14,11 +14,10 @@ namespace PixivAss
 {
     partial class Client
     {
-        //public int c = 0;
         /*
          * 下载
          */
-        //该函数必须在GetShouldDownload返回false的情况下使用
+        //必须在GetShouldDownload返回false的情况下使用
         static public bool GetShouldDelete(Illust illust, int page)
         {
             if (illust.bookmarked)//已收藏作品里只有不喜欢和已删除的图不需要下载
@@ -50,7 +49,6 @@ namespace PixivAss
                 ext = illust.urlFormat.Substring(pos + 1);
             return String.Format("{0}_p{1}.{2}", illust.id, page, ext);
         }
-
        
         //将指定图片下载到本地
         //如已存在则先删除
@@ -208,10 +206,9 @@ namespace PixivAss
             string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
             JObject ret = await RequestJsonAsync(url, referer);
-            if (ret.Value<Boolean>("error"))//可能是作者跑路了所以不抛出
+            if (ret.Value<Boolean>("error"))//可能是作者跑路了，所以不抛出
             {
                 Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
-                //throw new Exception("Get User Fail " + userId);
                 return null;
             }
             var body = ret.Value<JObject>("body");
