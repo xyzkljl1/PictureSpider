@@ -15,16 +15,19 @@ namespace PixivAss
     class Explorer : PictureBox,IBindHandleProvider
     {  
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
-        class ImageCache
+        class ImageCache:IDisposable
         {
             public Illust illust;
             public List<Image> data;
             public DateTime required_time;
-            ~ImageCache()
+            public void Dispose()
             {
                 data.ForEach(x => x.Dispose());
-                Console.WriteLine("Dispose");
                 data.Clear();
+            }
+            ~ImageCache()
+            {
+                Dispose();
             }
         }
         private const int cache_size = 30;
@@ -197,7 +200,8 @@ namespace PixivAss
                         cache.data.Add(img);
                     }
                 }
-                cache_pool.AddOrUpdate(illust.id,cache, (key, value) => { return value = cache; });
+                if (!cache_pool.TryAdd(illust.id, cache))//开头就检测过hit，如果此时已经存在，那肯定是刚加进去的，没必要更新required_time
+                    cache.Dispose();
                 while (cache_pool.Count > cache_size)
                 {
                     //C#里可修改的Pair类是什么？
@@ -213,6 +217,7 @@ namespace PixivAss
                         continue;
                     ImageCache ignored;
                     cache_pool.TryRemove(oldest_cache, out ignored);
+                    ignored.Dispose();
                 }
                 return cache;
             }
