@@ -8,29 +8,32 @@ using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
 using System.ComponentModel;
+using System.Collections.Concurrent;
 
 namespace PixivAss
 {
     class Explorer : PictureBox,IBindHandleProvider
     {  
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
-        class ImageCache:IDisposable
+        class ImageCache
         {
             public Illust illust;
             public List<Image> data;
             public DateTime required_time;
-            public void Dispose()
+            ~ImageCache()
             {
                 data.ForEach(x => x.Dispose());
+                Console.WriteLine("Dispose");
                 data.Clear();
             }
         }
         private const int cache_size = 30;
         //ImageCache需要手动dispose
-        private List<ImageCache> cache_pool = new List<ImageCache>();
+        private ConcurrentDictionary<int,ImageCache> cache_pool = new ConcurrentDictionary<int,ImageCache>();
         private List<Illust> illust_list = new List<Illust>();
         private int index = 0;
         private int sub_index = 0;
+        private int next_random_index = 0;
         private Image empty_image;
         public Client pixivClient;
         public bool random_slide = false;
@@ -117,7 +120,6 @@ namespace PixivAss
         public void SetList(List<Illust> list)
         {
             this.Image = null;
-            cache_pool.ForEach(y => y.Dispose());
             cache_pool.Clear();
             illust_list.Clear();            
             foreach (var illust in list)
@@ -141,12 +143,14 @@ namespace PixivAss
         //载入某个Illust的全部图片
         private ImageCache Load(Illust illust)
         {
-            foreach (var cache in cache_pool)
-                if (cache.illust.id == illust.id)//hit
+            {//hit
+                ImageCache cache;
+                if (cache_pool.TryGetValue(illust.id,out cache))
                 {
                     cache.required_time = DateTime.UtcNow;
                     return cache;
                 }
+            }
             {//not hit
                 ImageCache cache = new ImageCache();
                 cache.illust = illust;
@@ -193,13 +197,22 @@ namespace PixivAss
                         cache.data.Add(img);
                     }
                 }
-                cache_pool.Add(cache);
+                cache_pool.AddOrUpdate(illust.id,cache, (key, value) => { return value = cache; });
                 while (cache_pool.Count > cache_size)
                 {
-                    cache_pool.Sort((l, r) => l.required_time.CompareTo(r.required_time));
-                    int remove_size = cache_size / 2;
-                    cache_pool.Take(remove_size).ToList<ImageCache>().ForEach(x=>x.Dispose());
-                    cache_pool = cache_pool.Skip(remove_size).ToList<ImageCache>();
+                    //C#里可修改的Pair类是什么？
+                    int oldest_cache=-1;
+                    DateTime oldest_cache_time = DateTime.MaxValue;
+                    foreach(var tmp_cache in cache_pool)
+                        if(tmp_cache.Value.required_time < oldest_cache_time)
+                        {
+                            oldest_cache = tmp_cache.Key;
+                            oldest_cache_time = tmp_cache.Value.required_time;
+                        }
+                    if (oldest_cache < 0)
+                        continue;
+                    ImageCache ignored;
+                    cache_pool.TryRemove(oldest_cache, out ignored);
                 }
                 return cache;
             }
@@ -230,7 +243,16 @@ namespace PixivAss
             this.NotifyChange<string>("IndexText");
             for (int idx = i - 5; idx < i + 5; ++idx)
                 if (idx >= 0 && idx < illust_list.Count)
-                    Load(illust_list[idx]);
+                {
+                    //不能写成Task.Run(() => Load(illust_list[idx]));否则[]运行函数时才执行，此时idx的值已经改变
+                    Illust tmp = illust_list[idx];
+                    Task.Run(() => Load(tmp));
+                }
+            if (next_random_index >= 0 && next_random_index < illust_list.Count)
+            {
+                Illust tmp = illust_list[next_random_index];//同上
+                Task.Run(() => Load(tmp));
+            }
         }
         //标记当前为已读
         private void MarkReaded()
@@ -246,11 +268,11 @@ namespace PixivAss
         {
             if (illust_list.Count < 1)
                 return false;
-            var random = new Random();
-            int new_index = random.Next(0,illust_list.Count());
-            int new_sub_index =random.Next(0,Load(illust_list[new_index]).data.Count);
+            //预先生成下一个随机数，以提前加载
             MarkReaded();
-            SlideTo(new_index, new_sub_index);
+            var random = new Random();
+            SlideTo(next_random_index, random.Next(0, Load(illust_list[next_random_index]).data.Count));
+            next_random_index = random.Next(0, illust_list.Count());
             return true;
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
