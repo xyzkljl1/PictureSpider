@@ -123,6 +123,8 @@ namespace PixivAss
         public void SetList(List<Illust> list)
         {
             this.Image = null;
+            foreach (var cache in cache_pool)
+                cache.Value.Dispose();
             cache_pool.Clear();
             illust_list.Clear();            
             foreach (var illust in list)
@@ -216,8 +218,8 @@ namespace PixivAss
                     if (oldest_cache < 0)
                         continue;
                     ImageCache ignored;
-                    cache_pool.TryRemove(oldest_cache, out ignored);
-                    ignored.Dispose();
+                    if(cache_pool.TryRemove(oldest_cache, out ignored))
+                        ignored.Dispose();
                 }
                 return cache;
             }
