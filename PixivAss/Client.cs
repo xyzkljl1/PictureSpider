@@ -242,7 +242,13 @@ namespace PixivAss
             const int MaxSize = 10000;
             if (force||(await database.GetQueueUpdateInterval())>UpdateInterval||(await database.GetQueue()).Length<2)
             {
-                var illust_list =await database.GetAllUnreadedIllustFull();
+                var illust_list = (await database.GetAllUnreadedIllustFull()).FindAll((Illust illust) =>
+                                     {
+                                         foreach (var tag in illust.tags)
+                                             if (this.banned_keyword.Contains(tag.ToString()))
+                                                 return false;
+                                         return true;
+                                    });
                 var followed_user = new HashSet<int>();
                 foreach (var user in await database.GetFollowedUser())
                     followed_user.Add(user.userId);
@@ -262,6 +268,7 @@ namespace PixivAss
                 foreach (var illust in illust_list)
                     queue += " "+illust.id;
                 await database.UpdateQueue(queue);
+                Console.WriteLine("Generate Queue Done");
             }            
         }
 
