@@ -5,6 +5,8 @@ Pixiv本地助手，用aria2预下载图片到本地，自动标记已读，定�
 ![image](other/0.PNG)
 
 # 运行前需要
+确保使用x64系统(因为x86可用内存不足)
+
 安装VS2017与.Net Framework 4.7.1
 
 在config.json填写用户名和用户id(用于RunInitTask和访问测试,不影响其它功能)
