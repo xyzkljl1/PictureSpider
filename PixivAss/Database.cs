@@ -290,6 +290,9 @@ namespace PixivAss
                     cmd.Parameters.AddWithValue("@3", user.userId);
                 });
         }
+        /*插入或更新illust
+        注意：如果illust已经存在，bookmarked/bookmarkPrivate/bookmarkEach的本地数据优先于远程数据，因此不更新
+        */
         public void UpdateIllustOriginalData(List<Illust> data)
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
@@ -306,7 +309,7 @@ namespace PixivAss
                             string cmdText = "insert ignore user(userId) values(@userId);\n" +
                                              "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW())" +
                                              "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
-                                             "userId=@5,width=@6,height=@7,pageCount=@8,bookmarked=@9,bookmarkPrivate=@10," +
+                                             "userId=@5,width=@6,height=@7,pageCount=@8," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW();\n";
                             var cmd = new MySqlCommand(cmdText, connection, ts);
                             cmd.Parameters.AddWithValue("@userId", illust.userId);
