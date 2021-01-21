@@ -198,6 +198,7 @@ namespace PixivAss
         }
         public async Task DailyTask()
         {
+            Console.WriteLine("Start Fetch Task 0/3");
             //第一次运行之后，FollowedUser和BookmarkIllust由本地向远程单向更新
             var illust_list = new HashSet<int>();
             bool do_week_task = DateTime.Now.DayOfWeek == System.DayOfWeek.Tuesday;//每周一次
@@ -362,7 +363,6 @@ namespace PixivAss
                 throw;
             }
         }
-
         private async Task DownloadIllustsTmp()
         {
             try
@@ -392,7 +392,6 @@ namespace PixivAss
                 throw;
             }
         }
-
         private async Task<HashSet<int>> RequestAllKeywordSearchIllust()
         {
             var ret =new HashSet<int>();
@@ -464,7 +463,11 @@ namespace PixivAss
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
             JObject ret = await RequestJsonAsync(url, referer);
             if (ret.Value<Boolean>("error"))
-                throw new Exception("Get All By User Fail "+userId);
+            {
+                //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
+                Console.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
+                return new List<int>();
+            }
             var idList = new List<int>();
             foreach (var type in new List<string>{ "illusts"/*,"manga"*/}) //暂时只看插画,不看漫画
                 if (ret.Value<JObject>("body").GetValue("illusts").Type==JTokenType.Object)//为空时不是object而是array很坑爹
