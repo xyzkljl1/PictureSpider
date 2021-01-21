@@ -291,7 +291,7 @@ namespace PixivAss
                 });
         }
         /*插入或更新illust
-        注意：如果illust已经存在，bookmarked/bookmarkPrivate/bookmarkEach的本地数据优先于远程数据，因此不更新
+        注意：如果illust已经存在，readed/bookmarked/bookmarkPrivate/bookmarkEach的本地数据优先于远程数据，因此不更新
         */
         public void UpdateIllustOriginalData(List<Illust> data)
         {

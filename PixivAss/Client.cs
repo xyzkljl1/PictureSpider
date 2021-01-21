@@ -299,9 +299,9 @@ namespace PixivAss
                     process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
                     //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy,cookie_server.cookie);
                     //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}""", download_proxy);
-                    //不需要代理和cookie
+                    //[del]不需要代理[/del]，由于迷之原因，现在需要referer和代理才能下载了，而且岛风go还不行
                     //不要带cookie，会收到警告信
-                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf");
+                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --referer=https://www.pixiv.net/",request_proxy);
                     process.Start();
                 }
                 var queue = new TaskQueue<bool>(3000);
