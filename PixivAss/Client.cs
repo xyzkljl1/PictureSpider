@@ -335,7 +335,11 @@ namespace PixivAss
                                 await queue.Add(DownloadIllustForceAria2(url, download_dir_main, file_name));
                         }
                         else if (exist && GetShouldDelete(illust, i))//假定没有垃圾文件
-                            File.Delete(download_dir_main + "/" + file_name);
+                            try
+                            {
+                                File.Delete(download_dir_main + "/" + file_name);
+                            }
+                            catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,删除不需要立刻完成，因此忽略该异常
                     }
                 }
                 await queue.Done();
@@ -345,6 +349,7 @@ namespace PixivAss
                 //等待完成并查询状态
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 30));
                 //完成后拷贝
+                //反复执行DownloadIllusts(false)会产生大量重复的拷贝，但是目前都是用DownloadIllusts(true)，暂时不处理
                 foreach (var illust in illustList)
                     if(illust.bookmarked)
                     {
@@ -353,7 +358,11 @@ namespace PixivAss
                         {
                             string file_name = GetDownloadFileName(illust, i);
                             if(File.Exists(download_dir_main + "/" + file_name))
-                                File.Copy(download_dir_main + "/" + file_name, dir+"/"+file_name,true);
+                                try
+                                {
+                                    File.Copy(download_dir_main + "/" + file_name, dir + "/" + file_name, true);
+                                }
+                                catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
                         }
                     }
             }
