@@ -260,14 +260,14 @@ namespace PixivAss
         }
         //获取搜索结果
         //!:key_word需要以URL编码
-        private async Task<List<int>> RequestSearchResult(string key_word, bool text_mode, int start_page, int end_page)
+        private async Task<List<int>> RequestSearchResult(string key_word, bool text_mode, int start_page, int end_page,int start_like_count,int end_like_count)
         {
             var ret = new List<int>();
             try
             {
                 var queue = new TaskQueue<List<int>>(25);
                 for (int i = start_page; i < end_page; ++i)//页数从1开始，在RequestSearchPage里面加1了
-                    await queue.Add(RequestSearchPage(key_word, i, text_mode));
+                    await queue.Add(RequestSearchPage(key_word, i, text_mode, start_like_count,end_like_count));
                 await queue.Done();
                 foreach (var task in queue.done_task_list)
                     ret.AddRange(task.Result);
@@ -280,14 +280,15 @@ namespace PixivAss
             }
             return ret;
         }
-        public async Task<List<int>> RequestSearchPage(string word, int page, bool text_mode)
+        public async Task<List<int>> RequestSearchPage(string word, int page, bool text_mode, int start_like_count, int end_like_count)
         {
             //s_mode:s_tc 在描述和标题里搜索 s_tag 在tag里搜索(部分一致) s_tag_full tag搜索(完全一致)
-            //blt:最低收藏数 blg:最大收藏数
+            //blt:最低收藏数 bgt:最大收藏数
             //order:popular_male_d 最受男性欢迎 popular_d 最受欢迎 date_d 最新日期
             //scd:发布日期，格式:2020-08-02，但是因为bookmark的累积需要时间，同时根据收藏数量和时间筛选会漏，所以没有意义
-            string url = String.Format("{0}ajax/search/artworks/{1}?word={1}&order=popular_male_d&mode=all&p={2}&s_mode={3}&type=all&blt=2000",
-                                    base_url,word, page+1,text_mode ? "s_tc" : "s_tag");
+            string url = String.Format("{0}ajax/search/artworks/{1}?word={1}&order=popular_male_d&mode=all&p={2}&s_mode={3}&type=all&blt={4}{5}",
+                                    base_url,word, page+1,text_mode ? "s_tc" : "s_tag",
+                                    start_like_count,end_like_count>0?"&bgt="+end_like_count:"");
             string referer = String.Format("{0}tags/{1}/artworks?s_mode=s_tag_full", base_url,word);
             JObject json =await RequestJsonAsync(url, referer);
             var ret = new List<int>();

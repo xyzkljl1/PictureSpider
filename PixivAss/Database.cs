@@ -24,10 +24,21 @@ namespace PixivAss
             return await StandardQuery(String.Format("select id from illust {0}",condition),
                         (DbDataReader reader) => { return reader.GetInt32(0); });
         }
-        public async Task<List<int>> GetAllIllustIdNeedUpdate(DateTime time,float ratio=1.0f,bool reverse=false)
+        public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time,float ratio=1.0f,bool reverse=false)
         {
             var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString()));
             return new List<int>(list.Take((int)(list.Count * ratio)));
+        }
+        public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
+        {
+            return await StandardQuery<Illust>("select id,updateTime,likeCount from illust where readed=0 or bookmarked=1",
+               (DbDataReader dataReader) => {
+                   return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")),true)
+                   {
+                       updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
+                       likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
+                   };
+               });
         }
         public async Task<List<int>> GetBookmarkIllustId(bool pub)
         {
