@@ -161,14 +161,17 @@ namespace PixivAss
 
         public async Task RunSchedule()
         {
-            //在每日1点执行定时任务
-            //假定任务耗时不会超过23小时，即每天都会触发一次
+            int last_daily_task = -1;
             do
             {
-                DateTime next = DateTime.Today.AddDays(1).AddHours(1.0); //次日1：00
-                int waiting_time = (int)((next - DateTime.Now).TotalMilliseconds);
-                await Task.Delay(waiting_time);
-                await DailyTask();
+                if(DateTime.Now.Day!=last_daily_task)
+                {
+                    last_daily_task = DateTime.Now.Day;
+                    await DailyTask();
+                }
+                //每小时执行process
+                await ProcessIllustUpdateQueue(200);
+                await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
             }
             while (true);
         }
@@ -193,12 +196,12 @@ namespace PixivAss
             Console.WriteLine("Fetch {0} illusts:", illust_list_bytime.Count);
 
             /*获取Illust信息*/
-            await FetchIllustByIdWhenNeccessary(illust_list_bytime, illust_list_bylike);
+            await AddToIllustUpdateQueueIfNeccessary(illust_list_bytime, illust_list_bylike);
 
             /*其它*/
             if (do_week_task)//需要在FetchIllust之后
             {
-                await GenerateQueue();
+                await GenerateExplorerQueue();
                 await FetchAllUnfollowedUserStatus();
             }
 
@@ -214,13 +217,13 @@ namespace PixivAss
             await FetchAllBookMarkIllust(true);
             await FetchAllBookMarkIllust(false);
             illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-            await FetchIllustByIdWhenNeccessary(illust_list,new Dictionary<int, int>());
+            await AddToIllustUpdateQueueIfNeccessary(illust_list,new Dictionary<int, int>());
             await FetchAllUnfollowedUserStatus();
             await DownloadIllusts(true);
             Console.WriteLine("Fetch Task Done");
         }
 
-        private async Task GenerateQueue(bool force=false)
+        private async Task GenerateExplorerQueue(bool force=false)
         {
             const int UpdateInterval = 7 * 24 * 60 * 60;//每超过这个时间才刷新
             const int MaxSize = 10000;
@@ -488,8 +491,8 @@ namespace PixivAss
                             idList.Add(Int32.Parse(illust.Key));
             return idList;
         }
-        //先从本地去重再FetchIllustByIdList
-        private async Task FetchIllustByIdWhenNeccessary(HashSet<int> list_bytime, Dictionary<int,int> list_bylike)
+        //去掉重复以及不必更新的Illust，将剩下的加入illust_update_queue
+        private async Task AddToIllustUpdateQueueIfNeccessary(HashSet<int> list_bytime, Dictionary<int,int> list_bylike)
         {
             int tmp = illust_update_queue.Count;
             var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust=>illust.id);
@@ -503,11 +506,14 @@ namespace PixivAss
                     illust_update_queue.Add(pair.Key);
 
             Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_update_queue.Count-tmp);
-            var queue =new List<int>( illust_update_queue.ToList().Take(2000));
+        }
+        private async Task ProcessIllustUpdateQueue(int count)
+        {
+            var queue = new List<int>(illust_update_queue.ToList().Take(count<illust_update_queue.Count?count:illust_update_queue.Count));
             await FetchIllustByIdForce(queue);
             foreach (var id in queue)
                 illust_update_queue.Remove(id);
-            Console.WriteLine("Update Illusts Queue => {0} ", illust_update_queue.Count);
+            Console.WriteLine("Process Illusts Queue => {0}-{1} ", illust_update_queue.Count+count,count);
         }
         //获取并更新指定的作品
         private async Task FetchIllustByIdForce(List<int> illustIdList)
