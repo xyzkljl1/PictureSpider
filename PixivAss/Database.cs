@@ -444,7 +444,7 @@ namespace PixivAss
                     using (var dataReader = await cmd.ExecuteReaderAsync())
                         while (dataReader.Read())
                             ret.Add(converter(dataReader));
-                    Console.WriteLine("Select {0} Rows", ret.Count);
+//                    Console.WriteLine("Select {0} Rows", ret.Count);
                     return ret;
                 }
             }

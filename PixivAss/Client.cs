@@ -46,6 +46,7 @@ namespace PixivAss
         private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
         private string request_proxy;
         //private string download_proxy = "127.0.0.1:8000";下载图片不需要代理
+        private HashSet<int> illust_update_queue;//计划更新的illustid
 
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Client(Config config)
@@ -185,7 +186,7 @@ namespace PixivAss
                 illust_list_bytime.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
             //更新1/700的数据库，每两年更新一轮
             illust_list_bytime.UnionWith(await database.GetIllustIdByUpdateTime(DateTime.UtcNow.AddDays(-UPDATE_INTERVAL), 1.0f / UPDATE_INTERVAL));
-            //关键字搜索。分散成若干块进行，每周轮换关键字，每天轮换like数
+            //关键字搜索。分散成若干块进行，每周轮换关键字(5周一轮)，每天轮换like数(7天一轮)
             illust_list_bylike = await RequestAllKeywordSearchIllust(DateTime.Now.DayOfYear / 7, (int)DateTime.Now.DayOfWeek);
             //排行榜
             illust_list_bytime.UnionWith(await RequestAllCurrentRankIllust());
@@ -490,18 +491,23 @@ namespace PixivAss
         //先从本地去重再FetchIllustByIdList
         private async Task FetchIllustByIdWhenNeccessary(HashSet<int> list_bytime, Dictionary<int,int> list_bylike)
         {
+            int tmp = illust_update_queue.Count;
             var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust=>illust.id);
-            var all_illust = new List<int>();
             foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
                 if ((!local_illust.ContainsKey(id)) 
                     || local_illust[id].updateTime<DateTime.Now.AddDays(-UPDATE_INTERVAL))
-                        all_illust.Add(id);
+                    illust_update_queue.Add(id);
             foreach (var pair in list_bylike)//不在本地或like数明显小于真实值的图
                 if ((!local_illust.ContainsKey(pair.Key))
                     || local_illust[pair.Key].likeCount <pair.Value)
-                    all_illust.Add(pair.Key);
-            Console.WriteLine("Real Fetch {0} illusts:", all_illust.Count);
-            await FetchIllustByIdForce(all_illust);
+                    illust_update_queue.Add(pair.Key);
+
+            Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_update_queue.Count-tmp);
+            var queue =new List<int>( illust_update_queue.ToList().Take(2000));
+            await FetchIllustByIdForce(queue);
+            foreach (var id in queue)
+                illust_update_queue.Remove(id);
+            Console.WriteLine("Update Illusts Queue => {0} ", illust_update_queue.Count);
         }
         //获取并更新指定的作品
         private async Task FetchIllustByIdForce(List<int> illustIdList)
