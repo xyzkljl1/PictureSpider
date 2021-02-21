@@ -514,11 +514,12 @@ namespace PixivAss
         }
         private async Task ProcessIllustUpdateQueue(int count)
         {
+            int tmp = illust_update_queue.Count;
             var queue = new List<int>(illust_update_queue.ToList().Take(count<illust_update_queue.Count?count:illust_update_queue.Count));
             await FetchIllustByIdForce(queue);
             foreach (var id in queue)
                 illust_update_queue.Remove(id);
-            Console.WriteLine("Process Illusts Queue => {0}-{1} ", illust_update_queue.Count+count,count);
+            Console.WriteLine("Process Illusts Queue => {0}-{1} ",tmp,tmp - illust_update_queue.Count);
         }
         //获取并更新指定的作品
         private async Task FetchIllustByIdForce(List<int> illustIdList)
