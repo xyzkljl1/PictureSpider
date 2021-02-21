@@ -46,7 +46,7 @@ namespace PixivAss
         private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
         private string request_proxy;
         //private string download_proxy = "127.0.0.1:8000";下载图片不需要代理
-        private HashSet<int> illust_update_queue;//计划更新的illustid
+        private HashSet<int> illust_update_queue=new HashSet<int>();//计划更新的illustid
 
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Client(Config config)
@@ -170,7 +170,7 @@ namespace PixivAss
                     await DailyTask();
                 }
                 //每小时执行process
-                await ProcessIllustUpdateQueue(200);
+                await ProcessIllustUpdateQueue(150);
                 await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
             }
             while (true);
@@ -193,7 +193,7 @@ namespace PixivAss
             illust_list_bylike = await RequestAllKeywordSearchIllust(DateTime.Now.DayOfYear / 7, (int)DateTime.Now.DayOfWeek);
             //排行榜
             illust_list_bytime.UnionWith(await RequestAllCurrentRankIllust());
-            Console.WriteLine("Fetch {0} illusts:", illust_list_bytime.Count);
+            Console.WriteLine("Got {0}+{1} illusts:", illust_list_bytime.Count, illust_list_bylike.Count);
 
             /*获取Illust信息*/
             await AddToIllustUpdateQueueIfNeccessary(illust_list_bytime, illust_list_bylike);
