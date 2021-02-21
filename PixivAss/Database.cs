@@ -24,9 +24,10 @@ namespace PixivAss
             return await StandardQuery(String.Format("select id from illust {0}",condition),
                         (DbDataReader reader) => { return reader.GetInt32(0); });
         }
-        public async Task<List<int>> GetAllIllustIdNeedUpdate(DateTime time,bool reverse=false)
+        public async Task<List<int>> GetAllIllustIdNeedUpdate(DateTime time,float ratio=1.0f,bool reverse=false)
         {
-            return await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString()));
+            var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString()));
+            return new List<int>(list.Take((int)(list.Count * ratio)));
         }
         public async Task<List<int>> GetBookmarkIllustId(bool pub)
         {
@@ -121,9 +122,9 @@ namespace PixivAss
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
             return ret[0];
         }
-        public async Task<List<string>> GetFollowedTags()
+        public async Task<List<string>> GetFollowedTagsOrdered()
         {
-            return await StandardQuery("select `word` from keyword where `status`='Follow' and type='tag'",
+            return await StandardQuery("select `word` from keyword where `status`='Follow' and type='tag' ORDER BY word ",
                         (DbDataReader reader) => { return reader.GetString(0); });
         }
         public async Task<Dictionary<string, TagStatus>> GetAllTagsStatus()
@@ -174,6 +175,11 @@ namespace PixivAss
         public async Task<List<User>> GetQueuedUser()
         {
             return await StandardQuery(String.Format("select userId,userName,followed,queued from user where queued=true;"),
+                       (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
+        }
+        public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
+        {
+            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where followed=0 and (userName=\"\" or updateTime<\"{0}\");",time.ToString()),
                        (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
         }
 

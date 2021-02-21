@@ -117,7 +117,7 @@ namespace PixivAss
         {
             try
             {
-                HttpResponseMessage response = await httpClient.PostAsync(aria2_rpc_addr, new StringContent(data));
+                HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, new StringContent(data));
                 CheckStatusCode(response);
                 return await response.Content.ReadAsStringAsync();
             }
@@ -205,7 +205,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret = await RequestJsonAsync(url, referer);
+            JObject ret = await RequestJsonAsync(url, referer,true);
             if (ret.Value<Boolean>("error"))//可能是作者跑路了，所以不抛出
             {
                 Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
@@ -228,7 +228,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/following?offset=0&limit=1&rest=show", base_url, user_id);
             string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-            JObject ret =await RequestJsonAsync(url, referer);
+            JObject ret =await RequestJsonAsync(url, referer,false);
             if (ret.Value<Boolean>("error"))
                 throw new Exception("Get Bookmark Fail");
             return ret.GetValue("body").Value<int>("total");
@@ -286,7 +286,7 @@ namespace PixivAss
             //blt:最低收藏数 blg:最大收藏数
             //order:popular_male_d 最受男性欢迎 popular_d 最受欢迎 date_d 最新日期
             //scd:发布日期，格式:2020-08-02，但是因为bookmark的累积需要时间，同时根据收藏数量和时间筛选会漏，所以没有意义
-            string url = String.Format("{0}ajax/search/artworks/{1}?word={1}&order=popular_male_d&mode=all&p={2}&s_mode={3}&type=all&blt=1000",
+            string url = String.Format("{0}ajax/search/artworks/{1}?word={1}&order=popular_male_d&mode=all&p={2}&s_mode={3}&type=all&blt=2000",
                                     base_url,word, page+1,text_mode ? "s_tc" : "s_tag");
             string referer = String.Format("{0}tags/{1}/artworks?s_mode=s_tag_full", base_url,word);
             JObject json =await RequestJsonAsync(url, referer);
@@ -317,7 +317,7 @@ namespace PixivAss
             //date:指定日期，形如20200921，没有获知过往排行的必要所以不使用
             string url = String.Format("{0}ranking.php?mode={1}&p={2}&format=json",
                                     base_url, mode, page + 1);
-            JObject json = await RequestJsonAsync(url, base_url);
+            JObject json = await RequestJsonAsync(url, base_url,false);//部分排行榜需要登录
             var ret = new List<int>();
             //排除包含非法关键字的图片
             if(json.GetValue("contents")!=null)

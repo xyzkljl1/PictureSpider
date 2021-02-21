@@ -26,6 +26,7 @@ namespace PixivAss
             }
         }
         private float SEARCH_PAGE_SIZE = 60;//不知如何获得，暂用常数表示;为计算方便使用float
+        private int UPDATE_INTERVAL = 7 * 100;//更新数据库间隔，上次更新时间距今小于该值的illust不会被更新
         private string verify_state="Waiting";
         private string download_dir_root;
         private string user_id;
@@ -102,33 +103,7 @@ namespace PixivAss
             httpClient.Dispose();
         }
         public async Task<string> Test()
-        {/*            
-            var list = await RequestAllByUserId(55875);
-            var queue = new TaskQueue<Illust>(500);
-            foreach (var illust in list)
-                await queue.Add(RequestIllustAsync(illust));
-            await queue.Done();
-            var process = new System.Diagnostics.Process();            
-            process.StartInfo.WorkingDirectory = System.IO.Directory.GetCurrentDirectory() + @"\aria2";//右斜杠和左斜杠都可以但是不能混用(不知道为什么)
-            process.StartInfo.FileName = "aria2c(PixivAss).exe";
-            process.StartInfo.RedirectStandardOutput = false;
-            process.StartInfo.UseShellExecute = true;
-            process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --http-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy, cookie_server.cookie);
-            process.Start();
-            var d_queue = new TaskQueue<bool>(500);
-            foreach (var task in queue.done_task_list)
-            {
-                var illust = task.Result;
-                var dir ="G:/p0/" + illust.title.Substring(0,3) + illust.id.ToString();
-                Directory.CreateDirectory(dir);
-                for (int i = 0; i < illust.pageCount; ++i)
-                {
-                    string url = String.Format(illust.urlFormat, i);
-                    string file_name = GetDownloadFileName(illust, i);
-                    await d_queue.Add(DownloadIllustForceAria2(url, dir, file_name));
-                }
-            }
-            await d_queue.Done();*/
+        {
             return "";
            // var list = await database.GetBookmarkIllustId(true);
 //            await PushAllBookMark();
@@ -198,22 +173,24 @@ namespace PixivAss
         }
         public async Task DailyTask()
         {
-            Console.WriteLine("Start Fetch Task 0/3");
+            Console.WriteLine("Start Fetch Task ");
             //第一次运行之后，FollowedUser和BookmarkIllust由本地向远程单向更新
             var illust_list = new HashSet<int>();
-            bool do_week_task = DateTime.Now.DayOfWeek == System.DayOfWeek.Tuesday;//每周一次
+            bool do_week_task = DateTime.Now.DayOfWeek == System.DayOfWeek.Sunday;//每周一次
             if (do_week_task)//需要在FetchIllust之前
             {
+                int WeekOfYear = DateTime.Now.DayOfYear / 7;//周数
                 illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-                illust_list.UnionWith(await RequestAllKeywordSearchIllust());
-                illust_list.UnionWith(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-21)));
+                //每周搜索1/5的关键词以减少访问量
+                illust_list.UnionWith(await RequestAllKeywordSearchIllust(WeekOfYear,5));
+                //每周更新1/100的数据库以减少访问量
+                illust_list.UnionWith(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-UPDATE_INTERVAL),7/ UPDATE_INTERVAL));
             }
-            Console.WriteLine("Fetch Task 1/3 {0}", illust_list.Count);
             //每天一次
             illust_list.UnionWith(await RequestAllCurrentRankIllust());
+            Console.WriteLine("Fetch {0} illusts:", illust_list.Count);
             //FetchIllust
             await FetchIllustByIdWhenNeccessary(illust_list);
-            Console.WriteLine("Fetch Task 2/3 {0}",illust_list.Count);
             if (do_week_task)//需要在FetchIllust之后
             {
                 await GenerateQueue();
@@ -221,7 +198,7 @@ namespace PixivAss
                 //await DownloadIllusts();
             }
             await DownloadIllusts(true);
-            Console.WriteLine("Fetch Task Done");
+            Console.WriteLine("All Fetch Task Done");
         }
         //初次执行，将收藏的作者和图同步到本地
         public async Task InitTask()
@@ -401,14 +378,17 @@ namespace PixivAss
                 throw;
             }
         }
-        private async Task<HashSet<int>> RequestAllKeywordSearchIllust()
+        private async Task<HashSet<int>> RequestAllKeywordSearchIllust(int block,int total_block)//将所有关键词分为total_block块，搜索第block块
         {
             var ret =new HashSet<int>();
             var key_word_list=new List<string>();
             var task_list = new Dictionary<string, Task<List<int>>>();
             var tmp = "";
+            var tags=await database.GetFollowedTagsOrdered();
+            int tags_count = tags.Count;
+            block = block % total_block;
             //用or合并关键字可以减少重复
-            foreach (var word in await database.GetFollowedTags())
+            foreach (var word in tags.Take(tags_count * (block + 1) / total_block).Skip(tags_count * block / total_block))
             {
                 tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
                 if (tmp.Length > 1600)
@@ -419,12 +399,14 @@ namespace PixivAss
             }
             int start_page = 0;
             int step = 100;
+            int page_count = 0;
             while(key_word_list.Count>0)
             {
                 foreach(var key in key_word_list)
                 {
                     var task= RequestSearchResult(key, false, start_page, start_page + step);
                     task_list[key] = task;
+                    page_count += step;
                 }
                 await Task.WhenAll(task_list.Values);
                 //丢掉已经搜索完的
@@ -439,10 +421,10 @@ namespace PixivAss
                     foreach (var id in task.Result)
                         ret.Add(id);
                 task_list.Clear();
-                Console.WriteLine(String.Format("Search Res {0}: {1}",start_page,ret.Count));
+                Console.WriteLine(String.Format("Search Res {0}p: {1}",start_page,ret.Count));
                 start_page += step;
             }
-            Console.WriteLine("Final Search Res: " + ret.Count.ToString());
+            Console.WriteLine(String.Format("Search Done:{0} in {1} pages ",ret.Count,page_count));
             return ret;
         }
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
@@ -460,7 +442,7 @@ namespace PixivAss
             //一般每种排行总数在500左右浮动，一页50，RequestRankPage可以获得总数。
             //但是反正页数很少并且只需要固定数量，没有必要知道总共几页
             foreach (var mode in new List<string> { "daily", "weekly","monthly","male","daily_r18","weekly_r18","male_r18"})
-                for(int p=0;p<5;++p)
+                for (int p=0;p<2;++p)//只获取前两页以减少访问量
                     await queue.Add(RequestRankPage(mode,p));
             return await queue.GetResultSet();
         }
@@ -470,7 +452,7 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret = await RequestJsonAsync(url, referer);
+            JObject ret = await RequestJsonAsync(url, referer,true);
             if (ret.Value<Boolean>("error"))
             {
                 //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
@@ -487,17 +469,17 @@ namespace PixivAss
         //先从本地去重再FetchIllustByIdList
         private async Task FetchIllustByIdWhenNeccessary(HashSet<int> id_list)
         {
-            var no_need_update_illust =new HashSet<int>(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-14), true));
+            var no_need_update_illust =new HashSet<int>(await database.GetAllIllustIdNeedUpdate(DateTime.UtcNow.AddDays(-UPDATE_INTERVAL),1.0f, true));
             var all_illust = new List<int>();
             foreach (var id in id_list)
                 if (!no_need_update_illust.Contains(id))
                     all_illust.Add(id);
+            Console.WriteLine("Real Fetch {0} illusts:", all_illust.Count);
             await FetchIllustByIdForce(all_illust);
         }
         //获取并更新指定的作品
         private async Task FetchIllustByIdForce(List<int> illustIdList)
         {
-            Console.WriteLine("Begin Fetch {0}",illustIdList.Count);
             var queue = new TaskQueue<Illust>(3000,50000,task_list=> {
                 var illustList = new List<Illust>();
                 foreach (var task in task_list)
@@ -507,6 +489,7 @@ namespace PixivAss
             foreach (var illustId in illustIdList)
                 await queue.Add(RequestIllustAsync(illustId));
             await queue.Done();
+            Console.WriteLine("Fetch Illust Done", illustIdList.Count);
         }
         private async Task<Dictionary<int,Int64>> RequestBookMarkIllust(bool pub,bool get_bookmark_id=false)
         {
@@ -521,7 +504,7 @@ namespace PixivAss
                 string url = String.Format("{0}ajax/user/{1}/illusts/bookmarks?tag=&offset={2}&limit={3}&rest={4}",
                                             base_url, user_id, offset, page_size, pub ? "show" : "hide");
                 string referer = String.Format("{0}bookmark.php?id={1}&rest={2}", base_url, user_id, pub ? "show" : "hide");
-                JObject ret = await RequestJsonAsync(url, referer);
+                JObject ret = await RequestJsonAsync(url, referer,false);
                 if (ret.Value<Boolean>("error"))
                     throw new Exception("Get Bookmark Fail");
                 //获取总数,仅用于提示
@@ -578,7 +561,7 @@ namespace PixivAss
             {
                 string url = String.Format("{0}ajax/user/{1}/following?offset={2}&limit=50&rest=show", base_url, user_id,i);
                 string referer = String.Format("{0}bookmark.php?id={1}&rest=show", base_url, user_id);
-                await queue.Add(RequestJsonAsync(url, referer));
+                await queue.Add(RequestJsonAsync(url, referer,false));
             }
             await queue.Done();
             foreach(var task in queue.done_task_list)
@@ -595,7 +578,8 @@ namespace PixivAss
         //更新所有已知的未关注作者状态
         private async Task FetchAllUnfollowedUserStatus()
         {
-            var user_list = await database.GetFollowedUser(false);
+            //每隔70天更新全部，没有名字的立刻更新
+            var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-7 * 10));
             var queue = new TaskQueue<User>(2000);
             foreach (var user in user_list)
                 await queue.Add(RequestUserAsync(user.userId));
