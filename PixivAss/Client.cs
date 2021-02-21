@@ -161,7 +161,8 @@ namespace PixivAss
 
         public async Task RunSchedule()
         {
-            int last_daily_task = -1;
+            int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
+            int process_speed = 150;
             do
             {
                 if(DateTime.Now.Day!=last_daily_task)
@@ -169,8 +170,12 @@ namespace PixivAss
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask();
                 }
-                //每小时执行process
-                await ProcessIllustUpdateQueue(150);
+                //每小时执行process                
+                await ProcessIllustUpdateQueue(process_speed);
+                if (illust_update_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
+                    process_speed++;
+                else if (illust_update_queue.Count / process_speed < 24&&process_speed>150)//积压量小于一天时逐渐减速
+                    process_speed--;
                 await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
             }
             while (true);
