@@ -130,9 +130,8 @@ namespace PixivAss
         }
         public async Task<string> RequestPixivAsyncGet(string url, Uri referer, bool anonymous = false)
         {
-            int try_ct = 8;
             HttpClient client=anonymous?httpClient_anonymous:httpClient;
-            while (true)
+            for (int try_ct = 8; try_ct >= 0; --try_ct)
             {
                 try
                 {
@@ -156,12 +155,12 @@ namespace PixivAss
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if(try_ct<4)
                         Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
-                    if (try_ct == 0)
+                    //if (try_ct == 0)
                         //throw;
-                        return "{\"error\":true}";
-                    try_ct--;
                 }
             }
+            return null;
+
         }
         public async Task<string> RequestPixivAsyncPost(string url,Uri referer,string data)
         {
@@ -183,33 +182,45 @@ namespace PixivAss
                 {
                     if (try_ct < 4)
                         Console.WriteLine(e.Message + "Re Try " + try_ct.ToString() + " On :" + url);
-                    if (try_ct == 0)
+                    //if (try_ct == 0)
                         //throw;
-                        return "";
                 }
-            return "";
+            return null;
         }
         public async Task<JObject> RequestJsonAsync(string url, string referer,bool anonymous=false)
         {
             var r = await RequestPixivAsyncGet(url, new Uri(referer),anonymous);
-            return (JObject)JsonConvert.DeserializeObject(r);
+            if(r!=null)
+                return (JObject)JsonConvert.DeserializeObject(r);
+            return (JObject)JsonConvert.DeserializeObject("{\"NetError\":true,\"error\":true}");
         }
         public async Task<HtmlDocument> RequestHtmlAsync(string url, string referer)
         {
             var doc = new HtmlDocument();
-            var ret = await RequestPixivAsyncGet(url, new Uri(referer));
-            doc.LoadHtml(ret);
+            var result = await RequestPixivAsyncGet(url, new Uri(referer));
+            if(result is null)
+                return null;
+            doc.LoadHtml(result);
             return doc;
         }
         public async Task<User> RequestUserAsync(int userId)
         {
+            if (userId == 0)
+                return null;
             string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
             JObject ret = await RequestJsonAsync(url, referer,true);
-            if (ret.Value<Boolean>("error"))//可能是作者跑路了，所以不抛出
+            if (ret.Value<Boolean>("NetError"))
             {
-                Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
+                Console.WriteLine("Net Error");
                 return null;
+            }
+            if (ret.Value<Boolean>("error"))
+            {
+                if(ret.Value<string>("message")=="抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。")//作者跑路了,正常情况
+                    return null;
+                Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
+                throw new TopLevelException(ret.Value<string>("message"));
             }
             var body = ret.Value<JObject>("body");
             var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
@@ -292,6 +303,8 @@ namespace PixivAss
             string referer = String.Format("{0}tags/{1}/artworks?s_mode=s_tag_full", base_url,word);
             JObject json =await RequestJsonAsync(url, referer);
             var ret = new List<int>();
+            if (json.Value<Boolean>("error"))
+                return ret;
             //检查是否超出最后一页，超出时会返回最后一页的内容
             var total=json.Value<JObject>("body").Value<JObject>("illustManga").Value<int>("total");//illust和manga都在一起
             if (page >= Math.Ceiling(total / SEARCH_PAGE_SIZE))
@@ -320,6 +333,8 @@ namespace PixivAss
                                     base_url, mode, page + 1);
             JObject json = await RequestJsonAsync(url, base_url,false);//部分排行榜需要登录
             var ret = new List<int>();
+            if (json.Value<Boolean>("error"))
+                return ret;
             //排除包含非法关键字的图片
             if(json.GetValue("contents")!=null)
                 foreach (var illust_object in json.Value<JArray>("contents"))
@@ -350,8 +365,8 @@ namespace PixivAss
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);            
             JObject json = await RequestJsonAsync(url, referer,true);
-            if (!json.HasValues)
-                return new Illust(illustId, false);
+            if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
+                return null;
             if (json.Value<Boolean>("error"))
                 return new Illust(illustId, false);
             return new Illust(json.Value<JObject>("body"));

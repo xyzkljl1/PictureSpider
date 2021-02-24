@@ -106,18 +106,6 @@ namespace PixivAss
         public async Task<string> Test()
         {
             return "";
-           // var list = await database.GetBookmarkIllustId(true);
-//            await PushAllBookMark();
-            var new_list=await RequestBookMarkIllust(true);
-            await PushBookmark(false, 258, true,new_list[258]);
-            var new_list_2 = await RequestBookMarkIllust(true);
-            /*
-            Console.WriteLine(list.Count.ToString()+" -> "+new_list.Count.ToString());
-            foreach (var i in new_list)
-                if (!list.Contains(i.Key))
-                    Console.WriteLine(i.Key);
-            */
-            return "12s3";
         }
 
         public async Task<List<Tuple<ExploreQueueType,int,string>>> GetExploreQueueName()
@@ -201,7 +189,7 @@ namespace PixivAss
             Console.WriteLine("Got {0}+{1} illusts:", illust_list_bytime.Count, illust_list_bylike.Count);
 
             /*获取Illust信息*/
-            await AddToIllustUpdateQueueIfNeccessary(illust_list_bytime, illust_list_bylike);
+            await AddToIllustUpdateQueue(illust_list_bytime, illust_list_bylike);
 
             /*其它*/
             if (do_week_task)//需要在FetchIllust之后
@@ -222,7 +210,7 @@ namespace PixivAss
             await FetchAllBookMarkIllust(true);
             await FetchAllBookMarkIllust(false);
             illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-            await AddToIllustUpdateQueueIfNeccessary(illust_list,new Dictionary<int, int>());
+            await AddToIllustUpdateQueue(illust_list,new Dictionary<int, int>());
             await FetchAllUnfollowedUserStatus();
             await DownloadIllusts(true);
             Console.WriteLine("Fetch Task Done");
@@ -363,35 +351,6 @@ namespace PixivAss
                 throw;
             }
         }
-        private async Task DownloadIllustsTmp()
-        {
-            try
-            {
-                var queue = new TaskQueue<bool>(3000);
-                List<Illust> illustList = await database.GetIllustFullSortedByUser(13379747);
-                //创建下载任务
-                foreach (var illust in illustList)
-                {
-                    for (int i = 0; i < illust.pageCount; ++i)
-                    {
-                        string url = String.Format(illust.urlFormat, i);
-                        string file_name = GetDownloadFileName(illust, i);
-                        await queue.Add(DownloadIllustForceAria2(url, download_dir_main, file_name));
-                    }
-                }
-                await queue.Done();
-                int ct = 0;
-                queue.done_task_list.ForEach((Task<bool> task) => { ct += task.Result ? 1 : 0; });
-                Console.WriteLine(String.Format("Downloaded Begin{0}", ct));
-                //等待完成并查询状态
-                while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 30));
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                throw;
-            }
-        }
         //按关键词/like数将搜索任务分为若干块，每次搜索第idx块
         //返回<IllustId,minLikeCount>
         private async Task<Dictionary<int,int>> RequestAllKeywordSearchIllust(int idx_word,int idx_like)
@@ -460,10 +419,8 @@ namespace PixivAss
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
         {
             var queue = new TaskQueue<List<int>>(1000);
-            foreach (var user in await database.GetFollowedUser())
-                await queue.Add(RequestAllByUserId(user.userId));
-            foreach (var user in await database.GetQueuedUser())
-                await queue.Add(RequestAllByUserId(user.userId));
+            (await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
+            (await database.GetQueuedUser()  ).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             return await queue.GetResultSet();
         }
         private async Task<HashSet<int>> RequestAllCurrentRankIllust()
@@ -497,43 +454,52 @@ namespace PixivAss
             return idList;
         }
         //去掉重复以及不必更新的Illust，将剩下的加入illust_update_queue
-        private async Task AddToIllustUpdateQueueIfNeccessary(HashSet<int> list_bytime, Dictionary<int,int> list_bylike)
+        private async Task AddToIllustUpdateQueue(HashSet<int> list_bytime, Dictionary<int,int> list_bylike, bool only_necessary = true)
         {
             int tmp = illust_update_queue.Count;
-            var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust=>illust.id);
-            foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
-                if ((!local_illust.ContainsKey(id)) 
-                    || local_illust[id].updateTime<DateTime.Now.AddDays(-UPDATE_INTERVAL))
-                    illust_update_queue.Add(id);
-            foreach (var pair in list_bylike)//不在本地或like数明显小于真实值的图
-                if ((!local_illust.ContainsKey(pair.Key))
-                    || local_illust[pair.Key].likeCount <pair.Value)
-                    illust_update_queue.Add(pair.Key);
-
+            if (only_necessary)
+            {
+                var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust => illust.id);
+                if(list_bytime != null)
+                    foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
+                        if ((!local_illust.ContainsKey(id))
+                            || local_illust[id].updateTime < DateTime.Now.AddDays(-UPDATE_INTERVAL))
+                            illust_update_queue.Add(id);
+                if (list_bylike != null)
+                    foreach (var pair in list_bylike)//不在本地或like数明显小于真实值的图
+                        if ((!local_illust.ContainsKey(pair.Key))
+                            || local_illust[pair.Key].likeCount < pair.Value)
+                            illust_update_queue.Add(pair.Key);
+            }
+            else
+            {
+                if (list_bytime != null)
+                    foreach (var id in list_bytime)
+                        illust_update_queue.Add(id);
+                if (list_bylike != null)
+                    foreach (var id in list_bylike.Keys)
+                        illust_update_queue.Add(id);
+            }
             Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_update_queue.Count-tmp);
         }
         private async Task ProcessIllustUpdateQueue(int count)
         {
             int tmp = illust_update_queue.Count;
-            var queue = new List<int>(illust_update_queue.ToList().Take(count<illust_update_queue.Count?count:illust_update_queue.Count));
-            await FetchIllustByIdForce(queue);
-            foreach (var id in queue)
-                illust_update_queue.Remove(id);
-            Console.WriteLine("Process Illusts Queue => {0}-{1} ",tmp,tmp - illust_update_queue.Count);
-        }
-        //获取并更新指定的作品
-        private async Task FetchIllustByIdForce(List<int> illustIdList)
-        {
-            var queue = new TaskQueue<Illust>(3000,50000,task_list=> {
-                var illustList = new List<Illust>();
-                foreach (var task in task_list)
-                    illustList.Add(task.Result);
-                database.UpdateIllustOriginalData(illustList);
-            });
-            foreach (var illustId in illustIdList)
-                await queue.Add(RequestIllustAsync(illustId));
+            var queue = new TaskQueue<Illust>(3000);
+            foreach( var id in illust_update_queue.ToList().Take(Math.Max(count, illust_update_queue.Count)))
+                await queue.Add(RequestIllustAsync(id));
             await queue.Done();
-            Console.WriteLine("Fetch Illust Done", illustIdList.Count);
+
+            var illustList = new List<Illust>();
+            queue.done_task_list.ForEach(task =>
+            {
+                if (task.Result != null)
+                    illustList.Add(task.Result);
+            });
+            database.UpdateIllustOriginalData(illustList);
+
+            illustList.ForEach(illust=>illust_update_queue.Remove(illust.id));
+            Console.WriteLine("Process Illusts Queue => {0}-{1} ",tmp,tmp - illust_update_queue.Count);
         }
         private async Task<Dictionary<int,Int64>> RequestBookMarkIllust(bool pub,bool get_bookmark_id=false)
         {
@@ -568,14 +534,14 @@ namespace PixivAss
         //只在最初使用
         private async Task FetchAllBookMarkIllust(bool pub)
         {
-            var idList =(await RequestBookMarkIllust(pub)).Keys.ToList<int>();
+            var idList =new HashSet<int>((await RequestBookMarkIllust(pub)).Keys);
             //将当前有效的已收藏作品和可能已无效/已移除收藏的作品(即本地存储的已收藏作品)一起更新状态
             //FetchIllust时会获取Illust是否已收藏状态，所以不需要另行更新收藏状态
             int tmp = idList.Count;
             foreach (var illust_id in await database.GetBookmarkIllustId(pub))
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
-            await FetchIllustByIdForce(idList);
+            await AddToIllustUpdateQueue(idList,null);
             Console.WriteLine(String.Format("Fetch {0}/{1}  Bookmarks",pub?"Public":"Private",tmp));
         }
         //WIP
@@ -643,23 +609,26 @@ namespace PixivAss
             string url = base_url;
             string referer = String.Format("{0}", base_url);
             var doc =await RequestHtmlAsync(base_url,referer);
-            HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
-            if (headNode != null)
+            if(doc != null)
             {
-                var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
-                if (json_object!=null&& json_object.Value<JObject>("userData")!=null)
-                {                    
-                    var name = json_object.Value<JObject>("userData").Value<String>("name");
-                    if (name == this.user_name)
+                HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
+                if (headNode != null)
+                {
+                    var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
+                    if (json_object != null && json_object.Value<JObject>("userData") != null)
                     {
-                        VerifyState = "Login Success";
-                        return;
+                        var name = json_object.Value<JObject>("userData").Value<String>("name");
+                        if (name == this.user_name)
+                        {
+                            VerifyState = "Login Success";
+                            return;
+                        }
                     }
                 }
             }
             VerifyState = "Login Fail";
             Console.WriteLine("Login Fail");
-            throw new ArgumentOutOfRangeException("Login Not Success");
+            throw new TopLevelException("Login Not Success");
         }
     }
 }
