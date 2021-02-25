@@ -61,8 +61,10 @@ namespace PixivAss.Data
         public int bookmarkCount=0;
         public bool valid;//不在json里,获取不到(即已删除)则为无效
         //Modified data
-        public string urlFormat;//Lets assume url of each page has same format as p0 and they never change
+        public string urlFormat;//假定每P的格式都相同
         public string urlThumbFormat;
+        public string ugoiraFrames="";//动图帧，json格式，假定动图全部只有1p
+        public string ugoiraURL="";//动图url,如果此项不为空则为动图
         //My Data
         public Boolean readed;
         public string bookmarkEach="";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
@@ -84,7 +86,7 @@ namespace PixivAss.Data
             pageCount = _pageCount;
             valid = true;
         }
-        public Illust(JObject json)
+        public Illust(JObject json,JObject ugoira_json=null)
         {
             valid = true;
             id = json.Value<int>("illustId");
@@ -132,6 +134,13 @@ namespace PixivAss.Data
             updateTime = DateTime.UtcNow;
             readed = false;
             bookmarkEach = "";
+            if (ugoira_json!=null)
+            {
+                ugoiraURL = ugoira_json.Value<string>("originalSrc");
+                ugoiraFrames = "";
+                foreach (var frame in ugoira_json.Value<JArray>("frames"))
+                    ugoiraFrames +=frame.Value<String>("file")+"`"+frame.Value<String>("delay")+"`";
+            }
         }
         public bool isPageValid(int page)
         {
@@ -153,6 +162,31 @@ namespace PixivAss.Data
             if (bookmarkEach.Count() == pageCount)
                 return bookmarkEach.Sum(x=>x=='0'?1:0);
             return pageCount;
+        }
+        public bool isUgoira()
+        {
+            return ugoiraURL.Length > 0;
+        }
+        public string URL(int page)
+        {
+            if (isUgoira())
+                return ugoiraURL;//假定动图只有一p
+            return String.Format(urlFormat, page);
+        }
+        public string downloadFileName(int page)//下载的文件名
+        {
+            string ext = "";
+            string url = URL(0);
+            int pos = url.LastIndexOf(".");
+            if (pos >= 0)
+                ext = url.Substring(pos + 1);
+            return String.Format("{0}_p{1}.{2}", id, page, ext);
+        }
+        public string storeFileName(int page)//本地存储的文件名
+        {
+            if (isUgoira())
+                return String.Format("{0}_p{1}.gif", id, page);
+            return downloadFileName(page);
         }
     }
 }

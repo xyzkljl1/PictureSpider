@@ -77,8 +77,10 @@ namespace PixivAss
                                updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
                                valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
-                               bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount"))
-                           };
+                               bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
+                               ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
+                               ugoiraFrames = dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
+                   };
                });
         }
         public async Task<List<Illust>> GetIllustFullSortedByUser(int userId)//按id排序，实际等于按时间排序
@@ -109,7 +111,9 @@ namespace PixivAss
                                 updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
                                 valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                 likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
-                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount"))
+                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
+                                ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
+                                ugoiraFrames = dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
                             };
                         });
         }
@@ -324,10 +328,11 @@ namespace PixivAss
                         if(illust.valid)
                         {
                             string cmdText = "insert ignore user(userId) values(@userId);\n" +
-                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW())" +
+                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW(),@18,@19)" +
                                              "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
                                              "userId=@5,width=@6,height=@7,pageCount=@8," +
-                                             "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW();\n";
+                                             "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW(),"+
+                                             "ugoiraFrames=@18,ugoiraURL=@19;\n";
                             var cmd = new MySqlCommand(cmdText, connection, ts);
                             cmd.Parameters.AddWithValue("@userId", illust.userId);
                             cmd.Parameters.AddWithValue("@0", illust.id);
@@ -348,6 +353,8 @@ namespace PixivAss
                             cmd.Parameters.AddWithValue("@15", illust.valid);
                             cmd.Parameters.AddWithValue("@16", illust.likeCount);
                             cmd.Parameters.AddWithValue("@17", illust.bookmarkCount);
+                            cmd.Parameters.AddWithValue("@18", illust.ugoiraFrames);
+                            cmd.Parameters.AddWithValue("@19", illust.ugoiraURL);
                             affected += cmd.ExecuteNonQuery();
                         }
                         else

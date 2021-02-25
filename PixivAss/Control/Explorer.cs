@@ -134,7 +134,7 @@ namespace PixivAss
                 {
                     pass = false;
                     for (int i = 0; i < illust.pageCount; i++)
-                        if (File.Exists(String.Format("{0}/{1}", pixivClient.download_dir_main, Client.GetDownloadFileName(illust,i))))
+                        if (File.Exists(String.Format("{0}/{1}", pixivClient.download_dir_main, illust.storeFileName(i))))
                         {
                             pass = true;
                             break;
@@ -165,11 +165,12 @@ namespace PixivAss
                 {
                     if (illust.bookmarked && !illust.isPageValid(i))
                         continue;
-                    string path = String.Format("{0}/{1}", pixivClient.download_dir_main, Client.GetDownloadFileName(illust, i));
+                    string path = String.Format("{0}/{1}", pixivClient.download_dir_main, illust.storeFileName(i));
                     if (File.Exists(path))
                     {
-                        //如果图片过大就缩小一下防止占内存过大
                         var img = Image.FromFile(path);
+                        //我内存贼大，不用裁剪
+                        /*                      
                         if (img.Height * img.Width > 4096 * 4096)
                         {
                             int w = img.Width;
@@ -191,7 +192,7 @@ namespace PixivAss
                             g.Dispose();
                             img.Dispose();
                             img = new_img;
-                        }
+                        }*/
                         img.Tag = i;//图片在illust中的原本index
                         cache.data.Add(img);
                     }
@@ -372,7 +373,7 @@ namespace PixivAss
             {
                 System.Diagnostics.Process process = new System.Diagnostics.Process();
                 process.StartInfo.FileName =
-                    String.Format("{0}/{1}", pixivClient.download_dir_main, Client.GetDownloadFileName(illust_list[index], sub_index));
+                    String.Format("{0}/{1}", pixivClient.download_dir_main, illust_list[index].storeFileName(sub_index));
                 //使用系统默认浏览器，以最大化方式打开  
                 process.StartInfo.Arguments = "rundl132.exe C://WINDOWS//system32//shimgvw.dll,ImageView_Fullscreen";
                 process.StartInfo.UseShellExecute = true;

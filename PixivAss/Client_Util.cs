@@ -21,7 +21,7 @@ namespace PixivAss
         static public bool GetShouldDelete(Illust illust, int page)
         {
             if (illust.bookmarked)//已收藏作品里只有不喜欢和已删除的图不需要下载
-                return illust.valid;//如果是不喜欢的则删掉，否则留着
+                return illust.valid&&illust.isPageValid(page);//如果是不喜欢的则删掉，否则留着
             else if (illust.readed)//已看过且未收藏的作品无论是哪种都可以删
                 return true;
             return false;//未读作品留着
@@ -32,24 +32,12 @@ namespace PixivAss
             if (!illust.valid)
                 return false;
             if (illust.bookmarked)
-            {
-                //illust.bookmarkEach
-                return true;
-            }
+                return illust.isPageValid(page);
             if (illust.readed)
                 return false;
             return true;
         }
-
-        static public string GetDownloadFileName(Illust illust, int page)
-        {
-            string ext = "";
-            int pos = illust.urlFormat.LastIndexOf(".");
-            if (pos >= 0)
-                ext = illust.urlFormat.Substring(pos + 1);
-            return String.Format("{0}_p{1}.{2}", illust.id, page, ext);
-        }
-       
+      
         //将指定图片下载到本地
         //如已存在则先删除
         public async Task<bool> DownloadIllustForceAria2(string url, string dir, string file_name)
@@ -140,7 +128,8 @@ namespace PixivAss
                         throw new ArgumentNullException("url");
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
-                    client.DefaultRequestHeaders.Referrer = referer;
+                    if(referer!=null)
+                        client.DefaultRequestHeaders.Referrer = referer;
                     HttpResponseMessage response = await client.GetAsync(url);
                     //可能是作品已删除，此时仍然返回结果
                     if (response.StatusCode == HttpStatusCode.NotFound)
@@ -189,7 +178,7 @@ namespace PixivAss
         }
         public async Task<JObject> RequestJsonAsync(string url, string referer,bool anonymous=false)
         {
-            var r = await RequestPixivAsyncGet(url, new Uri(referer),anonymous);
+            var r = await RequestPixivAsyncGet(url,referer.Length>0?new Uri(referer):null,anonymous);
             if(r!=null)
                 return (JObject)JsonConvert.DeserializeObject(r);
             return (JObject)JsonConvert.DeserializeObject("{\"NetError\":true,\"error\":true}");
@@ -369,6 +358,16 @@ namespace PixivAss
                 return null;
             if (json.Value<Boolean>("error"))
                 return new Illust(illustId, false);
+            if(json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
+            {
+                string ugoira_url = String.Format("{0}/ugoira_meta?lang=zh", url);
+                JObject ugoira_json = await RequestJsonAsync(ugoira_url, "", false);//需要非匿名
+                if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
+                    return null;
+                if (json.Value<Boolean>("error"))//能获取到图片信息但获取不到动图信息时报错
+                    throw new TopLevelException("Get Ugoira Error");
+                return new Illust(json.Value<JObject>("body"), ugoira_json.Value<JObject>("body"));
+            }
             return new Illust(json.Value<JObject>("body"));
         }
     }

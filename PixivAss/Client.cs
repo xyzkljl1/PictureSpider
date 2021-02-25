@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http;
@@ -10,7 +11,9 @@ using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PixivAss.Data;
-using IDManLib;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace PixivAss
 {
@@ -35,7 +38,8 @@ namespace PixivAss
         private string user_name;
         private string download_dir_bookmark_pub;
         private string download_dir_bookmark_private;
-        public string download_dir_main;
+        public  string download_dir_main;
+        private string download_dir_ugoira_tmp;
         public string special_dir;
         private CookieServer cookie_server;
         public  Database database;
@@ -55,7 +59,11 @@ namespace PixivAss
             download_dir_bookmark_pub = download_dir_root+"pub";
             download_dir_bookmark_private = download_dir_root+"private";
             download_dir_main = download_dir_root+"tmp";
+            download_dir_ugoira_tmp = download_dir_root + "ugoira_tmp";
             special_dir = download_dir_root +"special";
+            foreach (var dir in new List<string> { download_dir_root, download_dir_bookmark_pub, download_dir_bookmark_private, download_dir_main, download_dir_ugoira_tmp, special_dir })
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
 
             database = new Database(config.ConnectStr);
             request_proxy = config.Proxy;
@@ -260,6 +268,7 @@ namespace PixivAss
         //同步所有图片到本地，如有必要则进行下载/删除，要求Illust信息都已更新过
         //IDM下载更快，但是各行为耗时且互相阻塞和报错中断下载的问题，Aria2更加稳定灵活，因此采用Aria2
         //所有图片都存储到dir_main,再拷贝到dir_bookmark
+        //动图在下载后转成GIF
         private async Task DownloadIllusts(bool only_necessary=false)
         {
             //注意：有的图本来就是半边虚的！
@@ -297,37 +306,40 @@ namespace PixivAss
                 }
                 else
                     illustList = await database.GetAllIllustFull();
-                //移除aria2临时文件
-                foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))
+                //移除临时文件
+                foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))//下载临时文件
+                    File.Delete(file);
+                foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
                 //创建下载任务
                 foreach (var illust in illustList)
-                {
                     for (int i = 0; i < illust.pageCount; ++i)
                     {
-                        string url = String.Format(illust.urlFormat, i);
-                        string file_name = GetDownloadFileName(illust, i);
-                        bool exist = File.Exists(download_dir_main + "/" + file_name);
+                        string store_file_name = illust.storeFileName(i);
+                        bool exist = File.Exists(download_dir_main + "/" + store_file_name);
                         if (GetShouldDownload(illust, i))
-                        {//别忘了大括号
-                            if (!exist)
-                                await queue.Add(DownloadIllustForceAria2(url, download_dir_main, file_name));
+                        {   //大括号不能丢
+                            if (!exist)//下载时使用downloadFileName
+                                await queue.Add(DownloadIllustForceAria2(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
                         }
                         else if (exist && GetShouldDelete(illust, i))//假定没有垃圾文件
+                        {
                             try
                             {
-                                File.Delete(download_dir_main + "/" + file_name);
+                                File.Delete(download_dir_main + "/" + store_file_name);
                             }
                             catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,删除不需要立刻完成，因此忽略该异常
+                        }
                     }
-                }
                 await queue.Done();
                 int ct = 0;
                 queue.done_task_list.ForEach((Task<bool> task)=> { ct+= task.Result ? 1 : 0; });
                 Console.WriteLine(String.Format("Downloaded Begin{0}", ct));
                 //等待完成并查询状态
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 30));
-                //完成后拷贝
+                //将动图转为GIF
+                await UgoiraToGIF(illustList);
+                //拷贝到
                 //反复执行DownloadIllusts(false)会产生大量重复的拷贝，但是目前都是用DownloadIllusts(true)，暂时不处理
                 foreach (var illust in illustList)
                     if(illust.bookmarked)
@@ -335,7 +347,7 @@ namespace PixivAss
                         string dir = illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub;
                         for (int i = 0; i < illust.pageCount; ++i)
                         {
-                            string file_name = GetDownloadFileName(illust, i);
+                            string file_name = illust.storeFileName(i);
                             if(File.Exists(download_dir_main + "/" + file_name))
                                 try
                                 {
@@ -351,6 +363,45 @@ namespace PixivAss
                 throw;
             }
         }
+        private async Task UgoiraToGIF (List<Illust> illustList)
+        {
+            foreach (var illust in illustList)
+                if (illust.isUgoira())
+                {
+                    foreach (var file in Directory.GetFiles(download_dir_ugoira_tmp, "*.*"))//下载临时文件
+                        File.Delete(file);
+
+                    //假定全部是zip且只有1p
+                    string zip_file = String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0));
+                    ZipFile.ExtractToDirectory(zip_file, download_dir_ugoira_tmp);
+
+                    var frame_info= illust.ugoiraFrames.Split('`');
+                    var frame_name = new List<string>();
+                    var frame_interval = new List<int>();
+                    for (int i=0;i+1<frame_info.Length;i+=2)
+                    {
+                        frame_name.Add(frame_info[i]);
+                        frame_interval.Add(int.Parse(frame_info[i+1]));
+                    }
+                    if(frame_name.Count>0)
+                    using (var animated = new SixLabors.ImageSharp.Image<Rgba32>(illust.width, illust.height))
+                    {
+                        for (int i = 0; i < frame_name.Count; ++i)
+                        {
+                            var path = String.Format("{0}/{1}", download_dir_ugoira_tmp, frame_name[i]);
+                            using (var img = SixLabors.ImageSharp.Image.Load(path))
+                            {
+                                img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i]/10;//单位不一致
+                                animated.Frames.AddFrame(img.Frames[0]);
+                            }
+                        }
+                        animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
+                        await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0)));
+                    }
+                    File.Delete(zip_file);
+                }
+        }
+
         //按关键词/like数将搜索任务分为若干块，每次搜索第idx块
         //返回<IllustId,minLikeCount>
         private async Task<Dictionary<int,int>> RequestAllKeywordSearchIllust(int idx_word,int idx_like)

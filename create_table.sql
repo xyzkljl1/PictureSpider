@@ -13,12 +13,10 @@
 
 
 -- Dumping database structure for pass
-DROP DATABASE IF EXISTS `pass`;
 CREATE DATABASE IF NOT EXISTS `pass` /*!40100 DEFAULT CHARACTER SET utf8 COLLATE utf8_bin */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `pass`;
 
 -- Dumping structure for table pass.illust
-DROP TABLE IF EXISTS `illust`;
 CREATE TABLE IF NOT EXISTS `illust` (
   `id` int(20) NOT NULL DEFAULT '0',
   `title` varchar(500) NOT NULL DEFAULT 'ERROR',
@@ -39,6 +37,8 @@ CREATE TABLE IF NOT EXISTS `illust` (
   `likeCount` int(11) NOT NULL DEFAULT '0',
   `bookmarkCount` int(11) NOT NULL DEFAULT '0',
   `updateTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `ugoiraFrames` varchar(6000) NOT NULL DEFAULT '',
+  `ugoiraURL` varchar(300) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `FK_illust_user` (`userId`),
   CONSTRAINT `FK_illust_user` FOREIGN KEY (`userId`) REFERENCES `user` (`userId`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS `illust` (
 -- Data exporting was unselected.
 
 -- Dumping structure for table pass.invalidkeyword
-DROP TABLE IF EXISTS `invalidkeyword`;
 CREATE TABLE IF NOT EXISTS `invalidkeyword` (
   `word` varchar(100) COLLATE utf8_bin NOT NULL,
   PRIMARY KEY (`word`)
@@ -56,7 +55,6 @@ CREATE TABLE IF NOT EXISTS `invalidkeyword` (
 -- Data exporting was unselected.
 
 -- Dumping structure for table pass.keyword
-DROP TABLE IF EXISTS `keyword`;
 CREATE TABLE IF NOT EXISTS `keyword` (
   `word` varchar(100) COLLATE utf8_bin NOT NULL,
   `type` enum('tag','word') COLLATE utf8_bin NOT NULL DEFAULT 'tag',
@@ -68,7 +66,6 @@ CREATE TABLE IF NOT EXISTS `keyword` (
 -- Data exporting was unselected.
 
 -- Dumping structure for table pass.status
-DROP TABLE IF EXISTS `status`;
 CREATE TABLE IF NOT EXISTS `status` (
   `Id` varchar(50) COLLATE utf8_bin NOT NULL DEFAULT '0',
   `CookieCache` text COLLATE utf8_bin NOT NULL,
@@ -81,7 +78,6 @@ CREATE TABLE IF NOT EXISTS `status` (
 -- Data exporting was unselected.
 
 -- Dumping structure for table pass.user
-DROP TABLE IF EXISTS `user`;
 CREATE TABLE IF NOT EXISTS `user` (
   `userId` int(11) NOT NULL DEFAULT '0',
   `userName` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '',
