@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `illust` (
   `likeCount` int(11) NOT NULL DEFAULT '0',
   `bookmarkCount` int(11) NOT NULL DEFAULT '0',
   `updateTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
-  `ugoiraFrames` varchar(6000) NOT NULL DEFAULT '',
+  `ugoiraFrames` text NOT NULL,
   `ugoiraURL` varchar(300) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `FK_illust_user` (`userId`),

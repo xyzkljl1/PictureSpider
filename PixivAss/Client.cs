@@ -537,7 +537,7 @@ namespace PixivAss
         {
             int tmp = illust_update_queue.Count;
             var queue = new TaskQueue<Illust>(3000);
-            foreach( var id in illust_update_queue.ToList().Take(Math.Max(count, illust_update_queue.Count)))
+            foreach( var id in illust_update_queue.ToList().Take(Math.Min(count, illust_update_queue.Count)))
                 await queue.Add(RequestIllustAsync(id));
             await queue.Done();
 

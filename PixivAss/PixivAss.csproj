@@ -159,7 +159,7 @@
     <Compile Include="ContextDestroyer.cs" />
     <Compile Include="CookieServer.cs" />
     <Compile Include="Database.cs" />
-    <Compile Include="Resources\IllustGroup.cs" />
+    <Compile Include="Data\IllustGroup.cs" />
     <Compile Include="Control\Explorer.cs">
       <SubType>Component</SubType>
     </Compile>
