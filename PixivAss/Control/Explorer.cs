@@ -170,29 +170,6 @@ namespace PixivAss
                     {
                         var img = Image.FromFile(path);
                         //我内存贼大，不用裁剪
-                        /*                      
-                        if (img.Height * img.Width > 4096 * 4096)
-                        {
-                            int w = img.Width;
-                            int h = img.Height;
-                            if (w > h)
-                            {
-                                w = 4096;
-                                h = (int)((float)w / img.Width * img.Height);
-                            }
-                            else
-                            {
-                                h = 4096;
-                                w = (int)((float)h / img.Height * img.Width);
-                            }
-                            Bitmap new_img = new Bitmap(w, h);
-                            Graphics g = Graphics.FromImage((System.Drawing.Image)new_img);
-                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                            g.DrawImage(img, 0, 0, w, h);
-                            g.Dispose();
-                            img.Dispose();
-                            img = new_img;
-                        }*/
                         img.Tag = i;//图片在illust中的原本index
                         cache.data.Add(img);
                     }

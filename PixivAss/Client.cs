@@ -33,8 +33,8 @@ namespace PixivAss
         private string verify_state="Waiting";
         private string download_dir_root;
         private string user_id;
-        private string base_url;
-        private string base_host;
+        private string base_url = "https://www.pixiv.net/";
+        private string base_host = "www.pixiv.net";
         private string user_name;
         private string download_dir_bookmark_pub;
         private string download_dir_bookmark_private;
@@ -49,8 +49,9 @@ namespace PixivAss
         private Uri aria2_rpc_addr =new Uri("http://127.0.0.1:4322/jsonrpc");
         private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
         private string request_proxy;
-        //private string download_proxy = "127.0.0.1:8000";下载图片不需要代理
-        private HashSet<int> illust_update_queue=new HashSet<int>();//计划更新的illustid
+
+        private HashSet<int> illust_fetch_queue = new HashSet<int>();//计划更新的illustid,线程不安全,只在RunSchedule里使用
+        private HashSet<int> illust_download_queue = new HashSet<int>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
 
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Client(Config config)
@@ -69,8 +70,6 @@ namespace PixivAss
             request_proxy = config.Proxy;
             user_id = config.UserId;
             user_name = config.UserName;
-            base_url = "https://www.pixiv.net/";
-            base_host = "www.pixiv.net";
             cookie_server = new CookieServer(database,request_proxy);
 
             System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -159,6 +158,12 @@ namespace PixivAss
         {
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 150;
+            //临时
+            //foreach (var id in await database.GetAllIllustId("where readed=1"))
+              //  illust_fetch_queue.Add(id);
+
+            foreach (var id in await database.GetAllIllustId("where readed=0"))
+                illust_download_queue.Add(id);
             do
             {
                 if(DateTime.Now.Day!=last_daily_task)
@@ -166,11 +171,12 @@ namespace PixivAss
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask();
                 }
-                //每小时执行process                
-                await ProcessIllustUpdateQueue(process_speed);
-                if (illust_update_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
+                //每小时处理下载和更新队列
+                await ProcessIllustFetchQueue(process_speed);
+                await ProcessIllustDownloadQueue(60);
+                if (illust_fetch_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
                     process_speed++;
-                else if (illust_update_queue.Count / process_speed < 24&&process_speed>150)//积压量小于一天时逐渐减速
+                else if (illust_fetch_queue.Count / process_speed < 24&&process_speed>150)//积压量小于一天时逐渐减速
                     process_speed--;
                 await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
             }
@@ -197,17 +203,18 @@ namespace PixivAss
             Console.WriteLine("Got {0}+{1} illusts:", illust_list_bytime.Count, illust_list_bylike.Count);
 
             /*获取Illust信息*/
-            await AddToIllustUpdateQueue(illust_list_bytime, illust_list_bylike);
+            await AddToIllustFetchQueue(illust_list_bytime, illust_list_bylike);
 
             /*其它*/
             if (do_week_task)//需要在FetchIllust之后
             {
                 await GenerateExplorerQueue();
                 await FetchAllUnfollowedUserStatus();
+                await SyncBookmarkDirectory();
             }
 
             /*下载*/
-            await DownloadIllusts(true);
+            await DownloadIllustsInExplorerQueue();
             Console.WriteLine("All Fetch Task Done");
         }
         //初次执行，将收藏的作者和图同步到本地
@@ -218,9 +225,9 @@ namespace PixivAss
             await FetchAllBookMarkIllust(true);
             await FetchAllBookMarkIllust(false);
             illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-            await AddToIllustUpdateQueue(illust_list,new Dictionary<int, int>());
+            await AddToIllustFetchQueue(illust_list,new Dictionary<int, int>());
             await FetchAllUnfollowedUserStatus();
-            await DownloadIllusts(true);
+            await DownloadIllustsInExplorerQueue();
             Console.WriteLine("Fetch Task Done");
         }
 
@@ -265,11 +272,11 @@ namespace PixivAss
          * Fetch:从远端查询并存储到数据库
          * Push:将本地结果推送到远端
          */
-        //同步所有图片到本地，如有必要则进行下载/删除，要求Illust信息都已更新过
+        //同步图片到本地，要求Illust信息已更新，返回已同步的id
+        //limit>=0时，在下载limit个illust后返回
         //IDM下载更快，但是各行为耗时且互相阻塞和报错中断下载的问题，Aria2更加稳定灵活，因此采用Aria2
-        //所有图片都存储到dir_main,再拷贝到dir_bookmark
         //动图在下载后转成GIF
-        private async Task DownloadIllusts(bool only_necessary=false)
+        private async Task<List<int>> DownloadIllusts(HashSet<int> id_list, int limit=-1)
         {
             //注意：有的图本来就是半边虚的！
             try
@@ -292,114 +299,137 @@ namespace PixivAss
                     process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --referer=https://www.pixiv.net/",request_proxy);
                     process.Start();
                 }
-                var queue = new TaskQueue<bool>(3000);
-                List<Illust> illustList;
-                if (only_necessary)
-                {
-                    //浏览队列+队列与收藏的作者
-                    var id_list = (await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                           .ToList<string>()
-                           .Select<string, int>(x => Int32.Parse(x))
-                           .ToList<int>();
-                    illustList =await database.GetIllustFull(id_list);
-                    illustList.AddRange(await database.GetAllIllustFullOfQueuedOrFollowedUser());
-                }
-                else
-                    illustList = await database.GetAllIllustFull();
                 //移除临时文件
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))//下载临时文件
                     File.Delete(file);
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
                 //创建下载任务
+                List<Illust> illustList = await database.GetIllustFull(id_list.ToList());
+                var processed_illusts = new List<Illust>();
+                var ugorias = new HashSet<Illust>();
+                int download_ct = 0;
+                var queue = new TaskQueue<bool>(3000);
                 foreach (var illust in illustList)
+                {
                     for (int i = 0; i < illust.pageCount; ++i)
                     {
                         string store_file_name = illust.storeFileName(i);
                         bool exist = File.Exists(download_dir_main + "/" + store_file_name);
-                        if (GetShouldDownload(illust, i))
-                        {   //大括号不能丢
-                            if (!exist)//下载时使用downloadFileName
-                                await queue.Add(DownloadIllustForceAria2(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
-                        }
-                        else if (exist && GetShouldDelete(illust, i))//假定没有垃圾文件
+                        if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
                         {
-                            try
-                            {
-                                File.Delete(download_dir_main + "/" + store_file_name);
-                            }
-                            catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,删除不需要立刻完成，因此忽略该异常
+                            await queue.Add(DownloadIllustByAria2(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
+                            if (illust.isUgoira())
+                                ugorias.Add(illust);
+                            download_ct++;
                         }
+                        //我硬盘贼大，没有必要删除多余的图片
                     }
+                    processed_illusts.Add(illust);
+                    if (limit >= 0 && download_ct >= limit)
+                        break;
+                }
                 await queue.Done();
                 int ct = 0;
                 queue.done_task_list.ForEach((Task<bool> task)=> { ct+= task.Result ? 1 : 0; });
-                Console.WriteLine(String.Format("Downloaded Begin{0}", ct));
+                Console.WriteLine(String.Format("Downloaded Begin {0}", ct));
                 //等待完成并查询状态
-                while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 30));
+                while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
+                
                 //将动图转为GIF
-                await UgoiraToGIF(illustList);
-                //拷贝到
-                //反复执行DownloadIllusts(false)会产生大量重复的拷贝，但是目前都是用DownloadIllusts(true)，暂时不处理
-                foreach (var illust in illustList)
-                    if(illust.bookmarked)
-                    {
-                        string dir = illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub;
-                        for (int i = 0; i < illust.pageCount; ++i)
-                        {
-                            string file_name = illust.storeFileName(i);
-                            if(File.Exists(download_dir_main + "/" + file_name))
-                                try
-                                {
-                                    File.Copy(download_dir_main + "/" + file_name, dir + "/" + file_name, true);
-                                }
-                                catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
-                        }
-                    }
+                await UgoiraToGIF(ugorias);
+
+                return processed_illusts.Select(illust => illust.id).ToList();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 throw;
             }
+            return new List<int>();
         }
-        private async Task UgoiraToGIF (List<Illust> illustList)
+        private async Task DownloadIllustsInExplorerQueue()
         {
-            foreach (var illust in illustList)
-                if (illust.isUgoira())
+            //浏览队列+队列与收藏的作者
+            var id_list = new HashSet<int>
+                    ((await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .ToList<string>()
+                    .Select<string, int>(x => Int32.Parse(x)));
+            (await database.GetIllustIdOfQueuedOrFollowedUser()).ForEach(id => id_list.Add(id));
+            await DownloadIllusts(id_list, -1);
+        }
+        private async Task UgoiraToGIF (HashSet<Illust> illustList)
+        {
+            foreach (var illust in illustList)                
+            {
+                foreach (var file in Directory.GetFiles(download_dir_ugoira_tmp, "*.*"))//下载临时文件
+                    File.Delete(file);
+
+                //假定全部是zip且只有1p
+                string zip_file = String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0));
+                ZipFile.ExtractToDirectory(zip_file, download_dir_ugoira_tmp);
+
+                var frame_info= illust.ugoiraFrames.Split('`');
+                var frame_name = new List<string>();
+                var frame_interval = new List<int>();
+                for (int i=0;i+1<frame_info.Length;i+=2)
                 {
-                    foreach (var file in Directory.GetFiles(download_dir_ugoira_tmp, "*.*"))//下载临时文件
-                        File.Delete(file);
-
-                    //假定全部是zip且只有1p
-                    string zip_file = String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0));
-                    ZipFile.ExtractToDirectory(zip_file, download_dir_ugoira_tmp);
-
-                    var frame_info= illust.ugoiraFrames.Split('`');
-                    var frame_name = new List<string>();
-                    var frame_interval = new List<int>();
-                    for (int i=0;i+1<frame_info.Length;i+=2)
-                    {
-                        frame_name.Add(frame_info[i]);
-                        frame_interval.Add(int.Parse(frame_info[i+1]));
-                    }
-                    if(frame_name.Count>0)
-                    using (var animated = new SixLabors.ImageSharp.Image<Rgba32>(illust.width, illust.height))
-                    {
-                        for (int i = 0; i < frame_name.Count; ++i)
-                        {
-                            var path = String.Format("{0}/{1}", download_dir_ugoira_tmp, frame_name[i]);
-                            using (var img = SixLabors.ImageSharp.Image.Load(path))
-                            {
-                                img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i]/10;//单位不一致
-                                animated.Frames.AddFrame(img.Frames[0]);
-                            }
-                        }
-                        animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
-                        await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0)));
-                    }
-                    File.Delete(zip_file);
+                    frame_name.Add(frame_info[i]);
+                    frame_interval.Add(int.Parse(frame_info[i+1]));
                 }
+                if(frame_name.Count>0)
+                using (var animated = new SixLabors.ImageSharp.Image<Rgba32>(illust.width, illust.height))
+                {
+                    for (int i = 0; i < frame_name.Count; ++i)
+                    {
+                        var path = String.Format("{0}/{1}", download_dir_ugoira_tmp, frame_name[i]);
+                        using (var img = SixLabors.ImageSharp.Image.Load(path))
+                        {
+                            img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i]/10;//单位不一致
+                            animated.Frames.AddFrame(img.Frames[0]);
+                        }
+                    }
+                    animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
+                    await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0)));
+                }
+                File.Delete(zip_file);
+            }
+        }
+        private async Task SyncBookmarkDirectory()
+        {
+            var private_files = new HashSet<string>();
+            var pub_files = new HashSet<string>();
+            var illust_ids = await database.GetBookmarkIllustId(true);
+            illust_ids.AddRange(await database.GetBookmarkIllustId(false));
+            foreach (var illust in await database.GetIllustFull(illust_ids))
+            {
+                string dir = illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub;
+                for (int i = 0; i < illust.pageCount; ++i)
+                    if(illust.isPageValid(i))
+                    {
+                        string file_name = illust.storeFileName(i);
+                        string dest = String.Format("{0}/{1}", dir, file_name);
+                        string src = String.Format("{0}/{1}", download_dir_main, file_name);
+                        if (!File.Exists(dest) && File.Exists(download_dir_main + "/" + file_name))
+                        {
+                            try
+                            {
+                                File.Copy(src, dest, true);
+                            }
+                            catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
+                        }
+                        if (illust.bookmarkPrivate)
+                            private_files.Add(file_name);
+                        else
+                            pub_files.Add(file_name);
+                    }
+            }
+            foreach (var file in Directory.GetFiles(download_dir_bookmark_pub, "*.*"))//下载临时文件
+                if(!pub_files.Contains(Path.GetFileName(file)))
+                    File.Delete(file);
+            foreach (var file in Directory.GetFiles(download_dir_bookmark_private, "*.*"))//下载临时文件
+                if (!private_files.Contains(Path.GetFileName(file)))
+                    File.Delete(file);
         }
 
         //按关键词/like数将搜索任务分为若干块，每次搜索第idx块
@@ -505,9 +535,9 @@ namespace PixivAss
             return idList;
         }
         //去掉重复以及不必更新的Illust，将剩下的加入illust_update_queue
-        private async Task AddToIllustUpdateQueue(HashSet<int> list_bytime, Dictionary<int,int> list_bylike, bool only_necessary = true)
+        private async Task AddToIllustFetchQueue(HashSet<int> list_bytime, Dictionary<int,int> list_bylike, bool only_necessary = true)
         {
-            int tmp = illust_update_queue.Count;
+            int tmp = illust_fetch_queue.Count;
             if (only_necessary)
             {
                 var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust => illust.id);
@@ -515,29 +545,29 @@ namespace PixivAss
                     foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
                         if ((!local_illust.ContainsKey(id))
                             || local_illust[id].updateTime < DateTime.Now.AddDays(-UPDATE_INTERVAL))
-                            illust_update_queue.Add(id);
+                            illust_fetch_queue.Add(id);
                 if (list_bylike != null)
                     foreach (var pair in list_bylike)//不在本地或like数明显小于真实值的图
                         if ((!local_illust.ContainsKey(pair.Key))
                             || local_illust[pair.Key].likeCount < pair.Value)
-                            illust_update_queue.Add(pair.Key);
+                            illust_fetch_queue.Add(pair.Key);
             }
             else
             {
                 if (list_bytime != null)
                     foreach (var id in list_bytime)
-                        illust_update_queue.Add(id);
+                        illust_fetch_queue.Add(id);
                 if (list_bylike != null)
                     foreach (var id in list_bylike.Keys)
-                        illust_update_queue.Add(id);
+                        illust_fetch_queue.Add(id);
             }
-            Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_update_queue.Count-tmp);
+            Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_fetch_queue.Count-tmp);
         }
-        private async Task ProcessIllustUpdateQueue(int count)
+        private async Task ProcessIllustFetchQueue(int count)
         {
-            int tmp = illust_update_queue.Count;
+            int tmp = illust_fetch_queue.Count;
             var queue = new TaskQueue<Illust>(3000);
-            foreach( var id in illust_update_queue.ToList().Take(Math.Min(count, illust_update_queue.Count)))
+            foreach( var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
                 await queue.Add(RequestIllustAsync(id));
             await queue.Done();
 
@@ -549,9 +579,17 @@ namespace PixivAss
             });
             database.UpdateIllustOriginalData(illustList);
 
-            illustList.ForEach(illust=>illust_update_queue.Remove(illust.id));
-            Console.WriteLine("Process Illusts Queue => {0}-{1} ",tmp,tmp - illust_update_queue.Count);
+            illustList.ForEach(illust=>illust_fetch_queue.Remove(illust.id));
+            Console.WriteLine("Process Fetch Queue => {0}-{1} ",tmp,tmp - illust_fetch_queue.Count);
         }
+        private async Task ProcessIllustDownloadQueue(int count)
+        {
+            int tmp = illust_download_queue.Count;
+            var ret=await DownloadIllusts(illust_download_queue, count);
+            ret.ForEach(id => illust_download_queue.Remove(id));
+            Console.WriteLine("Process Download Queue => {0}-{1} ", tmp, tmp - illust_download_queue.Count);
+        }
+
         private async Task<Dictionary<int,Int64>> RequestBookMarkIllust(bool pub,bool get_bookmark_id=false)
         {
             int total = 0;
@@ -592,7 +630,7 @@ namespace PixivAss
             foreach (var illust_id in await database.GetBookmarkIllustId(pub))
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
-            await AddToIllustUpdateQueue(idList,null);
+            await AddToIllustFetchQueue(idList,null);
             Console.WriteLine(String.Format("Fetch {0}/{1}  Bookmarks",pub?"Public":"Private",tmp));
         }
         //WIP

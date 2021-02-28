@@ -50,9 +50,9 @@ namespace PixivAss
             return new HashSet<String>(await StandardQuery("select word from invalidkeyword",
                         (DbDataReader reader) => { return reader.GetString(0); }));
         }
-        public async Task<List<Illust>> GetAllIllustFullOfQueuedOrFollowedUser()
+        public async Task<List<int>> GetIllustIdOfQueuedOrFollowedUser()
         {
-            return await GetAllIllustFull("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
+            return await GetAllIllustId("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
         }
         public async Task<List<Illust>> GetAllIllustFull(string condition="")//id是int，但是可以直接GetString
         {

@@ -188,5 +188,15 @@ namespace PixivAss.Data
                 return String.Format("{0}_p{1}.gif", id, page);
             return downloadFileName(page);
         }
+        public bool shouldDownload(int page)
+        {
+            if (!valid)
+                return false;
+            if (bookmarked)
+                return isPageValid(page);
+            if (readed)
+                return false;
+            return true;
+        }
     }
 }

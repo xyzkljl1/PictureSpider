@@ -17,30 +17,10 @@ namespace PixivAss
         /*
          * 下载
          */
-        //必须在GetShouldDownload返回false的情况下使用
-        static public bool GetShouldDelete(Illust illust, int page)
-        {
-            if (illust.bookmarked)//已收藏作品里只有不喜欢和已删除的图不需要下载
-                return illust.valid&&illust.isPageValid(page);//如果是不喜欢的则删掉，否则留着
-            else if (illust.readed)//已看过且未收藏的作品无论是哪种都可以删
-                return true;
-            return false;//未读作品留着
-        }
-
-        static public bool GetShouldDownload(Illust illust, int page)
-        {
-            if (!illust.valid)
-                return false;
-            if (illust.bookmarked)
-                return illust.isPageValid(page);
-            if (illust.readed)
-                return false;
-            return true;
-        }
       
         //将指定图片下载到本地
         //如已存在则先删除
-        public async Task<bool> DownloadIllustForceAria2(string url, string dir, string file_name)
+        public async Task<bool> DownloadIllustByAria2(string url, string dir, string file_name)
         {
             try
             {
