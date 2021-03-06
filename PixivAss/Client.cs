@@ -283,7 +283,7 @@ namespace PixivAss
             {
                 //关闭旧的aria2，已有任务没有重复利用的必要，全部放弃
                 foreach (var process in System.Diagnostics.Process.GetProcessesByName("aria2c(PixivAss)"))
-                    process.CloseMainWindow();
+                    process.Kill();
                 {//启动aria2
                     var process = new System.Diagnostics.Process();
                     //右斜杠和左斜杠都可以但是不能混用(不知道为什么)
