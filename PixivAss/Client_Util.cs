@@ -65,7 +65,7 @@ namespace PixivAss
 
                 Console.WriteLine("Aria2 Download Status:{0}MB/s of {1}(Running)/{2}(Waiting)/{3}(Done) Task",
                     speed,active,waiting,done);
-                return active == waiting && active == 0;
+                return waiting == 0 && active == 0;
             }
             catch (Exception e)
             {
@@ -122,7 +122,7 @@ namespace PixivAss
                 catch (Exception e)
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
-                    if(try_ct<4)
+                    if(try_ct<1)
                         Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     //if (try_ct == 0)
                         //throw;
@@ -149,7 +149,7 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    if (try_ct < 4)
+                    if (try_ct < 1)
                         Console.WriteLine(e.Message + "Re Try " + try_ct.ToString() + " On :" + url);
                     //if (try_ct == 0)
                         //throw;

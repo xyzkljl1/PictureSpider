@@ -157,11 +157,7 @@ namespace PixivAss
         public async Task RunSchedule()
         {
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
-            int process_speed = 150;
-            //临时
-            //foreach (var id in await database.GetAllIllustId("where readed=1"))
-              //  illust_fetch_queue.Add(id);
-
+            int process_speed = 140;
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
             do
@@ -176,7 +172,7 @@ namespace PixivAss
                 await ProcessIllustDownloadQueue(60);
                 if (illust_fetch_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
                     process_speed++;
-                else if (illust_fetch_queue.Count / process_speed < 24&&process_speed>150)//积压量小于一天时逐渐减速
+                else if (illust_fetch_queue.Count / process_speed < 24 &&process_speed>140)//积压量小于一天时逐渐减速
                     process_speed--;
                 await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
             }
@@ -196,8 +192,8 @@ namespace PixivAss
                 illust_list_bytime.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
             //更新1/700的数据库，每两年更新一轮
             illust_list_bytime.UnionWith(await database.GetIllustIdByUpdateTime(DateTime.UtcNow.AddDays(-UPDATE_INTERVAL), 1.0f / UPDATE_INTERVAL));
-            //关键字搜索。分散成若干块进行，每周轮换关键字(5周一轮)，每天轮换like数(7天一轮)
-            illust_list_bylike = await RequestAllKeywordSearchIllust(DateTime.Now.DayOfYear / 7, (int)DateTime.Now.DayOfWeek);
+            //关键字搜索。分散成若干块进行
+            illust_list_bylike.Union(await RequestAllKeywordSearchIllustBlock((DateTime.Now-new DateTime(2000,1,1)).Days));
             //排行榜
             illust_list_bytime.UnionWith(await RequestAllCurrentRankIllust());
             Console.WriteLine("Got {0}+{1} illusts:", illust_list_bytime.Count, illust_list_bylike.Count);
@@ -306,8 +302,7 @@ namespace PixivAss
                     File.Delete(file);
                 //创建下载任务
                 List<Illust> illustList = await database.GetIllustFull(id_list.ToList());
-                var processed_illusts = new List<Illust>();
-                var ugorias = new HashSet<Illust>();
+                var download_illusts = new List<Illust>();
                 int download_ct = 0;
                 var queue = new TaskQueue<bool>(3000);
                 foreach (var illust in illustList)
@@ -319,34 +314,46 @@ namespace PixivAss
                         if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
                         {
                             await queue.Add(DownloadIllustByAria2(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
-                            if (illust.isUgoira())
-                                ugorias.Add(illust);
                             download_ct++;
                         }
                         //我硬盘贼大，没有必要删除多余的图片
                     }
-                    processed_illusts.Add(illust);
+                    download_illusts.Add(illust);
                     if (limit >= 0 && download_ct >= limit)
                         break;
                 }
                 await queue.Done();
                 int ct = 0;
                 queue.done_task_list.ForEach((Task<bool> task)=> { ct+= task.Result ? 1 : 0; });
-                Console.WriteLine(String.Format("Downloaded Begin {0}", ct));
+                Console.WriteLine(String.Format("Download Begin {0}", ct));
                 //等待完成并查询状态
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
-                
+
+                var ugorias = new HashSet<Illust>();
+                var success_illusts = new List<int>();
+                //检查下载结果，以本地文件为准，无视Aria2
+                foreach (var illust in download_illusts)
+                {
+                    bool fail = false;
+                    for (int i = 0; i < illust.pageCount; ++i)
+                        if (!File.Exists(download_dir_main + "/" + illust.downloadFileName(i)))
+                            fail = true;
+                    if (fail) continue;
+                    success_illusts.Add(illust.id);
+                    if (illust.isUgoira())
+                        ugorias.Add(illust);
+                }
+                Console.WriteLine(String.Format("Download Done, {0}/{1} Success", success_illusts.Count,download_illusts.Count));
+
                 //将动图转为GIF
                 await UgoiraToGIF(ugorias);
-
-                return processed_illusts.Select(illust => illust.id).ToList();
+                return success_illusts;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 throw;
             }
-            return new List<int>();
         }
         private async Task DownloadIllustsInExplorerQueue()
         {
@@ -432,23 +439,23 @@ namespace PixivAss
                     File.Delete(file);
         }
 
-        //按关键词/like数将搜索任务分为若干块，每次搜索第idx块
-        //返回<IllustId,minLikeCount>
-        private async Task<Dictionary<int,int>> RequestAllKeywordSearchIllust(int idx_word,int idx_like)
+        private async Task<Dictionary<int, int>> RequestAllKeywordSearchIllustBlock(int idx_block)
         {
+            //like越低分布越密集,
+            var BLOCK_LIKE_COUNT      = new List<int> { 1600, 2000, 2500, 3000, 4000, 6000, 15000, 30000, 60000, 120000, 200000,300000,-1 };
+            //避免低处分块过密导致Illust多次跨越分块，反复触发Fetch
+            var BLOCK_FAKE_LIKE_COUNT = new List<int> { 1600, 1600, 1600, 1600, 4000, 4000, 15000, 30000, 60000, 120000, 200000,300000,-1 };
+            //避免高处分块稀疏浪费天数
+            var BLOCK_MERGE_LIKE_COUNT= new List<int> { 0,    1,    2,    3,    4,    5,    6, BLOCK_LIKE_COUNT.Count-1 };
             int BLOCKS_WORD = 5;
-            int BLOCKS_LIKE = 7;
-            var BLOCK_LIKE_VALUE = new List<int> {2000,5000,10000,30000,60000,90000,150000, -1};//长度=BLOCKS_LIKE+1，-1表示无限
+            int BLOCKS_LIKE = BLOCK_MERGE_LIKE_COUNT.Count-1;
 
-            var ret =new Dictionary<int, int>();
-            var key_word_list=new List<string>();
-            var task_list = new Dictionary<string, Task<List<int>>>();
-            int like_count_min = -1;
-            int like_count_max = -1;
-            //分块
+            var ret = new Dictionary<int,int>();
+
+            var key_word_list = new List<string>();
+            //关键字分块
             {
-                idx_word = idx_word % BLOCKS_WORD;
-                idx_like = idx_like % BLOCKS_LIKE;
+                int idx_word = (idx_block/ BLOCKS_LIKE) % BLOCKS_WORD;//先轮换like数再轮换关键字
                 var tmp = "";
                 var tags = await database.GetFollowedTagsOrdered();
                 int tags_count = tags.Count;
@@ -462,9 +469,30 @@ namespace PixivAss
                         tmp = "";
                     }
                 }
-                like_count_min = BLOCK_LIKE_VALUE[idx_like];
-                like_count_max = BLOCK_LIKE_VALUE[idx_like+1]-1;//闭区间
             }
+            //like数分块
+            int start_idx = BLOCK_MERGE_LIKE_COUNT[idx_block % BLOCKS_LIKE];
+            int end_idx   = BLOCK_MERGE_LIKE_COUNT[idx_block % BLOCKS_LIKE +1];
+            for (int idx_like= start_idx; idx_like< end_idx; ++idx_like)
+            {
+                int min_like_count = BLOCK_LIKE_COUNT[idx_like];
+                int max_like_count = BLOCK_LIKE_COUNT[idx_like+1];
+                var result =await RequestAllKeywordSearchIllust(key_word_list, min_like_count, max_like_count);
+                foreach(var id in result)
+                {
+                    if (ret.ContainsKey(id))
+                        ret[id] = BLOCK_FAKE_LIKE_COUNT[idx_like];
+                    else
+                        ret.Add(id, BLOCK_FAKE_LIKE_COUNT[idx_like]);
+                }
+            }
+            return ret;
+        }
+        //搜索包含任意指定关键字，且likeCount位于指定区间的Illust
+        private async Task<HashSet<int>> RequestAllKeywordSearchIllust(List<string> key_word_list, int like_count_min, int like_count_max)
+        {
+            var task_list = new Dictionary<string, Task<List<int>>>();
+            var ret = new HashSet<int>();
             //按页搜索
             int start_page = 0;
             int step = 50;
@@ -488,8 +516,8 @@ namespace PixivAss
                 //合并结果
                 foreach (var task in task_list.Values)
                     foreach (var id in task.Result)
-                        if(!ret.ContainsKey(id))
-                            ret.Add(id, like_count_min);
+                        if(!ret.Contains(id))
+                            ret.Add(id);
                 task_list.Clear();
                 Console.WriteLine(String.Format("Search Res {0}p: {1}",start_page,ret.Count));
                 start_page += step;
