@@ -417,7 +417,7 @@ namespace PixivAss
                             }
                         }
                         animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
-                        await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0)));
+                        await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.storeFileName(0)));
                     }
                     File.Delete(zip_file);
                 }
