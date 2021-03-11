@@ -336,6 +336,7 @@ namespace PixivAss
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
 
                 //将动图转为GIF
+                //转换相当慢，考虑到动图数量太少，暂不优化
                 {
                     var ugorias = new HashSet<Illust>();
                     foreach (var illust in download_illusts)
@@ -411,7 +412,8 @@ namespace PixivAss
                             var path = String.Format("{0}/{1}", download_dir_ugoira_tmp, frame_name[i]);
                             using (var img = SixLabors.ImageSharp.Image.Load(path))
                             {
-                                img.Mutate(x => x.Resize(illust.width, illust.height));//每张图的size可能跟illust不一样
+                                if(illust.width!=img.Width||illust.height!=img.Height)
+                                    img.Mutate(x => x.Resize(illust.width, illust.height));//每张图的size可能跟illust不一样
                                 img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i]/10;//单位不一致
                                 animated.Frames.AddFrame(img.Frames[0]);
                             }

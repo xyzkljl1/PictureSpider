@@ -53,6 +53,7 @@ namespace PixivAss
                         if (((ComboBoxItem)item).id == ((ComboBoxItem)old_select).id)
                         {
                             this.SelectedItem = item;
+                            block_signal = false;
                             return;
                         }
                 block_signal = false;

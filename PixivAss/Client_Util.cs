@@ -37,9 +37,8 @@ namespace PixivAss
                 //dir = "E:/test/2";
                 var data = String.Format("{{\"jsonrpc\": \"2.0\",\"id\":\"PixivAss\",\"method\": \"aria2.addUri\"," +
                                     "\"params\": [\"token:{0}\",[\"{1}\"],{{\"dir\":\"{2}\",\"out\":\"{3}\""+
-                                    //",\"Cookie\":\"{4}\""+
                                     "}}]}}",
-                                    aria2_rpc_secret,url,dir,file_name,cookie_server.cookie);
+                                    aria2_rpc_secret,url,dir,file_name);
                 await RequesttAria2Async(data);                
             }
             catch (Exception e)
