@@ -354,17 +354,28 @@ namespace PixivAss
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;
+                    var fail_illusts = new HashSet<int>();
                     foreach (var illust in download_illusts)
                     {
                         bool fail = false;
                         for (int i = 0; i < illust.pageCount; ++i)
                             if (!File.Exists(download_dir_main + "/" + illust.storeFileName(i)))
                                 fail = true;
-                        if (fail) continue;
-                        success_ct++;
-                        processed_illusts.Add(illust.id);
+                        if (fail)
+                        {
+                            //不更新近两周的作品以避免反复Fetch
+                            if((DateTime.Now-illust.updateTime).TotalDays>14)
+                                fail_illusts.Add(illust.id);
+                        }
+                        else
+                        {
+                            success_ct++;
+                            processed_illusts.Add(illust.id);
+                        }
                     }
                     Console.WriteLine(String.Format("Download Done, {0}/{1} Success", success_ct, download_illusts.Count));
+                    //无法下载可能是因为已删除，重新加入Fetch队列以避免反复下载
+                    await AddToIllustFetchQueue(fail_illusts, null, false);
                 }
                 return processed_illusts;
             }
