@@ -158,6 +158,10 @@ namespace PixivAss
         {
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 140;
+            //临时
+            //foreach (var id in await database.GetAllIllustId("where locate(\"うごイラ\",tags) AND ugoiraURL=\"\""))
+              //  illust_fetch_queue.Add(id);
+
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
             do
@@ -330,13 +334,12 @@ namespace PixivAss
                 }
                 await queue.Done();
                 int ct = 0;
-                queue.done_task_list.ForEach((Task<bool> task)=> { ct+= task.Result ? 1 : 0; });
+                queue.done_task_list.ForEach(task => ct += task.Result ? 1 : 0);
                 Console.WriteLine(String.Format("Download Begin {0}", ct));
                 //等待完成并查询状态
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
 
                 //将动图转为GIF
-                //转换相当慢，考虑到动图数量太少，暂不优化
                 {
                     var ugorias = new HashSet<Illust>();
                     foreach (var illust in download_illusts)
@@ -397,47 +400,64 @@ namespace PixivAss
         }
         private async Task UgoiraToGIF (HashSet<Illust> illustList)
         {
-            foreach (var illust in illustList)
-                try
-                {
-                    foreach (var file in Directory.GetFiles(download_dir_ugoira_tmp, "*.*"))//下载临时文件
+            DateTime t = DateTime.Now;
+            var queue = new TaskQueue<bool>(20);//10900K
+            foreach (var illust in illustList)//耗时间的不是文件读写而是转码，所以要并行
+                queue.Add(Task.Run(()=>UgoiraToGIF(illust)));
+            await queue.Done();
+            int ct = 0;
+            queue.done_task_list.ForEach(task => ct += task.Result?1:0);
+            Console.WriteLine(String.Format("Ugoira2GIF {0} Done in {1}s",ct, DateTime.Now.Subtract(t).TotalSeconds));
+        }
+        private async Task<bool> UgoiraToGIF(Illust illust)
+        {
+            try
+            {
+                String tmp_dir = String.Format("{0}/{1}", download_dir_ugoira_tmp, illust.id);
+                if (!Directory.Exists(tmp_dir))
+                    Directory.CreateDirectory(tmp_dir);
+                else
+                    foreach (var file in Directory.GetFiles(tmp_dir, "*.*"))//下载临时文件
                         File.Delete(file);
 
-                    //假定全部是zip且只有1p
-                    string zip_file = String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0));
-                    ZipFile.ExtractToDirectory(zip_file, download_dir_ugoira_tmp);
-
-                    var frame_info= illust.ugoiraFrames.Split('`');
-                    var frame_name = new List<string>();
-                    var frame_interval = new List<int>();
-                    for (int i=0;i+1<frame_info.Length;i+=2)
-                    {
-                        frame_name.Add(frame_info[i]);
-                        frame_interval.Add(int.Parse(frame_info[i+1]));
-                    }
-                    if(frame_name.Count>0)
-                    using (var animated = new SixLabors.ImageSharp.Image<Rgba32>(illust.width, illust.height))
-                    {
-                        for (int i = 0; i < frame_name.Count; ++i)
-                        {
-                            var path = String.Format("{0}/{1}", download_dir_ugoira_tmp, frame_name[i]);
-                            using (var img = SixLabors.ImageSharp.Image.Load(path))
-                            {
-                                if(illust.width!=img.Width||illust.height!=img.Height)
-                                    img.Mutate(x => x.Resize(illust.width, illust.height));//每张图的size可能跟illust不一样
-                                img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i]/10;//单位不一致
-                                animated.Frames.AddFrame(img.Frames[0]);
-                            }
-                        }
-                        animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
-                        await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.storeFileName(0)));
-                    }
-                    File.Delete(zip_file);
-                }
-                catch (Exception e)
+                //假定全部是zip且只有1p
+                string zip_file = String.Format("{0}/{1}", download_dir_main, illust.downloadFileName(0));
+                ZipFile.ExtractToDirectory(zip_file, tmp_dir);
+                var frame_info = illust.ugoiraFrames.Split('`');
+                var frame_name = new List<string>();
+                var frame_interval = new List<int>();
+                for (int i = 0; i + 1 < frame_info.Length; i += 2)
                 {
-                    Console.WriteLine(e.Message);
+                    frame_name.Add(frame_info[i]);
+                    frame_interval.Add(int.Parse(frame_info[i + 1]));
                 }
+                if (frame_name.Count <= 0)
+                    return false;
+                using (var animated = new SixLabors.ImageSharp.Image<Rgba32>(illust.width, illust.height))
+                {
+                    for (int i = 0; i < frame_name.Count; ++i)
+                    {
+                        var path = String.Format("{0}/{1}", tmp_dir, frame_name[i]);
+                        using (var img = SixLabors.ImageSharp.Image.Load(path))
+                        {
+                            if (illust.width != img.Width || illust.height != img.Height)
+                                img.Mutate(x => x.Resize(illust.width, illust.height));//每张图的size可能跟illust不一样
+                            img.Frames.First().Metadata.GetGifMetadata().FrameDelay = frame_interval[i] / 10;//单位不一致
+                            animated.Frames.AddFrame(img.Frames[0]);
+                        }
+                    }
+                    animated.Frames.RemoveFrame(0);//移除初始帧，frames不能为空，所以要最后移除
+                    await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.storeFileName(0)));
+                }
+                File.Delete(zip_file);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Ugoira cast Fail");
+                Console.WriteLine(e.Message);
+            }
+            return false;
         }
         private async Task SyncBookmarkDirectory()
         {

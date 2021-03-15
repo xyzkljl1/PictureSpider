@@ -55,6 +55,11 @@ namespace PixivAss
             return ret;
         }
     }*/
+    /*
+     * queue本身并不会令任务并行
+     * IO任务应当如queue.Add(func());般调用
+     * CPU任务应当如queue.Add(Task.Run(()=>func()));般调用,注意线程安全
+     */
     class TaskQueue<T>
     {
         public List<Task<T>> running_task_list=new List<Task<T>>();
@@ -77,20 +82,21 @@ namespace PixivAss
         {
             await WaitUntil(0,0);
         }
-        private async Task WaitUntil(int queue_target,int storage_size)//当队列大于target时清空
+        private async Task WaitUntil(int queue_target,int storage_size)//等待直到队列小于指定size
         {
-            if (running_task_list.Count > queue_target)
+            //由于外部已经限制了速率，队列改为全速
+            while(running_task_list.Count>queue_target)
             {
-                await Task.WhenAll(running_task_list);
-                    done_task_list.AddRange(running_task_list);
-                running_task_list.Clear();
+                var task=await Task.WhenAny(running_task_list);
+                done_task_list.Add(task);
+                running_task_list.Remove(task);
+                if (!(processor is null))
+                    if (done_task_list.Count > storage_size)
+                    {
+                        processor(done_task_list);
+                        done_task_list.Clear();
+                    }
             }
-            if (!(processor is null))
-                if (done_task_list.Count > storage_size)
-                {
-                    processor(done_task_list);
-                    done_task_list.Clear();
-                }
         }
         public async Task<HashSet<int>> GetResultSet()
         {//暂时想不到更好的写法
