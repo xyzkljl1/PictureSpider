@@ -368,7 +368,7 @@ namespace PixivAss
                             //不更新近两周的作品以避免反复Fetch
                             if((DateTime.Now-illust.updateTime).TotalDays>14)
                                 fail_illusts.Add(illust.id);
-                            Console.WriteLine("D Fail", illust.id);
+                            Console.WriteLine("D Fail {0}", illust.id);
                         }
                         else
                         {
