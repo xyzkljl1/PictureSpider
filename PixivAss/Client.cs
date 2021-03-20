@@ -167,6 +167,7 @@ namespace PixivAss
                 {
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask();
+                    await DownloadIllustsInExplorerQueue();//考虑到会失败，每天都下载一次
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);

@@ -55,7 +55,7 @@ namespace PixivAss
         [Bindable(true)]
         public string DescText{get { return illust_list.Count > 0 ? illust_list[index].title + "</br>" + illust_list[index].description : "";} }
         [Bindable(true)]
-        public string TotalPageText{get { return (playing?"Pause":"Play")+"\n"+(illust_list.Count > 0 ? (index+1).ToString()+"/"+illust_list.Count.ToString() : ""); }}
+        public string TotalPageText{get { return (playing?"Pause":"Play")+"\n"+(illust_list.Count > 0 ? (index+1).ToString()+"/"+illust_list.Count.ToString() : "0/0"); }}
         [Bindable(true)]
         public string IdText {get { return (illust_list.Count > 0 ? "["+illust_list[index].id+"]" : "None");}}
         [Bindable(true)]
@@ -143,7 +143,18 @@ namespace PixivAss
                 if (pass)
                     illust_list.Add(illust);
             }
-            SlideTo(0,0,true);
+            if(illust_list.Count>0)
+                SlideTo(0,0,true);
+            else
+            {
+                index = sub_index = 0;
+                this.NotifyChangeRange<string>(new List<string> { "IdText", "DescText", "TotalPageText" });
+                this.NotifyChange<int>("UserId");
+                this.NotifyChange<List<string>>("Tags");
+                this.NotifyChange<Bitmap>("FavIcon");
+                this.NotifyChange<bool>("PageInvalid");
+                this.NotifyChange<string>("IndexText");
+            }
         }
         //载入某个Illust的全部图片
         private ImageCache Load(Illust illust)
@@ -279,13 +290,14 @@ namespace PixivAss
             if (random_slide)
                 return SlideRandom();
             int new_sub_index = sub_index + i;
-            if (new_sub_index >= 0 && new_sub_index < illust_list[index].pageCount
-                &&new_sub_index < Load(illust_list[index]).data.Count)
-                {
-                    MarkReaded();
-                    SlideTo(index, new_sub_index);
-                    return true;
-                }
+            if(index>=0&&index<illust_list.Count)
+                if (new_sub_index >= 0 && new_sub_index < illust_list[index].pageCount
+                    &&new_sub_index < Load(illust_list[index]).data.Count)
+                    {
+                        MarkReaded();
+                        SlideTo(index, new_sub_index);
+                        return true;
+                    }
             return false;
         }
         public void SlideRight(object sender,EventArgs args)
