@@ -43,7 +43,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
                 return false;
             }
             return true;
@@ -68,7 +68,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
                 throw;
             }
         }
@@ -91,7 +91,7 @@ namespace PixivAss
             catch (Exception e)
             {
                 string msg = e.Message;//e.InnerException.InnerException.Message;
-                Console.WriteLine("Request Aria RPC Fail :" + msg);
+                Console.Error.WriteLine("Request Aria RPC Fail :" + msg);
                 throw;
             }
         }
@@ -180,14 +180,14 @@ namespace PixivAss
             JObject ret = await RequestJsonAsync(url, referer,true);
             if (ret.Value<Boolean>("NetError"))
             {
-                Console.WriteLine("Net Error");
+                Console.Error.WriteLine(String.Format("Get User {0} Net Error",userId));
                 return null;
             }
             if (ret.Value<Boolean>("error"))
             {
                 if(ret.Value<string>("message")=="抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。")//作者跑路了,正常情况
                     return null;
-                Console.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
+                Console.Error.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
                 throw new TopLevelException(ret.Value<string>("message"));
             }
             var body = ret.Value<JObject>("body");
@@ -255,7 +255,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
             }
             return ret;
         }

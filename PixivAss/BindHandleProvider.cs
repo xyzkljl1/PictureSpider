@@ -50,9 +50,11 @@ namespace PixivAss
     }
     public static class BindHandleProviderExtension
     {
+        public static MainWindow main_window;
         public static void NotifyChange<T>(this IBindHandleProvider obj, string property_name)
         {
             obj.provider.NotifyChange<T>(property_name);
+            main_window.Update();//由于蜜汁原因，在x64下频繁绘制足够大的GIF时，其它控件不会根据databinding自动刷新，所以需要让BindHandle手动调用MainWindow.Update()
         }
 
         public static void NotifyChangeRange<T>(this IBindHandleProvider obj, List<string> property_names)

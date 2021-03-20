@@ -158,9 +158,6 @@ namespace PixivAss
         {
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 140;
-            //临时
-            //foreach (var id in await database.GetAllIllustId("where locate(\"うごイラ\",tags) AND ugoiraURL=\"\""))
-              //  illust_fetch_queue.Add(id);
 
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
@@ -291,7 +288,9 @@ namespace PixivAss
                     process.StartInfo.FileName = "aria2c(PixivAss).exe";
                     process.StartInfo.RedirectStandardOutput = false;
                     process.StartInfo.UseShellExecute = true;
+#if !DEBUG
                     process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+#endif
                     //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy,cookie_server.cookie);
                     //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}""", download_proxy);
                     //[del]不需要代理[/del]，由于迷之原因，现在需要referer和代理才能下载了，而且岛风go还不行
@@ -369,6 +368,7 @@ namespace PixivAss
                             //不更新近两周的作品以避免反复Fetch
                             if((DateTime.Now-illust.updateTime).TotalDays>14)
                                 fail_illusts.Add(illust.id);
+                            Console.WriteLine("D Fail", illust.id);
                         }
                         else
                         {
@@ -384,7 +384,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
                 throw;
             }
         }
@@ -401,7 +401,7 @@ namespace PixivAss
         private async Task UgoiraToGIF (HashSet<Illust> illustList)
         {
             DateTime t = DateTime.Now;
-            var queue = new TaskQueue<bool>(20);//10900K
+            var queue = new TaskQueue<bool>(200);
             foreach (var illust in illustList)//耗时间的不是文件读写而是转码，所以要并行
                 queue.Add(Task.Run(()=>UgoiraToGIF(illust)));
             await queue.Done();
@@ -454,8 +454,8 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine("Ugoira cast Fail");
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(String.Format("Ugoira cast Fail {0}", illust.id));
+                Console.Error.WriteLine(e.Message);
             }
             return false;
         }
@@ -609,7 +609,7 @@ namespace PixivAss
             if (ret.Value<Boolean>("error"))
             {
                 //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
-                Console.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
+                Console.Error.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
                 return new List<int>();
             }
             var idList = new List<int>();
@@ -801,7 +801,7 @@ namespace PixivAss
                 }
             }
             VerifyState = "Login Fail";
-            Console.WriteLine("Login Fail");
+            Console.Error.WriteLine("Login Fail");
             throw new TopLevelException("Login Not Success");
         }
     }

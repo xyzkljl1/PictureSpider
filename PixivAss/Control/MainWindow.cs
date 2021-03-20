@@ -14,6 +14,9 @@ namespace PixivAss
         //生成64位程序会导致无法用设计器编辑
         public MainWindow()
         {
+            //由于蜜汁原因，在x64下频繁绘制足够大的GIF时，其它控件不会根据databinding自动刷新，所以需要让BindHandle手动调用MainWindow.Update()
+            //不确定是否会产生额外的刷新
+            BindHandleProviderExtension.main_window = this;
             InitializeComponent();
             //初始化
             var config = LoadConfig();

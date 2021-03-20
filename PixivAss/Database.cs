@@ -265,7 +265,7 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.Error.WriteLine(e.Message);
                     ts.Rollback();
                     throw;
                 }
@@ -295,7 +295,7 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.Error.WriteLine(e.Message);
                     ts.Rollback();
                     throw;
                 }
@@ -373,7 +373,7 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.Error.WriteLine(e.Message);
                     ts.Rollback();
                     throw;
                 }
@@ -403,7 +403,7 @@ namespace PixivAss
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.Error.WriteLine(e.Message);
                     ts.Rollback();
                     throw;
                 }
@@ -435,7 +435,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine("Database Exception {0}", e.Message);
+                Console.Error.WriteLine("Database Exception {0}", e.Message);
                 throw;
             }
         }
@@ -457,7 +457,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine("Database Exception {0}",e.Message);
+                Console.Error.WriteLine("Database Exception {0}",e.Message);
                 throw;
             }
         }
@@ -496,7 +496,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.WriteLine("Database Exception {0}", e.Message);
+                Console.Error.WriteLine("Database Exception {0}", e.Message);
                 throw;
             }
         }
