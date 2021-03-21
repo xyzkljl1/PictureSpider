@@ -347,8 +347,11 @@ namespace PixivAss
                         {
                             bool fail = false;
                             for (int i = 0; i < illust.pageCount; ++i)
-                                if (!File.Exists(download_dir_main + "/" + illust.downloadFileName(i)))
+                            {
+                                var path = download_dir_main + "/" + illust.downloadFileName(i);
+                                if (File.Exists(path+".aria2")|| !File.Exists(path))//存在.aria2说明下载未完成
                                     fail = true;
+                            }
                             if (fail) continue;
                             ugorias.Add(illust);
                         }
@@ -362,8 +365,11 @@ namespace PixivAss
                     {
                         bool fail = false;
                         for (int i = 0; i < illust.pageCount; ++i)
-                            if (!File.Exists(download_dir_main + "/" + illust.storeFileName(i)))
+                        {
+                            var path = download_dir_main + "/" + illust.storeFileName(i);
+                            if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                                 fail = true;
+                        }
                         if (fail)
                         {
                             //不更新近两周的作品以避免反复Fetch
@@ -451,6 +457,7 @@ namespace PixivAss
                     await animated.SaveAsGifAsync(String.Format("{0}/{1}", download_dir_main, illust.storeFileName(0)));
                 }
                 File.Delete(zip_file);
+                Directory.Delete(tmp_dir,true);
                 return true;
             }
             catch (Exception e)
