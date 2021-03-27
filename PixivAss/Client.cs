@@ -617,7 +617,7 @@ namespace PixivAss
             if (ret.Value<Boolean>("error"))
             {
                 //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
-                Console.Error.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
+                Console.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
                 return new List<int>();
             }
             var idList = new List<int>();

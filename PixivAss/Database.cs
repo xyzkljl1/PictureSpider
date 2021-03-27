@@ -79,7 +79,7 @@ namespace PixivAss
                                likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
                                ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
-                               ugoiraFrames = dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
+                               ugoiraFrames = dataReader.IsDBNull(dataReader.GetOrdinal("ugoiraFrames")) ? "" : dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
                    };
                });
         }
