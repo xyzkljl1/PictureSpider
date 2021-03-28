@@ -31,35 +31,43 @@ namespace PixivAss
                 Console.WriteLine("WebServer Start Successed.......");
                 while (true)
                 {
-                    //等待请求连接
-                    //没有请求则GetContext处于阻塞状态
-                    HttpListenerContext ctx = await listerner.GetContextAsync();
-                    ctx.Response.StatusCode = 200;//设置返回给客服端http状态代码
-                    string name = ctx.Request.QueryString["name"];
+                    try
+                    {
+                        //等待请求连接
+                        //没有请求则GetContext处于阻塞状态
+                        HttpListenerContext ctx = await listerner.GetContextAsync();
+                        ctx.Response.StatusCode = 200;//设置返回给客服端http状态代码
+                        string name = ctx.Request.QueryString["name"];
 
-                    if (name != null)
-                        Console.WriteLine(name);
-                    using (StreamReader reader = new StreamReader(ctx.Request.InputStream))
-                    {
-                        String data = reader.ReadToEnd();
-                        if (data.Length > 0)
+                        if (name != null)
+                            Console.WriteLine(name);
+                        using (StreamReader reader = new StreamReader(ctx.Request.InputStream))
                         {
-                            Console.WriteLine("Receive Cookie");
-                            if(this.cookie!=data)
+                            String data = reader.ReadToEnd();
+                            if (data.Length > 0)
                             {
-                                this.cookie = data;
-                                await database.UpdateCookie(cookie);
-                                await FetchCSRFToken();
+                                Console.WriteLine("Receive Cookie");
+                                if (this.cookie != data)
+                                {
+                                    this.cookie = data;
+                                    await database.UpdateCookie(cookie);
+                                    await FetchCSRFToken();
+                                }
                             }
+                            reader.Close();
                         }
-                        reader.Close();
+                        //使用Writer输出http响应代码
+                        using (StreamWriter writer = new StreamWriter(ctx.Response.OutputStream))
+                        {
+                            writer.WriteLine("Success");
+                            writer.Close();
+                            ctx.Response.Close();
+                        }
+
                     }
-                    //使用Writer输出http响应代码
-                    using (StreamWriter writer = new StreamWriter(ctx.Response.OutputStream))
+                    catch (Exception e)
                     {
-                        writer.WriteLine("Success");
-                        writer.Close();
-                        ctx.Response.Close();
+                        Console.Error.WriteLine(String.Format("Error While Receiving Cookie {0}",e.Message));
                     }
                 }
             }
