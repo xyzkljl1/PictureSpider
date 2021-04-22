@@ -159,6 +159,7 @@ namespace PixivAss
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 140;
 
+            await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
             do
@@ -167,7 +168,8 @@ namespace PixivAss
                 {
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask();
-                    await DownloadIllustsInExplorerQueue();//考虑到会失败，每天都下载一次
+                    for(int i=0;i<3;++i)
+                        await DownloadIllustsInExplorerQueue();//考虑到会失败，尝试多次并且每天都下载
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);
