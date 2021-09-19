@@ -237,31 +237,84 @@ namespace PixivAss
             const int MaxSize = 10000;
             if (force||(await database.GetQueueUpdateInterval())>UpdateInterval||(await database.GetQueue()).Length<2)
             {
-                var illust_list = (await database.GetAllUnreadedIllustFull()).FindAll((Illust illust) =>
-                                     {
-                                         foreach (var tag in illust.tags)
-                                             if (this.banned_keyword.Contains(tag.ToString()))
-                                                 return false;
-                                         return true;
-                                    });
+                var list_nonprivate = new List<Illust>();
+                var list_private = new List<Illust>();
+
+                foreach (var illust in (await database.GetAllUnreadedIllustFull()).FindAll((Illust illust) =>
+                                      {
+                                          foreach (var tag in illust.tags)
+                                              if (this.banned_keyword.Contains(tag.ToString()))
+                                                  return false;
+                                          return true;
+                                      }))
+                    if (illust.xRestrict > 0)
+                        list_private.Add(illust);
+                    else
+                        list_nonprivate.Add(illust);
                 var followed_user = new HashSet<int>();
                 foreach (var user in await database.GetFollowedUser())
                     followed_user.Add(user.userId);
-                foreach (var illust in illust_list)
+                var followed_tags=await database.GetFollowedTagsOrdered();
+
+                var tmp = new List<List<Illust>> {list_private, list_nonprivate };
+                for(int i=0;i<2;++i)
                 {
-                    illust.score = 0;
-                    if (followed_user.Contains(illust.userId))
-                        illust.score += 1000000;
-                    illust.score += illust.bookmarkCount / 100 + illust.likeCount / 1000;
-                    if (illust.xRestrict > 0)//R18倒序排序
-                        illust.score = -illust.score;
+                    int FOLLOWED_USER_MAGIC_NUMBER = 1000000;//关注作者对illust分数的加算加成
+                    var illust_list = tmp[i];
+                    int follow_ct = 0;
+                    //关注作者最优先，其余按收藏和喜欢数加权
+                    foreach(var illust in illust_list)
+                    {
+                        illust.score = 0;
+                        if (followed_user.Contains(illust.userId))
+                        {
+                            follow_ct++;
+                            illust.score += FOLLOWED_USER_MAGIC_NUMBER;
+                        }
+                        illust.score += illust.bookmarkCount / 10 + illust.likeCount / 100;
+                    }
+                    illust_list.Sort((l, r) => r.score.CompareTo(l.score));
+                    /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
+                     * 根据每张图所具有的最弱势已关注标签对分数进行乘算加成，标准是每个标签下非关注作者的第一名至少能超过无补偿队列中非关注作者的第500名
+                    */
+                    if(illust_list.Count>1000&&illust_list.Count> follow_ct+501)
+                    {
+                        int baseline = illust_list[follow_ct+500].score;
+                        var addition_in_tag = new Dictionary<string, float>();
+                        foreach (var tag in followed_tags)
+                            addition_in_tag.Add(tag, 1.0f);
+                        //先用addition_in_tag记下每个标签的最高分
+                        foreach (var illust in illust_list)
+                            if (illust.score< FOLLOWED_USER_MAGIC_NUMBER)
+                                foreach (var tag in illust.tags)
+                                    if (followed_tags.Contains(tag))
+                                        if (addition_in_tag[tag] < illust.score)
+                                            addition_in_tag[tag] = illust.score;
+                        foreach (var tag in followed_tags)
+                            addition_in_tag[tag] =Math.Max((float)baseline/ addition_in_tag[tag],1.0f);
+                        foreach (var illust in illust_list)
+                            if (illust.score < FOLLOWED_USER_MAGIC_NUMBER)
+                            {
+                                float addup = 1.0f;
+                                foreach (var tag in illust.tags)
+                                    if (followed_tags.Contains(tag))
+                                        addup = Math.Max(addup, addition_in_tag[tag]);
+                                illust.score = (int)((float)illust.score*addup);
+                            }
+                        //重新排序
+                        illust_list.Sort((l, r) => r.score.CompareTo(l.score));
+                    }
+                    /*
+                     * 不能用illust_list = illust_list.Take<Illust>(Math.Min(MaxSize, illust_list.Count)).ToList<Illust>();
+                     * 这样不会修改list_nonprivate/list_private的值
+                    */
                 }
-                illust_list.Sort((l, r) => r.score.CompareTo(l.score));
-                if (illust_list.Count > MaxSize*2)//取头尾各固定长，如果R18部分数量不足会取到评分低的非R图，但是无所谓
-                    illust_list=illust_list.Take<Illust>(MaxSize).Concat(illust_list.Reverse<Illust>().Take<Illust>(MaxSize)).ToList<Illust>();
+                //合并成一个字符串,因为没有混用的场景，混合时不需要排序
                 string queue = "";
-                foreach (var illust in illust_list)
-                    queue += " "+illust.id;
+                foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
+                    queue += " " + illust.id;
+                foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
+                    queue += " " + illust.id;
                 await database.UpdateQueue(queue);
                 Console.WriteLine("Generate Queue Done");
             }            
