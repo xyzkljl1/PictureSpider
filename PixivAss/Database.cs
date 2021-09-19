@@ -26,7 +26,7 @@ namespace PixivAss
         }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time,float ratio=1.0f,bool reverse=false)
         {
-            var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString()));
+            var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString("yyyy-MM-dd HH:mm:ss")));
             return new List<int>(list.Take((int)(list.Count * ratio)));
         }
         public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
@@ -194,7 +194,7 @@ namespace PixivAss
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where followed=0 and (userName=\"\" or updateTime<\"{0}\");",time.ToString()),
+            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where followed=0 and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
                        (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
         }
 
