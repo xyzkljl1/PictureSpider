@@ -295,11 +295,21 @@ namespace PixivAss
                         foreach (var illust in illust_list)
                             if (illust.score < FOLLOWED_USER_MAGIC_NUMBER)
                             {
-                                float addup = 1.0f;
+                                float max_addup = 1.0f;
+                                string max_tag="";
                                 foreach (var tag in illust.tags)
                                     if (followed_tags.Contains(tag))
-                                        addup = Math.Max(addup, addition_in_tag[tag]);
-                                illust.score = (int)((float)illust.score*addup);
+                                        if(addition_in_tag[tag]>max_addup)
+                                        {
+                                            max_tag = tag;
+                                            max_addup = addition_in_tag[tag];
+                                        }
+                                /*
+                                 * 补偿系数逐渐衰减，防止很多低分数图跟着鸡犬升天
+                                 */
+                                if(max_tag!="")
+                                    addition_in_tag[max_tag] = (addition_in_tag[max_tag] - 1.0f) * 0.9f + 1.0f;
+                                illust.score = (int)((float)illust.score*max_addup);
                             }
                         //重新排序
                         illust_list.Sort((l, r) => r.score.CompareTo(l.score));
