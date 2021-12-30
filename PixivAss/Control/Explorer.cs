@@ -179,10 +179,24 @@ namespace PixivAss
                     string path = String.Format("{0}/{1}", pixivClient.download_dir_main, illust.storeFileName(i));
                     if (File.Exists(path))
                     {
-                        var img = Image.FromFile(path);
-                        //我内存贼大，不用裁剪
-                        img.Tag = i;//图片在illust中的原本index
-                        cache.data.Add(img);
+                        try
+                        {
+                            var img = Image.FromFile(path);
+                            //我内存贼大，不用裁剪
+                            img.Tag = i;//图片在illust中的原本index
+                            cache.data.Add(img);
+                        }
+                        catch (Exception e)
+                        {
+                            //视同文件损坏，删除
+                            Console.WriteLine("Can't Load Image "+path);
+                            Console.WriteLine(e.Message);
+                            Console.WriteLine("Delete Image");
+                            File.Delete(path);
+                            var img = (Image)empty_image.Clone();
+                            img.Tag = -1;
+                            cache.data.Add(img);
+                        }
                     }
                     else
                     {
