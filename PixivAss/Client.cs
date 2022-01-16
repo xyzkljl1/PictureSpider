@@ -233,7 +233,7 @@ namespace PixivAss
 
         private async Task GenerateExplorerQueue(bool force=false)
         {
-            const int UpdateInterval = 7 * 24 * 60 * 60;//每超过这个时间才刷新
+            const int UpdateInterval = 7;//单位:天，每超过这个时间才刷新,
             const int MaxSize = 10000;
             if (force||(await database.GetQueueUpdateInterval())>UpdateInterval||(await database.GetQueue()).Length<2)
             {

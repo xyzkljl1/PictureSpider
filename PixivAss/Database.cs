@@ -167,8 +167,8 @@ namespace PixivAss
                         (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); }))[0];
         }
         public async Task<int> GetQueueUpdateInterval()
-        {   //这里一定能找到user
-            return (await StandardQuery(String.Format("SELECT NOW()-`QueueUpdateTime` FROM status WHERE id=\"Current\";"),
+        {   
+            return (await StandardQuery(String.Format("SELECT datediff(NOW(),`QueueUpdateTime`) FROM status WHERE id=\"Current\";"),
                         (DbDataReader reader) => { return reader.GetInt32(0); }))[0];
         }
         public async Task<string> GetQueue()
@@ -435,7 +435,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine("Database Exception {0}", e.Message);
+                Console.Error.WriteLine("Database Exception1 {0}", e.Message);
                 throw;
             }
         }
@@ -457,7 +457,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine("Database Exception {0}",e.Message);
+                Console.Error.WriteLine("Database Exception2 {0}",e.Message);
                 throw;
             }
         }
@@ -496,7 +496,7 @@ namespace PixivAss
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine("Database Exception {0}", e.Message);
+                Console.Error.WriteLine("Database Exception3 {0}", e.Message);
                 throw;
             }
         }
