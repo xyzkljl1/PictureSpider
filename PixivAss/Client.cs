@@ -173,7 +173,7 @@ namespace PixivAss
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);
-                await ProcessIllustDownloadQueue(60);
+                await ProcessIllustDownloadQueue(120);
                 if (illust_fetch_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
                     process_speed++;
                 else if (illust_fetch_queue.Count / process_speed < 24 &&process_speed>140)//积压量小于一天时逐渐减速
@@ -400,7 +400,7 @@ namespace PixivAss
                 await queue.Done();
                 int ct = 0;
                 queue.done_task_list.ForEach(task => ct += task.Result ? 1 : 0);
-                Console.WriteLine(String.Format("Download Begin {0}", ct));
+                Console.WriteLine(String.Format("Download Begin {0}(pages)", ct));
                 //等待完成并查询状态
                 while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
 
@@ -448,7 +448,7 @@ namespace PixivAss
                             processed_illusts.Add(illust.id);
                         }
                     }
-                    Console.WriteLine(String.Format("Download Done, {0}/{1} Success", success_ct, download_illusts.Count));
+                    Console.WriteLine(String.Format("Download Done, {0}/{1}(illusts) Success", success_ct, download_illusts.Count));
                     //无法下载可能是因为已删除，重新加入Fetch队列以避免反复下载
                     await AddToIllustFetchQueue(fail_illusts, null, false);
                 }
