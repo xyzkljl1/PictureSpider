@@ -84,9 +84,11 @@ namespace PixivAss
         {
             try
             {
-                HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, new StringContent(data));
-                CheckStatusCode(response);
-                return await response.Content.ReadAsStringAsync();
+                using (HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, new StringContent(data)))
+                {
+                    CheckStatusCode(response);
+                    return await response.Content.ReadAsStringAsync();
+                }
             }
             catch (Exception e)
             {
@@ -109,14 +111,16 @@ namespace PixivAss
                         throw new ArgumentException("Not SSL");
                     if(referer!=null)
                         client.DefaultRequestHeaders.Referrer = referer;
-                    HttpResponseMessage response = await client.GetAsync(url);
-                    //可能是作品已删除，此时仍然返回结果
-                    if (response.StatusCode == HttpStatusCode.NotFound)
+                    using (HttpResponseMessage response = await client.GetAsync(url))
+                    {
+                        //可能是作品已删除，此时仍然返回结果
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                            return await response.Content.ReadAsStringAsync();
+                        //未知错误
+                        CheckStatusCode(response);
+                        //正常
                         return await response.Content.ReadAsStringAsync();
-                    //未知错误
-                    CheckStatusCode(response);
-                    //正常
-                    return await response.Content.ReadAsStringAsync();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -140,11 +144,13 @@ namespace PixivAss
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
                     httpClient.DefaultRequestHeaders.Referrer = referer;
-                    HttpResponseMessage response = await httpClient.PostAsync(url, new StringContent(data,Encoding.UTF8,"application/json"));
-                    var ret = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine(response.StatusCode.ToString()+":"+ret);
-                    CheckStatusCode(response);
-                    return ret;
+                    using (HttpResponseMessage response = await httpClient.PostAsync(url, new StringContent(data, Encoding.UTF8, "application/json")))
+                    {
+                        var ret = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine(response.StatusCode.ToString() + ":" + ret);
+                        CheckStatusCode(response);
+                        return ret;
+                    }
                 }
                 catch (Exception e)
                 {

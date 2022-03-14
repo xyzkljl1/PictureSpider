@@ -112,16 +112,16 @@ namespace PixivAss
             for (int try_ct = 5; try_ct >=0;--try_ct)
                 try
                 {
-                    HttpResponseMessage response = await httpClient.GetAsync(url);
+                    using (HttpResponseMessage response = await httpClient.GetAsync(url))
                     //if(response.StatusCode==HttpStatusCode.OK)
                     {
                         var ret = await response.Content.ReadAsStringAsync();
                         var doc = new HtmlDocument();
                         doc.LoadHtml(ret);
                         HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//input[@name='tt']");
-                        if(headNode!=null)
+                        if (headNode != null)
                         {
-                            this.csrf_token=headNode.Attributes["value"].Value;
+                            this.csrf_token = headNode.Attributes["value"].Value;
                             break;
                         }
                     }
