@@ -341,7 +341,7 @@ namespace PixivAss
             JObject json = await RequestJsonAsync(url, referer,true);
             if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
                 return null;
-            if (json.Value<Boolean>("error"))
+            if (json.Value<Boolean>("error"))//否则标记未无效
                 return new Illust(illustId, false);
             if(json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
             {

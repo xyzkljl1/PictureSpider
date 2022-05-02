@@ -14,6 +14,7 @@ using PixivAss.Data;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
+using MoreLinq;
 
 namespace PixivAss
 {
@@ -369,8 +370,8 @@ namespace PixivAss
                     File.Delete(file);
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
-                //创建下载任务
-                List<Illust> illustList = await database.GetIllustFull(id_list.ToList());
+                //创建下载任务，打乱顺序以防止反复下载尚未fetch成功的illust
+                List<Illust> illustList = await database.GetIllustFull(id_list.ToList().Shuffle().ToList());
                 var download_illusts = new List<Illust>();
                 var processed_illusts = new List<int>();
                 int download_ct = 0;
@@ -435,12 +436,10 @@ namespace PixivAss
                             if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                                 fail = true;
                         }
-                        if (fail)
+                        if (fail)//重新fetch
                         {
-                            //不更新近两周的作品以避免反复Fetch
-                            if((DateTime.Now-illust.updateTime).TotalDays>14)
-                                fail_illusts.Add(illust.id);
-                            Console.WriteLine("D Fail {0}", illust.id);
+                            fail_illusts.Add(illust.id);
+                            Console.WriteLine("Download Fail，Try ReFetch {0}", illust.id);
                         }
                         else
                         {
@@ -449,7 +448,7 @@ namespace PixivAss
                         }
                     }
                     Console.WriteLine(String.Format("Download Done, {0}/{1}(illusts) Success", success_ct, download_illusts.Count));
-                    //无法下载可能是因为已删除，重新加入Fetch队列以避免反复下载
+                    //无法下载可能是因为已删除或已更新，尝试重新Fetch
                     await AddToIllustFetchQueue(fail_illusts, null, false);
                 }
                 return processed_illusts;
@@ -475,7 +474,7 @@ namespace PixivAss
             DateTime t = DateTime.Now;
             var queue = new TaskQueue<bool>(200);
             foreach (var illust in illustList)//耗时间的不是文件读写而是转码，所以要并行
-                queue.Add(Task.Run(()=>UgoiraToGIF(illust)));
+                await queue.Add(Task.Run(()=>UgoiraToGIF(illust)));
             await queue.Done();
             int ct = 0;
             queue.done_task_list.ForEach(task => ct += task.Result?1:0);
