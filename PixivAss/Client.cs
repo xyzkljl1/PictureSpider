@@ -157,10 +157,9 @@ namespace PixivAss
 
         public async Task RunSchedule()
         {
-            int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
+            int last_daily_task = DateTime.Now.Day-1;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 140;
             var day_of_week = DateTime.Now.DayOfWeek;
-
             await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
@@ -725,7 +724,7 @@ namespace PixivAss
         private async Task ProcessIllustFetchQueue(int count)
         {
             int tmp = illust_fetch_queue.Count;
-            var queue = new TaskQueue<Illust>(3000);
+            var queue = new TaskQueue<Illust>(30);
             foreach( var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
                 await queue.Add(RequestIllustAsync(id));
             await queue.Done();
@@ -838,7 +837,7 @@ namespace PixivAss
         {
             //每隔70天更新全部，没有名字的立刻更新
             var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-7 * 10));
-            var queue = new TaskQueue<User>(2000);
+            var queue = new TaskQueue<User>(1500);
             foreach (var user in user_list)
                 await queue.Add(RequestUserAsync(user.userId));
             await queue.Done();

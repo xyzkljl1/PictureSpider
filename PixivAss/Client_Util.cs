@@ -177,6 +177,26 @@ namespace PixivAss
             doc.LoadHtml(result);
             return doc;
         }
+        public async Task<string> RequestUserName(int userId)
+        {
+            string url = String.Format("{0}ajax/user/{1}?full=0", base_url, userId);//即使full=1也不包含illusts
+            string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
+            JObject ret = await RequestJsonAsync(url, referer, true);
+            if (ret.Value<Boolean>("NetError"))
+            {
+                Console.Error.WriteLine(String.Format("Get UserName {0} Net Error", userId));
+                return null;
+            }
+            if (ret.Value<Boolean>("error"))
+            {
+                Console.Error.WriteLine("Get UserName {0} Fail:{1}", userId, ret.Value<string>("message"));
+                throw new TopLevelException(ret.Value<string>("message"));
+            }
+            var body = ret.Value<JObject>("body");
+            if(body!=null)
+                return body.Value<string>("name");
+            return null;
+        }
         public async Task<User> RequestUserAsync(int userId)
         {
             if (userId == 0)
@@ -197,17 +217,13 @@ namespace PixivAss
                 throw new TopLevelException(ret.Value<string>("message"));
             }
             var body = ret.Value<JObject>("body");
-            var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");
-            foreach (var type in new List<string>{ "illusts","manga"})
-                if(body.GetValue(type)!=null)
-                    if(body.GetValue(type).Type==JTokenType.Object)//必须判断类型，因为空的时候是个空array而非object，很迷
-                        foreach (var illustId in body.Value<JObject>(type))
-                        {
-                            var illust = await RequestIllustAsync(Int32.Parse(illustId.Key));
-                            userName = illust.userName;
-                            break;
-                        }
-            return new User(userId, userName, false,false);            
+            var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");//这个是带-pixiv的，不是真实用户名
+            //尝试通过另一个api获得用户名，获取不到就拿上一个将就一下
+            //不能通过获取任意illust的方式获取用户名，因为调用频率限制很严格
+            var tmp=await RequestUserName(userId);
+            if (tmp != null)
+                userName = tmp;
+            return new User(userId, userName, false,false);
         }
         public async Task<int> RequestFollowedUserCount()
         {
@@ -338,13 +354,18 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
-            //R18如95047397需要登录，是后来改的？
-            JObject json = await RequestJsonAsync(url, referer,false);
-            if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
-                return null;
-            if (json.Value<Boolean>("error"))//否则标记未无效
-                return new Illust(illustId, false);
-            if(json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
+            //现在R18如95047397需要登录才能查看，但是匿名client仍然能获取到信息？
+            //由于登录后更容易因为访问频率导致请求失败?先尝试匿名获取，失败再用登录的client获取
+            JObject json = await RequestJsonAsync(url, referer,true);
+            if(json.Value<Boolean>("NetError")|| json.Value<Boolean>("error"))//失败时用另一个client重试一下
+            {
+                json = await RequestJsonAsync(url, referer, false);
+                if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
+                    return null;
+                if (json.Value<Boolean>("error"))//否则标记未无效
+                    return new Illust(illustId, false);
+            }
+            if (json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
             {
                 string ugoira_url = String.Format("{0}/ugoira_meta?lang=zh", url);
                 JObject ugoira_json = await RequestJsonAsync(ugoira_url, "", false);//需要非匿名
