@@ -159,6 +159,7 @@ namespace PixivAss
         {
             int last_daily_task = DateTime.Now.Day;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
             int process_speed = 140;
+            var day_of_week = DateTime.Now.DayOfWeek;
 
             await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
@@ -168,7 +169,7 @@ namespace PixivAss
                 if(DateTime.Now.Day!=last_daily_task)
                 {
                     last_daily_task = DateTime.Now.Day;
-                    await DailyTask();
+                    await DailyTask(day_of_week);
                     for(int i=0;i<3;++i)
                         await DownloadIllustsInExplorerQueue();//考虑到会失败，尝试多次并且每天都下载
                 }
@@ -183,13 +184,13 @@ namespace PixivAss
             }
             while (true);
         }
-        public async Task DailyTask()
+        public async Task DailyTask(DayOfWeek day_of_week)
         {
             Console.WriteLine("Start Fetch Task ");
             //第一次运行之后，FollowedUser和BookmarkIllust由本地向远程单向更新
             var illust_list_bytime = new HashSet<int>();//根据时间更新的列表
             var illust_list_bylike = new Dictionary<int,int>();//根据like数更新的列表
-            bool do_week_task = DateTime.Now.DayOfWeek == System.DayOfWeek.Sunday;//每周一次
+            bool do_week_task = DateTime.Now.DayOfWeek == day_of_week;//每周一次
 
             /*获得需要更新的Illust的id*/
             if (do_week_task)

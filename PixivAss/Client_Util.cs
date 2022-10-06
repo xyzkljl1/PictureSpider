@@ -337,8 +337,9 @@ namespace PixivAss
         public async Task<Illust> RequestIllustAsync(int illustId)
         {
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
-            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);            
-            JObject json = await RequestJsonAsync(url, referer,true);
+            string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
+            //R18如95047397需要登录，是后来改的？
+            JObject json = await RequestJsonAsync(url, referer,false);
             if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
                 return null;
             if (json.Value<Boolean>("error"))//否则标记未无效
