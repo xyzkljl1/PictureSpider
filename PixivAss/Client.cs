@@ -86,7 +86,7 @@ namespace PixivAss
             httpClient.Timeout = new TimeSpan(0, 0, 35);
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Host = base_host;
             httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -99,7 +99,7 @@ namespace PixivAss
             httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
             httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/538.45 (KHTML, like Gecko) Chrome/76.0.4147.100 Safari/538.45");
+            httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
             httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
             httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
 
@@ -677,7 +677,8 @@ namespace PixivAss
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
-            JObject ret = await RequestJsonAsync(url, referer,true);
+            //这里要登录后查询，有的用户不登陆看不到作品如25877697
+            JObject ret = await RequestJsonAsync(url, referer,false);
             if (ret.Value<Boolean>("error"))
             {
                 //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
@@ -685,9 +686,9 @@ namespace PixivAss
                 return new List<int>();
             }
             var idList = new List<int>();
-            foreach (var type in new List<string>{ "illusts"/*,"manga"*/}) //暂时只看插画,不看漫画
-                if (ret.Value<JObject>("body").GetValue("illusts").Type==JTokenType.Object)//为空时不是object而是array很坑爹
-                    foreach (var illust in ret.Value<JObject>("body").Value<JObject>("illusts"))
+            foreach (var type in new List<string>{ "illusts","manga"})
+                if (ret.Value<JObject>("body").GetValue(type).Type==JTokenType.Object)//为空时不是object而是array很坑爹
+                    foreach (var illust in ret.Value<JObject>("body").Value<JObject>(type))
                             idList.Add(Int32.Parse(illust.Key));
             return idList;
         }
