@@ -5,55 +5,70 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PictureSpider;
-using PictureSpider;
 
 namespace PictureSpider.Pixiv
 {
     public class QueueChangeEventArgs : EventArgs
     {
-        public int name;
-        public ExploreQueueType type;
-        public QueueChangeEventArgs(ExploreQueueType _type, int _name)
+        public int server_index;
+        public ExplorerQueue item;
+        public QueueChangeEventArgs(int _idx, ExplorerQueue _item)
         {
-            type = _type;
-            name = _name;
+            server_index = _idx;
+            item = _item;
         }
     }
+    class ComboBoxItem
+    {
+        public int provider_index;
+        public ExplorerQueue item;
+        public ComboBoxItem(int _idx, ExplorerQueue _item)
+        {
+            provider_index = _idx;
+            item = _item;
+        }
+        public override string ToString()
+        {
+            return item.displayText;
+        }
+    };
     class QueueComboBox:ComboBox
     {
         public event EventHandler<QueueChangeEventArgs> QueueChanged;
-        Server client;
+        List<BaseServer> providers;
         bool block_signal = false;
         public QueueComboBox()
         {
             DropDownStyle = ComboBoxStyle.DropDownList;
-            this.SelectedIndexChanged += (object sender, EventArgs e) =>
+            SelectedIndexChanged += (object sender, EventArgs e) =>
             {
                 if (!block_signal)
                     if(SelectedItem!=null)
-                        QueueChanged(this, new QueueChangeEventArgs(((ComboBoxItem)SelectedItem).type, ((ComboBoxItem)SelectedItem).id));
+                        QueueChanged(this, new QueueChangeEventArgs(((ComboBoxItem)SelectedItem).provider_index, ((ComboBoxItem)SelectedItem).item));
             };
         }
-        public void SetClient(Server _client)
+        public void SetClient(List<BaseServer> _providers)
         {
-            client = _client;
+            providers = _providers;
             UpdateContent();
         }
         public async void UpdateContent()
         {
-            var old_select = this.SelectedItem;
+            var old_select = SelectedItem as ComboBoxItem;
             Items.Clear();
             using (BlockSyncContext.Enter())
-                foreach (var item in await client.QueryExploreQueueName())
-                    Items.Add(new ComboBoxItem(item));
-            if(old_select!= null)
+                for(int i=0;i<providers.Count; i++)
+                foreach (var item in await providers[i].GetExplorerQueues())
+                    Items.Add(new ComboBoxItem(i,item));
+            if(old_select!= null)//重新选中之前选中的选项
             {
                 block_signal = true;
-                foreach (var item in Items)
-                    if (((ComboBoxItem)item).type == ((ComboBoxItem)old_select).type)
-                        if (((ComboBoxItem)item).id == ((ComboBoxItem)old_select).id)
+                foreach (ComboBoxItem item in Items)
+                    if (item.provider_index == old_select.provider_index
+                        &&item.item.type== old_select.item.type
+                        &&item.item.id== old_select.item.id)
                         {
-                            this.SelectedItem = item;
+                            SelectedItem = item;
                             block_signal = false;
                             return;
                         }
@@ -62,29 +77,4 @@ namespace PictureSpider.Pixiv
             }
         }
     }
-    struct ComboBoxItem
-    {
-        public int id;
-        public string name;
-        public ExploreQueueType type;
-        public ComboBoxItem(Tuple<ExploreQueueType, int, string> data)
-        {
-            this.type = data.Item1;
-            this.id = data.Item2;
-            this.name = data.Item3;
-        }
-        public override string ToString()
-        {
-            if (type == ExploreQueueType.Fav)
-                return "Fav";
-            else if (type == ExploreQueueType.FavR)
-                return "FavR";
-            else if (type == ExploreQueueType.Main)
-                return "Main";
-            else if (type == ExploreQueueType.MainR)
-                return "MainR";
-            else
-                return name;
-        }
-    };
 }

@@ -199,6 +199,7 @@
     <Compile Include="Twitter\Data.cs" />
     <Compile Include="Twitter\Database.cs" />
     <Compile Include="Twitter\Server.cs" />
+    <Compile Include="Util\ExplorerQueue.cs" />
     <Compile Include="Util\Util.cs" />
     <Compile Include="Util\Aria2DownloadQueue.cs" />
     <Compile Include="Util\BindHandleProvider.cs" />
@@ -212,7 +213,7 @@
     <Compile Include="ContextDestroyer.cs" />
     <Compile Include="Pixiv\CookieServer.cs" />
     <Compile Include="Pixiv\Database.cs" />
-    <Compile Include="PixivControl\IllustGroup.cs" />
+    <Compile Include="Pixiv\Data.cs" />
     <Compile Include="PixivControl\Explorer.cs">
       <SubType>Component</SubType>
     </Compile>

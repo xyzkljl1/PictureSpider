@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,14 +8,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PictureSpider.Pixiv
 {
-    public enum ExploreQueueType
-    {
-        Fav,
-        FavR,
-        Main,
-        MainR,
-        User
-    };
     public enum TagStatus
     {
         None,
@@ -198,5 +191,37 @@ namespace PictureSpider.Pixiv
                 return false;
             return true;
         }
+    }
+    public class ExplorerFile : ExplorerFileBase
+    {
+        //基类中定义的属性在基类中修改，未定义的在illust中
+        public Illust illust;
+        public string download_dir_main;
+        public ExplorerFile(Illust _illust, string _download_dir)
+        {
+            illust = _illust;
+            download_dir_main = _download_dir;
+            title = illust.title;
+            description = illust.description;
+            id=illust.id.ToString();
+            tags=illust.tags;
+            userId=illust.userId.ToString();
+            bookmarked=illust.bookmarked;
+            bookmarkPrivate =illust.bookmarkPrivate;
+            readed=illust.readed;
+        }
+        public override string FilePath(int page)
+        {
+            return Path.Combine(download_dir_main, illust.storeFileName(page));
+        }
+
+        public override int pageCount() { return illust.pageCount;}
+
+        public override string URL(int page) { return illust.URL(page);}
+
+        public override int validPageCount() { return illust.validPageCount();}
+
+        public override bool isPageValid(int page) { return illust.isPageValid(page); }
+        public override void switchPageValid(int page) { illust.switchPageValid(page); }
     }
 }

@@ -15,15 +15,13 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using MoreLinq;
-using PictureSpider.Util;
-
 namespace PictureSpider.Pixiv
 {
-    partial class Server: BaseServer,IBindHandleProvider, IDisposable
+    partial class Server : BaseServer, IBindHandleProvider, IDisposable
     {
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
         public delegate void Delegate_V_B();
-        public string VerifyState { get=>verify_state;
+        public string VerifyState { get => verify_state;
             set
             {
                 verify_state = value;
@@ -32,7 +30,7 @@ namespace PictureSpider.Pixiv
         }
         private float SEARCH_PAGE_SIZE = 60;//不知如何获得，暂用常数表示;为计算方便使用float
         private int UPDATE_INTERVAL = 7 * 100;//更新数据库间隔，上次更新时间距今小于该值的illust不会被更新
-        private string verify_state="Waiting";
+        private string verify_state = "Waiting";
         private string download_dir_root;
         private string user_id;
         private string base_url = "https://www.pixiv.net/";
@@ -40,15 +38,15 @@ namespace PictureSpider.Pixiv
         private string user_name;
         private string download_dir_bookmark_pub;
         private string download_dir_bookmark_private;
-        public  string download_dir_main;
+        public string download_dir_main;
         private string download_dir_ugoira_tmp;
         public string special_dir;
         private CookieServer cookie_server;
-        public  Database database;
+        public Database database;
         private HttpClient httpClient;
         private HttpClient httpClient_anonymous;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private HashSet<string> banned_keyword;
-        private Uri aria2_rpc_addr =new Uri("http://127.0.0.1:4322/jsonrpc");
+        private Uri aria2_rpc_addr = new Uri("http://127.0.0.1:4322/jsonrpc");
         private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
         private string request_proxy;
 
@@ -72,15 +70,15 @@ namespace PictureSpider.Pixiv
             request_proxy = config.Proxy;
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
-            cookie_server = new CookieServer(database,request_proxy);
+            cookie_server = new CookieServer(database, request_proxy);
 
             System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
-                                        {
-                                            MaxConnectionsPerServer = 256,
-                                            UseCookies = false,
-                                            Proxy = new WebProxy(request_proxy, false)
-                                        };            
+            {
+                MaxConnectionsPerServer = 256,
+                UseCookies = false,
+                Proxy = new WebProxy(request_proxy, false)
+            };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
             //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
@@ -90,9 +88,9 @@ namespace PictureSpider.Pixiv
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Host = base_host;
             httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-//            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
-//            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
-//            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
+            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
+            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
+            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
             httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
 
@@ -120,45 +118,78 @@ namespace PictureSpider.Pixiv
             return "";
         }
 
-        /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
-        public async Task<List<Tuple<ExploreQueueType,int,string>>> QueryExploreQueueName()
+        public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
-            var ret = new List<Tuple<ExploreQueueType, int, string>>();
-            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.Fav, 0,""));
-            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.FavR, 0,""));
-            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.Main, 0,""));
-            ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.MainR, 0,""));
-            foreach(var user in await database.GetQueuedUser())
-                ret.Add(new Tuple<ExploreQueueType, int, string>(ExploreQueueType.User, user.userId,user.userName));
+            var ret = new List<ExplorerQueue>();
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.FavR, "0", "FavR"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Main"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.MainR, "0", "MainR"));
+            foreach (var user in await database.GetQueuedUser())
+                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.userId.ToString(), user.userName));
             return ret;
         }
-        public async Task<List<Illust>> QueryExploreQueue(ExploreQueueType type,int userId)
-        {
-            var list = new List<Illust>();
-            if (type == ExploreQueueType.Main || type == ExploreQueueType.MainR)
+        public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
+        {            
+            var illusts = new List<Illust>();
+            if (queue.type == ExplorerQueue.QueueType.Main || queue.type == ExplorerQueue.QueueType.MainR)
             {
-                bool is_private = type == ExploreQueueType.MainR;
+                bool is_private = queue.type == ExplorerQueue.QueueType.MainR;
                 var id_list = (await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                             .ToList<string>()
                             .Select<string, int>(x => Int32.Parse(x))
                             .ToList<int>();
                 foreach (var illust in await database.GetIllustFull(id_list))
                     if ((illust.xRestrict > 0) == is_private && !illust.readed && !illust.bookmarked)
-                        list.Add(illust);
+                        illusts.Add(illust);
             }
-            else if (type == ExploreQueueType.Fav || type == ExploreQueueType.FavR)
+            else if (queue.type == ExplorerQueue.QueueType.Fav || queue.type == ExplorerQueue.QueueType.FavR)
             {
-                bool is_private = type == ExploreQueueType.FavR;
-                list = await database.GetIllustFull(await database.GetBookmarkIllustId(!is_private));
+                bool is_private = queue.type == ExplorerQueue.QueueType.FavR;
+                foreach(var illust in await database.GetIllustFull(await database.GetBookmarkIllustId(!is_private)))
+                    illusts.Add(illust);
             }
             else
             {
-                foreach (var illust in await database.GetIllustFullSortedByUser(userId))
+                int id = int.Parse(queue.id);
+                foreach (var illust in await database.GetIllustFullSortedByUser(id))
                     if (illust.bookmarked || !illust.readed)
-                        list.Add(illust);
+                        illusts.Add(illust);
             }
-            return list;
+            var result = new List<ExplorerFileBase>();
+            foreach(var illust in illusts)
+            {
+                if (illust.valid)
+                    result.Add(new ExplorerFile(illust, download_dir_main));
+                else //如果Illust已被删除，检测本地是否有图，如果本地至少有一张图也加入result
+                {
+                    for (int i = 0; i < illust.pageCount; i++)
+                        if (File.Exists(String.Format("{0}/{1}", download_dir_main, illust.storeFileName(i))))
+                        {
+                            result.Add(new ExplorerFile(illust, download_dir_main));
+                            break;
+                        }
+                }
+            }
+            return result;
         }
+
+        public override void SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
+        {
+            var illust = (file as ExplorerFile).illust;
+            database.UpdateIllustReaded(illust.id).Wait();
+        }
+        public override void SetBookmarked(ExplorerFileBase file)
+        {
+            var illust = (file as ExplorerFile).illust;
+            database.UpdateIllustBookmarked(illust.id,file.bookmarked,file.bookmarkPrivate).Wait();
+        }
+        public override void SetBookmarkEach(ExplorerFileBase file)
+        {
+            var illust = (file as ExplorerFile).illust;
+            database.UpdateIllustBookmarkEach(illust.id,illust.bookmarkEach).Wait();
+        }
+        /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
         private async Task RunSchedule()
         {

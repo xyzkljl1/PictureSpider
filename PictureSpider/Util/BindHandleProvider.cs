@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-namespace PictureSpider.Util
+namespace PictureSpider
 {
     /*
      * 一个物体上的属性更新，所有属性都会被重新获取

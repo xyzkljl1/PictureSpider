@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using PictureSpider;
-using PictureSpider.Util;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -81,6 +80,7 @@ namespace PictureSpider.Twitter
             //httpClient.DefaultRequestHeaders.Add("Cookie", @"ct0=7617e0974c96ef6a593bf03ddfffe9ae");
         }
         public override async Task Init() {
+            return;
             //await CheckGetUserNameApi();
             if (!await Login())
                 throw new TopLevelException("TwitterServer Login Failed");
@@ -88,6 +88,32 @@ namespace PictureSpider.Twitter
                 Console.WriteLine($"{DateTime.Now.ToString()} Twitter Login Success.");
             RunSchedule();
             //Task.Run(RunSchedule);
+        }
+        public override void SetReaded(ExplorerFileBase file)
+        {
+            throw new Exception("");
+        }
+        public override async Task<List<ExplorerQueue>> GetExplorerQueues()
+        {
+            var ret = new List<ExplorerQueue>();
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.FavR, "0", "FavR"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Main"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.MainR, "0", "MainR"));
+            foreach (var user in await database.GetUsers(false,true))
+                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.id, $"@{user.name}"));
+            return ret;
+        }
+        public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
+        {
+            var result=new List<ExplorerFileBase>();
+            return result;
+        }
+        public override void SetBookmarked(ExplorerFileBase file)
+        {
+        }
+        public override void SetBookmarkEach(ExplorerFileBase file)
+        {
         }
         private async Task RunSchedule()
         {
@@ -433,7 +459,7 @@ namespace PictureSpider.Twitter
                                         }
                                         if (string.IsNullOrEmpty(media.url))
                                             throw new TopLevelException("Can't Find Twitter Video URL");
-                                        var ext=Util.GetExtFromURL(media.url);
+                                        var ext = Util.GetExtFromURL(media.url);
                                         media.file_name = $"{media.id}.{ext}";
                                     }
                                     else
@@ -589,6 +615,5 @@ namespace PictureSpider.Twitter
         {
             httpClient.Dispose();
         }
-
     }
 }

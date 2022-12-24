@@ -84,7 +84,8 @@ namespace PictureSpider.Pixiv
         {
             try
             {
-                using (HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, new StringContent(data)))
+                using(var content= new StringContent(data))
+                using (HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, content))
                 {
                     CheckStatusCode(response);
                     return await response.Content.ReadAsStringAsync();
@@ -143,7 +144,8 @@ namespace PictureSpider.Pixiv
                     if (!url.StartsWith("https"))
                         throw new ArgumentException("Not SSL");
                     httpClient.DefaultRequestHeaders.Referrer = referer;
-                    using (HttpResponseMessage response = await httpClient.PostAsync(url, new StringContent(data, Encoding.UTF8, "application/json")))
+                    using (var content= new StringContent(data, Encoding.UTF8, "application/json"))
+                    using (HttpResponseMessage response = await httpClient.PostAsync(url, content))
                     {
                         var ret = await response.Content.ReadAsStringAsync();
                         Console.WriteLine(response.StatusCode.ToString() + ":" + ret);

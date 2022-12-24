@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PictureSpider.Util
+namespace PictureSpider
 {
     public class Util
     {

@@ -12,7 +12,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PictureSpider.Util
+namespace PictureSpider
 {
     internal class Aria2DownloadQueue
     {
