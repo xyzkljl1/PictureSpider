@@ -1,0 +1,16 @@
+﻿{
+  "Proxy": "127.0.0.1:1196",
+  "ProxyGo": "127.0.0.1:8000",
+  "PixivDownloadDir": "D:/Pixiv/",
+  "PixivUserName": "",
+  "PixivUserId": "",
+  "PixivConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=pixiv;",
+  "ShowInitButton": false,
+  "TwitterConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=twitter;",
+  "TwitterAPIKey": "",
+  "TwitterAPISecret": "",
+  "TwitterBearerToken": "",
+  "TwitterDownloadDir": "D:/Twitter/",
+  "TwitterUserName": "",
+  "TwitterPassword": ""
+}
