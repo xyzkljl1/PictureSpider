@@ -8,6 +8,7 @@ namespace PictureSpider
 {
     public abstract class BaseServer
     {
+        public bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
         //Init应当在构建之后，使用之前，在主线程(UI线程)中调用并等待完成
         public abstract Task Init();
         //获得所有浏览队列的列表
@@ -16,6 +17,11 @@ namespace PictureSpider
         public abstract Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue);
         public abstract void SetReaded(ExplorerFileBase file);
         public abstract void SetBookmarked(ExplorerFileBase file);
-        public abstract void SetBookmarkEach(ExplorerFileBase file);
+        public virtual void SetBookmarkEach(ExplorerFileBase file) { }
+        public abstract BaseUser GetUserById(string id);
+        public abstract void SetUserFollowOrQueue(BaseUser user);
+        public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }
+        public virtual Dictionary<string, string> GetAllTagsDesc() { return new Dictionary<string, string>(); }
+        public virtual void UpdateTagStatus(string tag,TagStatus status) { }
     }
 }

@@ -190,22 +190,23 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="PixivControl\AuthorBox.cs">
+    <Compile Include="Control\AuthorBox.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="PixivControl\AuthorBox.Designer.cs">
+    <Compile Include="Control\AuthorBox.Designer.cs">
       <DependentUpon>AuthorBox.cs</DependentUpon>
     </Compile>
     <Compile Include="Twitter\Data.cs" />
     <Compile Include="Twitter\Database.cs" />
     <Compile Include="Twitter\Server.cs" />
+    <Compile Include="Util\BaseUser.cs" />
     <Compile Include="Util\ExplorerQueue.cs" />
     <Compile Include="Util\Util.cs" />
     <Compile Include="Util\Aria2DownloadQueue.cs" />
     <Compile Include="Util\BindHandleProvider.cs" />
     <Compile Include="Config.cs" />
-    <Compile Include="PixivControl\QueueComboBox.cs" />
-    <Compile Include="PixivControl\TagBox.cs">
+    <Compile Include="Control\QueueComboBox.cs" />
+    <Compile Include="Control\TagBox.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Pixiv\Server.cs" />
@@ -214,7 +215,7 @@
     <Compile Include="Pixiv\CookieServer.cs" />
     <Compile Include="Pixiv\Database.cs" />
     <Compile Include="Pixiv\Data.cs" />
-    <Compile Include="PixivControl\Explorer.cs">
+    <Compile Include="Control\Explorer.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="MainWindow.cs">
@@ -228,7 +229,7 @@
     <Compile Include="TaskQueue.cs" />
     <Compile Include="TopLevelException.cs" />
     <Compile Include="Util\BaseServer.cs" />
-    <EmbeddedResource Include="PixivControl\AuthorBox.resx">
+    <EmbeddedResource Include="Control\AuthorBox.resx">
       <DependentUpon>AuthorBox.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="MainWindow.resx">

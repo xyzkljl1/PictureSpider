@@ -15,6 +15,11 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Twitter
 {
+    /*
+     * TODO:
+     * 显示视频
+     * 处理删除的media(由于是一次性fetch到media且不会重复获取，并且总量较少从获取到下载的间隔短，失效的情况比较少见，暂不处理)
+     */
     public partial class Server : BaseServer, IBindHandleProvider, IDisposable
     {
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
@@ -80,7 +85,7 @@ namespace PictureSpider.Twitter
             //httpClient.DefaultRequestHeaders.Add("Cookie", @"ct0=7617e0974c96ef6a593bf03ddfffe9ae");
         }
         public override async Task Init() {
-            return;
+            //return;
             //await CheckGetUserNameApi();
             if (!await Login())
                 throw new TopLevelException("TwitterServer Login Failed");
@@ -91,14 +96,14 @@ namespace PictureSpider.Twitter
         }
         public override void SetReaded(ExplorerFileBase file)
         {
-            throw new Exception("");
+            var media = (file as ExplorerFile).media;
+            media.readed = file.readed;
+            database.UpdateMediaProperty(new List<Media> {media},"readed").Wait();
         }
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
             var ret = new List<ExplorerQueue>();
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.FavR, "0", "FavR"));
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Main"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.MainR, "0", "MainR"));
             foreach (var user in await database.GetUsers(false,true))
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.id, $"@{user.name}"));
@@ -106,45 +111,59 @@ namespace PictureSpider.Twitter
         }
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
-            var result=new List<ExplorerFileBase>();
+            var medias = new List<Media>();
+            if (queue.type == ExplorerQueue.QueueType.MainR)
+                medias = await database.GetFollowedUnreadMedia();
+            else if (queue.type == ExplorerQueue.QueueType.FavR)
+                medias = await database.GetBookmarkedMedia();
+            else
+                medias = await database.GetMediaByUserId(queue.id);
+            var result = new List<ExplorerFileBase>();
+            foreach (var media in medias)
+                if(media.media_type==MediaType.Image)
+                    result.Add(new ExplorerFile(media, download_dir_tmp));
             return result;
         }
         public override void SetBookmarked(ExplorerFileBase file)
         {
+            var media = (file as ExplorerFile).media;
+            media.bookmarked=file.bookmarked;
+            database.UpdateMediaProperty(new List<Media> { media},"bookmarked").Wait();
         }
-        public override void SetBookmarkEach(ExplorerFileBase file)
-        {
-        }
+        public override BaseUser GetUserById(string id) { return database.GetUserById(id).Result; }
+        public override void SetUserFollowOrQueue(BaseUser user) { database.UpdateUserFollowOrQueue(user as User).Wait(); }
         private async Task RunSchedule()
         {
             int interval_ct = 0;
             var interval = new TimeSpan(1, 0, 0);
             do
             {
-                if(interval_ct%24==0)//每24次间隔重新获取最新tweet
+                if(interval_ct%24==0)//每24次间隔
                 {
+                    //重新获取最新tweet
                     var users = await database.GetUsers(true, true);
                     foreach (var user in users)
                         await FetchTweetsByUser(user.name, user.latest_tweet_id);
+                    //同步收藏文件夹
+                    await SyncBookmarkDirectory();
                 }
                 //每次间隔下载media
                 {
-                    var medias = await database.GetWaitingDownloadMedia(100);
-                    Console.WriteLine($"{DateTime.Now.ToString()} Start Download Try:{medias.Count()}");
+                    var medias = await database.GetWaitingDownloadMedia(200);
+                    Console.WriteLine($"{DateTime.Now} Start Download Try:{medias.Count()}");
                     foreach (var media in medias)
                     {
-                        var dir = media.fav ? download_dir_private : download_dir_tmp;
+                        var dir = download_dir_tmp;
                         var path = Path.Combine(dir, media.file_name);
                         if (File.Exists(path))
                             File.Delete(path);
                         await downloader.Add(media.url, dir, media.file_name);
-                        //await Task.Delay(30);//防止aria2反应不过来
                     }
                     await downloader.WaitForAll();
                     int ct = 0;
                     foreach (var media in medias)
                     {
-                        var dir = media.fav ? download_dir_private : download_dir_tmp;
+                        var dir = download_dir_tmp;
                         var path = Path.Combine(dir, media.file_name);
                         if (File.Exists(path))
                         {
@@ -152,8 +171,8 @@ namespace PictureSpider.Twitter
                             ct++;
                         }
                     }
-                    await database.UpdateMediaDownloaded(medias);
-                    Console.WriteLine($"{DateTime.Now.ToString()} Download Done:{ct}/{medias.Count()}");
+                    await database.UpdateMediaProperty(medias,"downloaded");
+                    Console.WriteLine($"{DateTime.Now} Download Done:{ct}/{medias.Count()}");
                 }
                 await Task.Delay(interval);
                 interval_ct++;
@@ -426,6 +445,7 @@ namespace PictureSpider.Twitter
                                     var media = new Media();
                                     media.id = mediaObject.Value<string>("id_str");
                                     media.key = mediaObject.Value<string>("media_key");
+                                    media.expand_url = mediaObject.Value<string>("expanded_url");
                                     media.user_id = tweet.user_id;
                                     media.tweet_id = tweet.id;
                                     var type = mediaObject.Value<string>("type");
@@ -515,7 +535,29 @@ namespace PictureSpider.Twitter
                 Console.WriteLine(e.Message);
             }
         }
-
+        private async Task SyncBookmarkDirectory()
+        {
+            var private_files = new HashSet<string>();
+            foreach (var media in await database.GetBookmarkedMedia())
+            {
+                string dir = download_dir_private;
+                string file_name = media.file_name;
+                string dest = Path.Combine(dir, file_name);
+                string tmp = Path.Combine(dir, "_tmp");
+                string src = Path.Combine(download_dir_tmp, file_name);
+                if (!File.Exists(dest) && File.Exists(src))
+                    try
+                    {
+                        File.Copy(src, tmp, true);
+                        File.Move(tmp,dest);
+                    }
+                    catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
+                private_files.Add(file_name);
+            }
+            foreach (var file in Directory.GetFiles(download_dir_private, "*.*"))//下载临时文件
+                if (!private_files.Contains(Path.GetFileName(file)))
+                    File.Delete(file);
+        }
         public async Task<JObject> GetJsonAsync(string text)
         {
             return ParseJson(await GetAsync(text));

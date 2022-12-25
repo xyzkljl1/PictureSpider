@@ -1,4 +1,4 @@
-﻿namespace PictureSpider.Pixiv
+﻿namespace PictureSpider
 {
     partial class AuthorBox
     {

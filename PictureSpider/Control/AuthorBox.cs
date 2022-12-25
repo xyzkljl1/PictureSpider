@@ -9,22 +9,21 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PictureSpider;
 
-namespace PictureSpider.Pixiv
+namespace PictureSpider
 {
     partial class AuthorBox : UserControl
     {
         public event EventHandler AuthorModified;
-        public int UserId
+        public string UserId
         {
-            get { return user_id; }
+            get { return user is null?"":user.displayId; }
             set
             {
-                user_id = value;
-                UpdateByUserId();
+                UpdateByUserId(value);
             }
         }
-        private int user_id=-1;
-        private Server client;
+        private BaseUser user = null;
+        private BaseServer server;
         private Boolean frozen = false;
         private Dictionary<CheckState, String> CheckState2Text = new Dictionary<CheckState, String> {
             { CheckState.Checked, "已关注" }, {  CheckState.Indeterminate, "已入列"  }, { CheckState.Unchecked, "未关注" } };
@@ -35,24 +34,27 @@ namespace PictureSpider.Pixiv
             followCheckBox.CheckStateChanged += onCheckedChange;
         }
 
-        public void SetClient(Server _client)
+        public void SetClient(BaseServer _server)
         {
-            client = _client;
+            server = _server;
         }
-        void UpdateByUserId()
+        void UpdateByUserId(string user_id)
         {
             frozen = true;
-            if (user_id>=0&&client!=null)
+            if (!string.IsNullOrEmpty(user_id)&&server!=null)
             {
-                var user = client.database.GetUserById(UserId).ConfigureAwait(false).GetAwaiter().GetResult();
-                nameLabel.Text = user.userName;
-                if (user.followed)
-                    followCheckBox.CheckState = CheckState.Checked;
-                else if(user.queued)
-                    followCheckBox.CheckState = CheckState.Indeterminate;
-                else
-                    followCheckBox.CheckState = CheckState.Unchecked;
-                followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
+                var user = server.GetUserById(user_id);
+                if(user!=null)
+                {
+                    nameLabel.Text = user.displayText;
+                    if (user.followed)
+                        followCheckBox.CheckState = CheckState.Checked;
+                    else if (user.queued)
+                        followCheckBox.CheckState = CheckState.Indeterminate;
+                    else
+                        followCheckBox.CheckState = CheckState.Unchecked;
+                    followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
+                }
             }
             else
             {
@@ -67,8 +69,9 @@ namespace PictureSpider.Pixiv
             if (frozen)
                 return;
             followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
-            var user = new User(user_id, nameLabel.Text, followCheckBox.CheckState == CheckState.Checked, followCheckBox.CheckState == CheckState.Indeterminate);
-            client.database.UpdateUser(user).Wait();
+            user.followed = followCheckBox.CheckState == CheckState.Checked;
+            user.queued = followCheckBox.CheckState == CheckState.Indeterminate;
+            server.SetUserFollowOrQueue(user);
             AuthorModified(this,new EventArgs());
         }
     }

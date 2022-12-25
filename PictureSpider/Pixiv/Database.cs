@@ -178,8 +178,11 @@ namespace PictureSpider.Pixiv
         }
         public async Task<User> GetUserById(int userId)
         {
-            return (await StandardQuery(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
-                    (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2),reader.GetBoolean(3)); }))[0];
+            var ret=(await StandardQuery(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
+                    (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2),reader.GetBoolean(3)); }));
+            if (ret != null && ret.Count > 1)
+                return ret.First();
+            return null;
 
         }
         public async Task<List<User>> GetFollowedUser(bool followed=true)

@@ -27,12 +27,31 @@ namespace PictureSpider.Twitter
                 return await StandardQuery<User>("select * from user where queued=1");
             return await StandardQuery<User>("select * from user");
         }
+        public async Task<User> GetUserById(string user_id)
+        {
+            var result=await StandardQuery<User>($"select * from user where id='{user_id}'");
+            if(result!=null&&result.Count()>0)
+                return result[0];
+            return null;
+        }
         public async Task<List<Media>> GetWaitingDownloadMedia(int limit=-1)
         {
             var sql = "SELECT media.* FROM media JOIN `user` WHERE media.user_id=`user`.id AND media.downloaded=0 AND (`user`.queued=1 OR `user`.followed=1)";
             if (limit > 0)
                 sql += $" limit {limit}";
             return await StandardQuery<Media>(sql);
+        }
+        public async Task<List<Media>> GetFollowedUnreadMedia()
+        {
+            return await StandardQuery<Media>("SELECT media.* FROM media JOIN `user` WHERE media.user_id=`user`.id AND media.downloaded=1 AND `user`.followed=1 AND media.`readed`=0");
+        }
+        public async Task<List<Media>> GetBookmarkedMedia()
+        {
+            return await StandardQuery<Media>("SELECT * FROM media WHERE downloaded=1 AND bookmarked=1");
+        }
+        public async Task<List<Media>> GetMediaByUserId(string user_id)
+        {
+            return await StandardQuery<Media>($"SELECT * FROM media WHERE `user_id`='{user_id}' AND downloaded=1");
         }
         public async Task AddUserBase(List<User> users)
         {
@@ -44,6 +63,10 @@ namespace PictureSpider.Twitter
         {
             await StandardNonQuery("update user set `latest_tweet_id`=@latest_tweet_id where `id`=@id", user);
         }
+        public async Task UpdateUserFollowOrQueue(User user)
+        {
+            await StandardNonQuery("update user set `followed`=@followed,`queued`=@queued where `id`=@id", user);
+        }
 
         public async Task AddTweetFull(List<Tweet> tweets)
         {
@@ -53,15 +76,14 @@ namespace PictureSpider.Twitter
         }
         public async Task AddMediaBase(List<Media> medias)
         {
-            await StandardNonQuery("insert into media(`id`,`key`,`user_id`,`tweet_id`,`url`,`media_type`,`file_name`) values(@id,@key,@user_id,@tweet_id,@url,@media_type,@file_name) " +
+            await StandardNonQuery("insert into media(`id`,`key`,`user_id`,`tweet_id`,`url`,`media_type`,`file_name`,`expand_url`) values(@id,@key,@user_id,@tweet_id,@url,@media_type,@file_name,@expand_url) " +
                                     "on duplicate key update" +
-                                    "`id`=@id,`key`=@key,`user_id`=@user_id,`tweet_id`=@tweet_id,`url`=@url,`media_type`=@media_type,`file_name`=@file_name", medias);
+                                    "`id`=@id,`key`=@key,`user_id`=@user_id,`tweet_id`=@tweet_id,`url`=@url,`media_type`=@media_type,`file_name`=@file_name,`expand_url`=@expand_url", medias);
         }
-        public async Task UpdateMediaDownloaded(List<Media> medias)
+        public async Task UpdateMediaProperty(List<Media> medias,string property)
         {
-            await StandardNonQuery("update media set `downloaded`=@downloaded where `id`=@id", medias);
+            await StandardNonQuery($"update media set `{property}`=@{property} where `id`=@id", medias);
         }
-
 
         public async Task StandardNonQuery<T>(String query, T objects)
         {
@@ -70,7 +92,8 @@ namespace PictureSpider.Twitter
                 using (IDbConnection connection = new MySqlConnection(connect_str))
                 {
                     connection.Open();
-                    await connection.ExecuteAsync(query, objects);
+                    int r=await connection.ExecuteAsync(query, objects);
+                    Console.WriteLine($"Update {r} line");
                 }
 
             }

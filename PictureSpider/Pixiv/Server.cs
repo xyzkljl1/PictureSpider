@@ -46,8 +46,7 @@ namespace PictureSpider.Pixiv
         private HttpClient httpClient;
         private HttpClient httpClient_anonymous;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private HashSet<string> banned_keyword;
-        private Uri aria2_rpc_addr = new Uri("http://127.0.0.1:4322/jsonrpc");
-        private string aria2_rpc_secret = "{1BF4EE95-7D91-4727-8934-BED4A305CFF0}";
+        Aria2DownloadQueue downloader;
         private string request_proxy;
 
         private HashSet<int> illust_fetch_queue = new HashSet<int>();//计划更新的illustid,线程不安全,只在RunSchedule里使用
@@ -56,6 +55,8 @@ namespace PictureSpider.Pixiv
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
         public Server(Config config)
         {
+            base.tripleBookmarkState = true;
+
             download_dir_root = config.PixivDownloadDir;
             download_dir_bookmark_pub = Path.Combine(download_dir_root, "pub");
             download_dir_bookmark_private = Path.Combine(download_dir_root, "private");
@@ -71,8 +72,9 @@ namespace PictureSpider.Pixiv
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
             cookie_server = new CookieServer(database, request_proxy);
+            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy);
 
-            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
             {
                 MaxConnectionsPerServer = 256,
@@ -101,7 +103,6 @@ namespace PictureSpider.Pixiv
             httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
             httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
             httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
-
         }
         public override async Task Init()
         {
@@ -189,6 +190,20 @@ namespace PictureSpider.Pixiv
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkEach(illust.id,illust.bookmarkEach).Wait();
         }
+        public override BaseUser GetUserById(string id)
+        {
+            int user_id = 0;
+            if(int.TryParse(id, out user_id))
+                return database.GetUserById(user_id).Result;
+            return null;
+        }
+        public override void SetUserFollowOrQueue(BaseUser user)
+        {
+            database.UpdateUser(user as User).Wait();
+        }
+        public override Dictionary<string, TagStatus> GetAllTagsStatus() { return database.GetAllTagsStatus().Result; }
+        public override Dictionary<string, string> GetAllTagsDesc() { return database.GetAllTagsDesc().Result; }
+        public override void UpdateTagStatus(string tag, TagStatus status) { database.UpdateTagStatus(tag, status).Wait(); }
         /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
         private async Task RunSchedule()
@@ -267,7 +282,6 @@ namespace PictureSpider.Pixiv
             await DownloadIllustsInExplorerQueue();
             Console.WriteLine("Fetch Task Done");
         }
-
         private async Task GenerateExplorerQueue(bool force=false)
         {
             const int UpdateInterval = 7;//单位:天，每超过这个时间才刷新,
@@ -381,26 +395,6 @@ namespace PictureSpider.Pixiv
             //注意：有的图本来就是半边虚的！
             try
             {
-                //关闭旧的aria2，已有任务没有重复利用的必要，全部放弃
-                foreach (var process in System.Diagnostics.Process.GetProcessesByName("aria2c(PixivAss)"))
-                    process.Kill();
-                {//启动aria2
-                    var process = new System.Diagnostics.Process();
-                    //右斜杠和左斜杠都可以但是不能混用(不知道为什么)
-                    process.StartInfo.WorkingDirectory = System.IO.Directory.GetCurrentDirectory() + @"\aria2";
-                    process.StartInfo.FileName = "aria2c(PixivAss).exe";
-                    process.StartInfo.RedirectStandardOutput = false;
-                    process.StartInfo.UseShellExecute = true;
-#if !DEBUG
-                    process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-#endif
-                    //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --header=""Cookie:{1}""", download_proxy,cookie_server.cookie);
-                    //                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}""", download_proxy);
-                    //[del]不需要代理[/del]，由于迷之原因，现在需要referer和代理才能下载了，而且岛风go还不行
-                    //不要带cookie，会收到警告信
-                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}"" --referer=https://www.pixiv.net/",request_proxy);
-                    process.Start();
-                }
                 //移除临时文件
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))//下载临时文件
                     File.Delete(file);
@@ -421,7 +415,8 @@ namespace PictureSpider.Pixiv
                         bool exist = File.Exists(download_dir_main + "/" + store_file_name);
                         if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
                         {
-                            await queue.Add(DownloadIllustByAria2(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
+                            //用queue是为了并发发送任务节约时间
+                            await queue.Add(downloader.Add(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
                             download_ct++;
                             downloaded = true;
                         }
@@ -439,7 +434,7 @@ namespace PictureSpider.Pixiv
                 queue.done_task_list.ForEach(task => ct += task.Result ? 1 : 0);
                 Console.WriteLine(String.Format("Download Begin {0}(pages)", ct));
                 //等待完成并查询状态
-                while (!await QueryAria2Status()) await Task.Delay(new TimeSpan(0, 0, 60));
+                await downloader.WaitForAll();
 
                 //将动图转为GIF
                 {
@@ -580,13 +575,15 @@ namespace PictureSpider.Pixiv
                     if(illust.isPageValid(i))
                     {
                         string file_name = illust.storeFileName(i);
-                        string dest = String.Format("{0}/{1}", dir, file_name);
-                        string src = String.Format("{0}/{1}", download_dir_main, file_name);
-                        if (!File.Exists(dest) && File.Exists(download_dir_main + "/" + file_name))
+                        string dest = Path.Combine(dir, file_name);
+                        string tmp = Path.Combine(dir, "_tmp");
+                        string src = Path.Combine(download_dir_main, file_name);
+                        if (!File.Exists(dest) && File.Exists(src))
                         {
                             try
                             {
-                                File.Copy(src, dest, true);
+                                File.Copy(src, tmp, true);
+                                File.Move(tmp, dest);
                             }
                             catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
                         }

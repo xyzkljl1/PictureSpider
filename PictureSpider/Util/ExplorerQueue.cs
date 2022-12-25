@@ -18,7 +18,7 @@ namespace PictureSpider
         public bool readed;
         public abstract int pageCount();
         public abstract int validPageCount();
-        public abstract string URL(int page);
+        public abstract string WebsiteURL(int page);
         public abstract string FilePath(int page);
         public virtual bool isPageValid(int page) { return true; }
         public virtual void switchPageValid(int page) { }
@@ -43,4 +43,6 @@ namespace PictureSpider
             displayText = _text;
         }
     }
+
 }
+

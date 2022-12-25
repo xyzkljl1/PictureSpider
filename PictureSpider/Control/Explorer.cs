@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Concurrent;
 
-namespace PictureSpider.Pixiv
+namespace PictureSpider
 {
     class Explorer : PictureBox,IBindHandleProvider
     {  
@@ -60,7 +60,7 @@ namespace PictureSpider.Pixiv
         [Bindable(true)]
         public List<string> Tags{get { return file_list.Count > 0 ? file_list[index].tags : new List<string>(); }}
         [Bindable(true)]
-        public string UserId { get { return file_list.Count > 0 ? file_list[index].userId : "_"; } }
+        public string UserId { get { return file_list.Count > 0 ? file_list[index].userId : ""; } }
         [Bindable(true)]
         public Bitmap FavIcon
         {
@@ -325,12 +325,17 @@ namespace PictureSpider.Pixiv
             var illust = file_list[index];
             if (args.Button == MouseButtons.Left)//左键切换整组是否收藏
             {
-                if (!illust.bookmarked)//0->1
-                    illust.bookmarked = true;
-                else if (illust.bookmarkPrivate)//2->0
-                    illust.bookmarked = illust.bookmarkPrivate = false;
-                else//1->2
-                    illust.bookmarkPrivate = true;
+                if (server.tripleBookmarkState)
+                {
+                    if (!illust.bookmarked)//0->1
+                        illust.bookmarked = true;
+                    else if (illust.bookmarkPrivate)//2->0
+                        illust.bookmarked = illust.bookmarkPrivate = false;
+                    else//1->2
+                        illust.bookmarkPrivate = true;
+                }
+                else
+                    illust.bookmarked = !illust.bookmarked;
                 server.SetBookmarked(illust);
                 this.NotifyChange<Bitmap>("FavIcon");
                 this.NotifyChange<bool>("PageInvalid");

@@ -8,16 +8,16 @@ using System.IO;
 using System.Threading.Tasks;
 using System.ComponentModel;
 
-namespace PictureSpider.Pixiv
+namespace PictureSpider
 {
-    class TagBox : System.Windows.Forms.FlowLayoutPanel
+    class TagBox : FlowLayoutPanel
     {
         public List<string> Tags
         {
             get { return null; }
             set {SetTags(value); }
         }
-        private Server client;
+        private BaseServer server;
         private Dictionary<string, TagStatus> tags_status;
         private Dictionary<string, string>    tags_desc;
         private bool block_signal = false;
@@ -38,11 +38,11 @@ namespace PictureSpider.Pixiv
             this.WrapContents = false;
         }
 
-        public void SetClient(Server _client)
+        public void SetClient(BaseServer _client)
         {
-            client = _client;
-            tags_status = Task.Run(client.database.GetAllTagsStatus).ConfigureAwait(false).GetAwaiter().GetResult();
-            tags_desc = Task.Run(client.database.GetAllTagsDesc).ConfigureAwait(false).GetAwaiter().GetResult();
+            server = _client;
+            tags_status = Task.Run(server.GetAllTagsStatus).ConfigureAwait(false).GetAwaiter().GetResult();
+            tags_desc = Task.Run(server.GetAllTagsDesc).ConfigureAwait(false).GetAwaiter().GetResult();
         }
         private void SetTags(List<string> tags)
         {
@@ -107,12 +107,12 @@ namespace PictureSpider.Pixiv
             var new_status = CheckState2TagStatus[((CheckBox)sender).CheckState];
             if (!tags_status.ContainsKey(text))
             {
-                client.database.UpdateTagStatus(text, new_status).Wait();
+                server.UpdateTagStatus(text, new_status);
                 tags_status.Add(text, new_status);
             }
             else if(tags_status[text]!= new_status)
             {
-                client.database.UpdateTagStatus(text, new_status).Wait();
+                server.UpdateTagStatus(text, new_status);
                 tags_status[text] = new_status;
             }
         }

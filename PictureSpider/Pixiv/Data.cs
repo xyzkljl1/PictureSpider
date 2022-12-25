@@ -8,32 +8,28 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PictureSpider.Pixiv
 {
-    public enum TagStatus
-    {
-        None,
-        Follow,
-        Ignore
-    };
-    public class User
+    public class User : BaseUser
     {
         //Original Data
         public int userId;
         public string userName;
-        public Boolean followed;
-        public Boolean queued;
         public User(int _id,string _name,Boolean _f, Boolean _q)
         {
             userId = _id;
             userName = _name;
-            followed = _f;
-            queued = _q;
+            base.displayId = userId.ToString();
+            base.displayText=userName;
+            base.followed = _f;
+            base.queued = _q;
         }
         public User(JObject json)
         {
             userId = json.Value<int>("userId");
             userName = json.Value<string>("userName");
-            followed = json.Value<Boolean>("following");
-            queued = false;
+            base.displayId = userId.ToString();
+            base.displayText = userName;
+            base.followed = json.Value<Boolean>("following");
+            base.queued = false;
         }
     }
     public class Illust
@@ -217,7 +213,7 @@ namespace PictureSpider.Pixiv
 
         public override int pageCount() { return illust.pageCount;}
 
-        public override string URL(int page) { return illust.URL(page);}
+        public override string WebsiteURL(int page) { return $"https://www.pixiv.net/artworks/{illust.id}"; }
 
         public override int validPageCount() { return illust.validPageCount();}
 

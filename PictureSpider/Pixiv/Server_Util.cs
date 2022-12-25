@@ -17,61 +17,6 @@ namespace PictureSpider.Pixiv
         /*
          * 下载
          */
-      
-        //将指定图片下载到本地
-        //如已存在则先删除
-        public async Task<bool> DownloadIllustByAria2(string url, string dir, string file_name)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(url))
-                    throw new ArgumentNullException("url");
-                string path = dir + "/" + file_name;
-                if (File.Exists(path))
-                    File.Delete(path);
-                /*id必须有，值可以随便填
-                 * 虽然url是数组但是并不能一次下载多个
-                 * token(rpc secret)和其它参数的格式不一样
-                 * 失败时RequesttAria2Async会直接抛出异常所以此处无需验证返回的json
-                */
-                //dir = "E:/test/2";
-                var data = String.Format("{{\"jsonrpc\": \"2.0\",\"id\":\"PixivAss\",\"method\": \"aria2.addUri\"," +
-                                    "\"params\": [\"token:{0}\",[\"{1}\"],{{\"dir\":\"{2}\",\"out\":\"{3}\""+
-                                    "}}]}}",
-                                    aria2_rpc_secret,url,dir,file_name);
-                await RequestAria2Async(data);                
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.Message);
-                return false;
-            }
-            return true;
-        }
-        public async Task<bool> QueryAria2Status()
-        {
-            try
-            {
-                var data = String.Format("{{\"jsonrpc\": \"2.0\",\"id\":\"PixivAss\",\"method\": \"aria2.getGlobalStat\"," +
-                                    "\"params\": [\"token:{0}\"]}}",
-                                    aria2_rpc_secret);
-                var ret=(JObject)JsonConvert.DeserializeObject(await RequestAria2Async(data));
-                var result=ret.Value<JObject>("result");
-                float speed = (result.Value<Int32>("downloadSpeed") >> 10)/1024.0f;
-                int active = result.Value<Int32>("numActive");
-                int waiting = result.Value<Int32>("numWaiting");
-                int done = result.Value<Int32>("numStoppedTotal");
-
-                Console.WriteLine("Aria2 Download Status:{0}MB/s of {1}(Running)/{2}(Waiting)/{3}(Done) Task",
-                    speed,active,waiting,done);
-                return waiting == 0 && active == 0;
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.Message);
-                throw;
-            }
-        }
         /*
          * 网络请求
          */
@@ -79,24 +24,6 @@ namespace PictureSpider.Pixiv
         {
             if (!response.IsSuccessStatusCode)
                 throw new Exception("HTTP Not Success");
-        }
-        public async Task<string> RequestAria2Async(String data)
-        {
-            try
-            {
-                using(var content= new StringContent(data))
-                using (HttpResponseMessage response = await httpClient_anonymous.PostAsync(aria2_rpc_addr, content))
-                {
-                    CheckStatusCode(response);
-                    return await response.Content.ReadAsStringAsync();
-                }
-            }
-            catch (Exception e)
-            {
-                string msg = e.Message;//e.InnerException.InnerException.Message;
-                Console.Error.WriteLine("Request Aria RPC Fail :" + msg);
-                throw;
-            }
         }
         public async Task<string> RequestPixivAsyncGet(string url, Uri referer, bool anonymous = false)
         {
