@@ -97,6 +97,7 @@ namespace PictureSpider
                     process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --rpc-secret={2} --rpc-listen-port={1} --all-proxy=""{0}"" --referer=https://www.pixiv.net/",
                                                                 proxy, port, aria2_rpc_secret);
                     process.Start();
+                    Console.WriteLine($"{process_name} Restart");
                 }
             }
         }
@@ -113,9 +114,13 @@ namespace PictureSpider
                 int waiting = result.Value<Int32>("numWaiting");
                 int done = result.Value<Int32>("numStoppedTotal");
 
-                Console.WriteLine("Aria2 Download Status:{0}MB/s of {1}(Running)/{2}(Waiting)/{3}(Done) Task",
-                    speed, active, waiting, done);
-                return waiting == 0 && active == 0;
+                Console.WriteLine($"{process_name} Download Status:{speed}MB/s of {active}(Running)/{waiting}(Waiting)/{done}(Done) Task");
+                if(waiting == 0 && active == 0)
+                {
+                    Console.WriteLine($"{process_name} Done");
+                    return true;
+                }
+                return false;
             }
             catch (Exception e)
             {

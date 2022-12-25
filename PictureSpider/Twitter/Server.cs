@@ -39,6 +39,8 @@ namespace PictureSpider.Twitter
         private CookieContainer cookie_container=new CookieContainer();
         public Server(Config config)
         {
+            base.logPrefix = "T";
+
             my_user_name = config.TwitterUserName;
             my_password = config.TwitterPassword;
             download_dir_root = config.TwitterDownloadDir;
@@ -90,7 +92,7 @@ namespace PictureSpider.Twitter
             if (!await Login())
                 throw new TopLevelException("TwitterServer Login Failed");
             else
-                Console.WriteLine($"{DateTime.Now.ToString()} Twitter Login Success.");
+                Log($"Twitter Login Success.");
             RunSchedule();
             //Task.Run(RunSchedule);
         }
@@ -150,7 +152,7 @@ namespace PictureSpider.Twitter
                 //每次间隔下载media
                 {
                     var medias = await database.GetWaitingDownloadMedia(200);
-                    Console.WriteLine($"{DateTime.Now} Start Download Try:{medias.Count()}");
+                    Log($"Start Download:{medias.Count()}");
                     foreach (var media in medias)
                     {
                         var dir = download_dir_tmp;
@@ -172,7 +174,7 @@ namespace PictureSpider.Twitter
                         }
                     }
                     await database.UpdateMediaProperty(medias,"downloaded");
-                    Console.WriteLine($"{DateTime.Now} Download Done:{ct}/{medias.Count()}");
+                    Log($"{DateTime.Now} Download Done:{ct}/{medias.Count()}");
                 }
                 await Task.Delay(interval);
                 interval_ct++;
@@ -320,7 +322,7 @@ namespace PictureSpider.Twitter
                     {
                         httpClient.DefaultRequestHeaders.Remove("x-csrf-token");//Add不会清空旧的值
                         httpClient.DefaultRequestHeaders.Add("x-csrf-token", cookie.Value);
-                        Console.WriteLine($"Update CSRF Token{cookie.Value}");
+                        Log($"Update CSRF Token{cookie.Value}");
                     }
         }
         /*
@@ -343,7 +345,7 @@ namespace PictureSpider.Twitter
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Update XGuestToken Fail{e.Message}");
+                LogError($"Update XGuestToken Fail{e.Message}");
             }
             return false;
         }
@@ -406,7 +408,7 @@ namespace PictureSpider.Twitter
                     var jsonDoc = JsonConvert.DeserializeObject<dynamic>(responseContent);
                     if (jsonDoc["globalObjects"] is null || jsonDoc["globalObjects"]["tweets"] is null)//搜索失败
                     {
-                        Console.WriteLine("Search Fail");
+                        Log("Search Fail");
                         break;
                     }
                     //User
@@ -428,6 +430,11 @@ namespace PictureSpider.Twitter
                         foreach (var tweetPair in tweetsObject.Properties())
                         {
                             var id = tweetPair.Name;
+                            if (Int64.Parse(id) < since_tweet_id)
+                            {
+                                complete = true;//返回的结果是按时间倒序，但是此处的遍历并不是按顺序，所以此处不break
+                                continue;
+                            }
                             var tweetObject = tweetPair.Value;
                             var tweet = new Tweet();
                             tweet.id = id;
@@ -487,9 +494,6 @@ namespace PictureSpider.Twitter
                                     if (!medias.ContainsKey(media.id))
                                         medias.Add(media.id, media);
                                 }
-
-                            if (Int64.Parse(id) < since_tweet_id)
-                                complete = true;//返回的结果是按时间倒序，但是此处的遍历并不是按顺序，所以此处不break
                         }
                         if (complete)//如果已经搜到上次的位置则退出
                             break;
@@ -515,7 +519,7 @@ namespace PictureSpider.Twitter
                     search_uri = QueryHelpers.AddQueryString($"{base_url_v2}search/adaptive.json", paras);
                 }
                 //更新数据库
-                Console.WriteLine($"{DateTime.Now.ToString()} Fetch User {user_name}"+(complete?"Complete.":"Break!!") +$" result: {tweets.Count} Tweets/{medias.Count} Medias");
+                Log($"Fetch User @{user_name} "+(complete?"Complete.":"Break!!") +$":{tweets.Count} Tweets/{medias.Count} Medias");
                 await database.AddUserBase(users.Values.ToList());
                 await database.AddTweetFull(tweets.Values.ToList());
                 await database.AddMediaBase(medias.Values.ToList());
@@ -532,7 +536,7 @@ namespace PictureSpider.Twitter
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                LogError (e.Message);
             }
         }
         private async Task SyncBookmarkDirectory()
@@ -574,7 +578,7 @@ namespace PictureSpider.Twitter
             {
                 try
                 {
-                    //Console.WriteLine("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
+                    //Log("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
                     if (string.IsNullOrEmpty(url))
                         throw new ArgumentNullException("url");
                     //if (!url.StartsWith("https"))
@@ -602,7 +606,7 @@ namespace PictureSpider.Twitter
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if (try_ct < 1)
-                        Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                        LogError(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     if (try_ct == 0)
                         throw;
                 }
@@ -615,7 +619,7 @@ namespace PictureSpider.Twitter
             {
                 try
                 {
-                    //Console.WriteLine("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
+                    //Log("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
                     if (string.IsNullOrEmpty(url))
                         throw new ArgumentNullException("url");
                     //if (!url.StartsWith("https"))
@@ -645,7 +649,7 @@ namespace PictureSpider.Twitter
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if (try_ct < 1)
-                        Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                        LogError(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     if (try_ct == 0)
                         throw;
                 }

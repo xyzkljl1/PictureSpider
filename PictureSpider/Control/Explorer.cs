@@ -355,7 +355,7 @@ namespace PictureSpider
         public void OpenInBrowser(object sender, EventArgs args)
         {
             if(file_list.Count>0) 
-                System.Diagnostics.Process.Start(String.Format("https://www.pixiv.net/artworks/{0}",file_list[index].id));
+                System.Diagnostics.Process.Start(file_list[index].WebsiteURL(sub_index));
         }
         //打开本地
         public void OpenInLocal(object sender, EventArgs args)

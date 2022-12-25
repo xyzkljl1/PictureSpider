@@ -56,6 +56,7 @@ namespace PictureSpider.Pixiv
         public Server(Config config)
         {
             base.tripleBookmarkState = true;
+            base.logPrefix = "P";
 
             download_dir_root = config.PixivDownloadDir;
             download_dir_bookmark_pub = Path.Combine(download_dir_root, "pub");
@@ -108,7 +109,7 @@ namespace PictureSpider.Pixiv
         {
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = await database.GetBannedKeyword();
-            //Task.Run(RunSchedule);
+            Task.Run(RunSchedule);
         }
         public void Dispose()
         {
@@ -236,7 +237,7 @@ namespace PictureSpider.Pixiv
         }
         private async Task DailyTask(DayOfWeek day_of_week)
         {
-            Console.WriteLine("Start Fetch Task ");
+            Log("Start Fetch Task ");
             //第一次运行之后，FollowedUser和BookmarkIllust由本地向远程单向更新
             var illust_list_bytime = new HashSet<int>();//根据时间更新的列表
             var illust_list_bylike = new Dictionary<int,int>();//根据like数更新的列表
@@ -252,7 +253,7 @@ namespace PictureSpider.Pixiv
             illust_list_bylike.Union(await RequestAllKeywordSearchIllustBlock((DateTime.Now-new DateTime(2000,1,1)).Days));
             //排行榜
             illust_list_bytime.UnionWith(await RequestAllCurrentRankIllust());
-            Console.WriteLine("Got {0}+{1} illusts:", illust_list_bytime.Count, illust_list_bylike.Count);
+            Log($"Got {illust_list_bytime.Count}+{illust_list_bylike.Count} illusts:");
 
             /*获取Illust信息*/
             await AddToIllustFetchQueue(illust_list_bytime, illust_list_bylike);
@@ -267,7 +268,7 @@ namespace PictureSpider.Pixiv
 
             /*下载*/
             await DownloadIllustsInExplorerQueue();
-            Console.WriteLine("All Fetch Task Done");
+            Log("All Fetch Task Done");
         }
         //初次执行，将收藏的作者和图同步到本地
         public async Task InitTask()
@@ -280,7 +281,7 @@ namespace PictureSpider.Pixiv
             await AddToIllustFetchQueue(illust_list,new Dictionary<int, int>());
             await FetchAllUnfollowedUserStatus();
             await DownloadIllustsInExplorerQueue();
-            Console.WriteLine("Fetch Task Done");
+            Log("Fetch Task Done");
         }
         private async Task GenerateExplorerQueue(bool force=false)
         {
@@ -377,7 +378,7 @@ namespace PictureSpider.Pixiv
                 foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
                     queue += " " + illust.id;
                 await database.UpdateQueue(queue);
-                Console.WriteLine("Generate Queue Done");
+                Log("Generate Queue Done");
             }            
         }
 
@@ -432,7 +433,7 @@ namespace PictureSpider.Pixiv
                 await queue.Done();
                 int ct = 0;
                 queue.done_task_list.ForEach(task => ct += task.Result ? 1 : 0);
-                Console.WriteLine(String.Format("Download Begin {0}(pages)", ct));
+                Log(String.Format("Download Begin {0}(pages)", ct));
                 //等待完成并查询状态
                 await downloader.WaitForAll();
 
@@ -470,7 +471,7 @@ namespace PictureSpider.Pixiv
                         if (fail)//重新fetch
                         {
                             fail_illusts.Add(illust.id);
-                            Console.WriteLine("Download Fail，Try ReFetch {0}", illust.id);
+                            Log($"Download Fail，Try ReFetch {illust.id}");
                         }
                         else
                         {
@@ -478,7 +479,7 @@ namespace PictureSpider.Pixiv
                             processed_illusts.Add(illust.id);
                         }
                     }
-                    Console.WriteLine(String.Format("Download Done, {0}/{1}(illusts) Success", success_ct, download_illusts.Count));
+                    Log(String.Format("Download Done, {0}/{1}(illusts) Success", success_ct, download_illusts.Count));
                     //无法下载可能是因为已删除或已更新，尝试重新Fetch
                     await AddToIllustFetchQueue(fail_illusts, null, false);
                 }
@@ -486,7 +487,7 @@ namespace PictureSpider.Pixiv
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine(e.Message);
+                LogError(e.Message);
                 throw;
             }
         }
@@ -509,7 +510,7 @@ namespace PictureSpider.Pixiv
             await queue.Done();
             int ct = 0;
             queue.done_task_list.ForEach(task => ct += task.Result?1:0);
-            Console.WriteLine(String.Format("Ugoira2GIF {0} Done in {1}s",ct, DateTime.Now.Subtract(t).TotalSeconds));
+            Log(String.Format("Ugoira2GIF {0} Done in {1}s",ct, DateTime.Now.Subtract(t).TotalSeconds));
         }
         private async Task<bool> UgoiraToGIF(Illust illust)
         {
@@ -557,8 +558,8 @@ namespace PictureSpider.Pixiv
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine(String.Format("Ugoira cast Fail {0}", illust.id));
-                Console.Error.WriteLine(e.Message);
+                LogError(String.Format("Ugoira cast Fail {0}", illust.id));
+                LogError(e.Message);
             }
             return false;
         }
@@ -673,7 +674,7 @@ namespace PictureSpider.Pixiv
                     if (task_list[key].Result.Count == 0)
                     {
                         key_word_list.Remove(key);
-                        Console.WriteLine("Keyword(Tag) " + key.Substring(0,20)+" Done");
+                        Log("Keyword(Tag) " + key.Substring(0,20)+" Done");
                     }
                 //合并结果
                 foreach (var task in task_list.Values)
@@ -681,10 +682,10 @@ namespace PictureSpider.Pixiv
                         if(!ret.Contains(id))
                             ret.Add(id);
                 task_list.Clear();
-                Console.WriteLine(String.Format("Search Res {0}p: {1}",start_page,ret.Count));
+                Log(String.Format("Search Res {0}p: {1}",start_page,ret.Count));
                 start_page += step;
             }
-            Console.WriteLine(String.Format("Search Done:{0} in {1} pages ",ret.Count,page_count));
+            Log(String.Format("Search Done:{0} in {1} pages ",ret.Count,page_count));
             return ret;
         }
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
@@ -715,7 +716,7 @@ namespace PictureSpider.Pixiv
             if (ret.Value<Boolean>("error"))
             {
                 //throw new Exception("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
-                Console.WriteLine("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
+                Log("Get All By User Fail " + userId + " " + ret.Value<string>("message"));
                 return new List<int>();
             }
             var idList = new List<int>();
@@ -752,7 +753,7 @@ namespace PictureSpider.Pixiv
                     foreach (var id in list_bylike.Keys)
                         illust_fetch_queue.Add(id);
             }
-            Console.WriteLine("Update Illusts Queue {0} + {1} ",tmp, illust_fetch_queue.Count-tmp);
+            Log($"Update Illusts Queue {tmp}+{illust_fetch_queue.Count - tmp} ");
         }
         private async Task ProcessIllustFetchQueue(int count)
         {
@@ -771,14 +772,14 @@ namespace PictureSpider.Pixiv
             database.UpdateIllustOriginalData(illustList);
 
             illustList.ForEach(illust=>illust_fetch_queue.Remove(illust.id));
-            Console.WriteLine("Process Fetch Queue => {0}-{1} ",tmp,tmp - illust_fetch_queue.Count);
+            Log($"Process Fetch Queue => {tmp}-{tmp - illust_fetch_queue.Count}");
         }
         private async Task ProcessIllustDownloadQueue(int count)
         {
             int tmp = illust_download_queue.Count;
             var ret=await DownloadIllusts(illust_download_queue, count);
             ret.ForEach(id => illust_download_queue.Remove(id));
-            Console.WriteLine("Process Download Queue => {0}-{1} ", tmp, tmp - illust_download_queue.Count);
+            Log($"Process Download Queue => {tmp}-{tmp - illust_download_queue.Count}");
         }
 
         private async Task<Dictionary<int,Int64>> RequestBookMarkIllust(bool pub,bool get_bookmark_id=false)
@@ -822,7 +823,7 @@ namespace PictureSpider.Pixiv
                 if (!idList.Contains(illust_id))
                     idList.Add(illust_id);
             await AddToIllustFetchQueue(idList,null);
-            Console.WriteLine(String.Format("Fetch {0}/{1}  Bookmarks",pub?"Public":"Private",tmp));
+            Log(String.Format("Fetch {0}/{1}  Bookmarks",pub?"Public":"Private",tmp));
         }
         //WIP
         private async Task PushAllBookMark()
@@ -863,7 +864,7 @@ namespace PictureSpider.Pixiv
                     userList.Add(new User(user.ToObject<JObject>()));
             }
             database.UpdateFollowedUser(userList);
-            Console.WriteLine("Fetch " + userList.Count.ToString() + " followings");
+            Log("Fetch " + userList.Count.ToString() + " followings");
         }
         //更新所有已知的未关注作者状态
         private async Task FetchAllUnfollowedUserStatus()
@@ -879,7 +880,7 @@ namespace PictureSpider.Pixiv
                 if(task.Result!=null)
                     user_list.Add(task.Result);
             database.UpdateUserName(user_list);
-            Console.WriteLine("Done");
+            Log("Done");
         }
 
         //确认是否成功登录
@@ -907,7 +908,7 @@ namespace PictureSpider.Pixiv
                 }
             }
             VerifyState = "Login Fail";
-            Console.Error.WriteLine("Login Fail");
+            LogError("Login Fail");
             throw new TopLevelException("Login Not Success");
         }
     }
