@@ -26,7 +26,10 @@ namespace PictureSpider.Twitter
         public string id { get; set; }//数字id
         public string name { get; set; }//唯一名字，接在@后面的部分，不包括@
         public string nick_name { get; set; }//昵称
-        public string latest_tweet_id { get; set; }//此ID以前(小于)的tweet都已经完全获取过
+        //此ID以前(小于)的tweet都已经完全获取过
+        //因为search返回的推不全，而api返回的有时限，所以latest_tweet_id需要分别计
+        public string search_latest_tweet_id { get; set; }
+        public string api_latest_tweet_id { get; set; }
         public User()
         {
 
@@ -52,7 +55,7 @@ namespace PictureSpider.Twitter
     public class Media
     {
         //Base
-        public string id { get; set; }//形如1604559279322968065
+        public string id { get; set; }//同key，搜索时可以获得一个id(和key不同，形如1604559279322968065)，但是从api查询时只会获得key，再去获得id没有意义，暂时使用key替代id
         public string key { get; set; }//形如3_1605831705872388098，apiv2查询attachments时返回的key
         public string user_id { get; set; }//user_id,冗余,加速用
         public string tweet_id { get; set; }
@@ -91,7 +94,7 @@ namespace PictureSpider.Twitter
 
         public override int pageCount() { return 1; }
 
-        public override string WebsiteURL(int page) { return media.url; }
+        public override string WebsiteURL(int page) { return media.expand_url; }
 
         public override int validPageCount() { return 1; }
     }

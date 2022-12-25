@@ -59,9 +59,13 @@ namespace PictureSpider.Twitter
                                     "on duplicate key update"+
                                     "`id`=@id,`name`=@name,`nick_name`=@nick_name", users);
         }
-        public async Task UpdateUserLatestTweet(User user)
+        public async Task UpdateUserSearchLatestTweet(User user)
         {
-            await StandardNonQuery("update user set `latest_tweet_id`=@latest_tweet_id where `id`=@id", user);
+            await StandardNonQuery("update user set `search_latest_tweet_id`=@search_latest_tweet_id where `id`=@id", user);
+        }
+        public async Task UpdateUserAPILatestTweet(User user)
+        {
+            await StandardNonQuery("update user set `api_latest_tweet_id`=@api_latest_tweet_id where `id`=@id", user);
         }
         public async Task UpdateUserFollowOrQueue(User user)
         {

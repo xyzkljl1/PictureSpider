@@ -137,7 +137,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `nick_name` varchar(256) NOT NULL DEFAULT '',
   `followed` tinyint(4) NOT NULL DEFAULT '0',
   `queued` tinyint(4) NOT NULL DEFAULT '0',
-  `latest_tweet_id` varchar(256) NOT NULL DEFAULT '0',
+  `search_latest_tweet_id` varchar(256) NOT NULL DEFAULT '0',
+  `api_latest_tweet_id` varchar(256) NOT NULL DEFAULT '0',
   PRIMARY KEY (`name`),
   UNIQUE KEY `id` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -109,7 +109,7 @@ namespace PictureSpider.Pixiv
         {
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = await database.GetBannedKeyword();
-            Task.Run(RunSchedule);
+            //Task.Run(RunSchedule);
         }
         public void Dispose()
         {
