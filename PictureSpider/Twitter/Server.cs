@@ -479,7 +479,7 @@ namespace PictureSpider.Twitter
                                     media.tweet_id = tweet.id;
                                     var type = mediaObject.Value<string>("type");
                                     //参考https://github.com/mikf/gallery-dl/blob/master/gallery_dl/extractor/twitter.py extract_media
-                                    if (type == "photo" || type == "animated_gif")//图片
+                                    if (type == "photo" )//图片
                                     {
                                         media.media_type = MediaType.Image;
                                         media.url = mediaObject.Value<string>("media_url_https");
@@ -492,14 +492,14 @@ namespace PictureSpider.Twitter
                                         media.url += $"?format={ext}&name=orig";
                                         media.file_name = $"{media.id}.{ext}";
                                     }
-                                    else if (type == "video")//视频
+                                    else if (type == "video" || type == "animated_gif")//视频，动图内部格式是视频
                                     {
                                         media.media_type = MediaType.Video;
                                         //下载码率最大的视频
                                         int max_bitrate = -1;
                                         foreach (var videoObject in mediaObject["video_info"]["variants"].ToArray())
                                         {
-                                            int bitrate = videoObject.Value<int>("bitrate");
+                                            int bitrate = videoObject.Value<int>("bitrate");//预览图也在variants里，没有bitrate,此处是0，不影响
                                             if (bitrate > max_bitrate)
                                             {
                                                 max_bitrate = bitrate;
@@ -545,7 +545,7 @@ namespace PictureSpider.Twitter
                 await database.AddUserBase(users.Values.ToList());
                 await database.AddTweetFull(tweets.Values.ToList());
                 await database.AddMediaBase(medias.Values.ToList());
-                if (complete)//只有搜到底，才更新latest_tweet_id
+                if (complete && tweets.Count > 0)//只有搜到底，才更新latest_tweet_id
                     foreach (var user in users.Values)
                         if (user.name == user_name)
                         {
@@ -633,7 +633,7 @@ namespace PictureSpider.Twitter
                             var media = medias[key];
                             var type = mediaObject.Value<string>("type");
                             //参考https://github.com/mikf/gallery-dl/blob/master/gallery_dl/extractor/twitter.py extract_media
-                            if (type == "photo" || type == "animated_gif")//图片
+                            if (type == "photo" )//图片
                             {
                                 media.media_type = MediaType.Image;
                                 media.url = mediaObject.Value<string>("url");
@@ -646,14 +646,14 @@ namespace PictureSpider.Twitter
                                 media.url += $"?format={ext}&name=orig";
                                 media.file_name = $"{media.id}.{ext}";
                             }
-                            else if (type == "video")//视频
+                            else if (type == "video" || type == "animated_gif")//视频/动图，动图内部格式是视频
                             {
                                 media.media_type = MediaType.Video;
                                 //下载码率最大的视频
                                 int max_bitrate = -1;
                                 foreach (var videoObject in mediaObject["variants"].ToArray())
                                 {
-                                    int bitrate = videoObject.Value<int>("bitrate");
+                                    int bitrate = videoObject.Value<int>("bitrate");//预览图也在variants里，没有bitrate,此处是0，不影响
                                     if (bitrate > max_bitrate)
                                     {
                                         max_bitrate = bitrate;
@@ -680,7 +680,7 @@ namespace PictureSpider.Twitter
                 Log($"Fetch User(API) @{user_name} " + (complete ? "Complete." : "Break!!") + $":{tweets.Count} Tweets/{medias.Count} Medias");
                 await database.AddTweetFull(tweets.Values.ToList());
                 await database.AddMediaBase(medias.Values.ToList());
-                if (complete)//只有搜到底，才更新latest_tweet_id
+                if (complete&& tweets.Count>0)//只有搜到底，才更新latest_tweet_id
                 {
                     //转成int64再比较,越晚的tweet的id越大
                     user.api_latest_tweet_id = tweets.Keys.ToList()
