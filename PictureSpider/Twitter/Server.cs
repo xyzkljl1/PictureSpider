@@ -584,7 +584,7 @@ namespace PictureSpider.Twitter
                     { "expansions","attachments.media_keys"},//返回media的详细信息
                 };
                 string next_token = "";
-                do
+                while(true)
                 {
                     if (string.IsNullOrEmpty(next_token))
                         paras.Remove("pagination_token");
@@ -670,9 +670,11 @@ namespace PictureSpider.Twitter
                         }
 
                     next_token =jsonDoc["meta"].Value<string>("next_token");
+                    if (string.IsNullOrEmpty(next_token))
+                        complete = true;
                     if (complete)
                         break;
-                } while (!string.IsNullOrEmpty(next_token));               
+                }
 
                 //更新数据库
                 Log($"Fetch User(API) @{user_name} " + (complete ? "Complete." : "Break!!") + $":{tweets.Count} Tweets/{medias.Count} Medias");
