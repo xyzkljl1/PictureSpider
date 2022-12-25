@@ -683,7 +683,7 @@ namespace PictureSpider.Twitter
                 if (complete)//只有搜到底，才更新latest_tweet_id
                 {
                     //转成int64再比较,越晚的tweet的id越大
-                    user.search_latest_tweet_id = tweets.Keys.ToList()
+                    user.api_latest_tweet_id = tweets.Keys.ToList()
                                                 .Select<string, Int64>(x => Int64.Parse(x))
                                                 .Max().ToString();
                     await database.UpdateUserAPILatestTweet(user);
