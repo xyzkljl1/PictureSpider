@@ -43,7 +43,7 @@ namespace PictureSpider
             frozen = true;
             if (!string.IsNullOrEmpty(user_id)&&server!=null)
             {
-                var user = server.GetUserById(user_id);
+                user = server.GetUserById(user_id);
                 if(user!=null)
                 {
                     nameLabel.Text = user.displayText;

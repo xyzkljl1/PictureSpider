@@ -132,7 +132,7 @@ namespace PictureSpider.Pixiv
             return ret;
         }
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
-        {            
+        {
             var illusts = new List<Illust>();
             if (queue.type == ExplorerQueue.QueueType.Main || queue.type == ExplorerQueue.QueueType.MainR)
             {
