@@ -173,7 +173,7 @@ namespace PictureSpider.Twitter
                 }
                 //每次间隔下载media
                 {
-                    var medias = await database.GetWaitingDownloadMedia(120);
+                    var medias = await database.GetWaitingDownloadMedia(200);
                     Log($"Start Download:{medias.Count()}");
                     foreach (var media in medias)
                     {

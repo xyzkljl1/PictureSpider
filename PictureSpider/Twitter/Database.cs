@@ -43,7 +43,7 @@ namespace PictureSpider.Twitter
         }
         public async Task<List<Media>> GetFollowedUnreadMedia()
         {
-            return await StandardQuery<Media>("SELECT media.* FROM media JOIN `user` WHERE media.user_id=`user`.id AND media.downloaded=1 AND `user`.followed=1 AND media.`readed`=0");
+            return await StandardQuery<Media>("SELECT media.* FROM media JOIN `user` WHERE media.user_id=`user`.id AND media.downloaded=1 AND `user`.followed=1 AND media.`readed`=0 AND media.`bookmarked`=0");
         }
         public async Task<List<Media>> GetBookmarkedMedia()
         {

@@ -180,7 +180,7 @@ namespace PictureSpider.Pixiv
         {
             var ret=(await StandardQuery(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
                     (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2),reader.GetBoolean(3)); }));
-            if (ret != null && ret.Count > 1)
+            if (ret != null && ret.Count > 0)
                 return ret.First();
             return null;
 
