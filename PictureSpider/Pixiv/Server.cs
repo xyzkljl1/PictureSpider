@@ -109,7 +109,7 @@ namespace PictureSpider.Pixiv
         {
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = await database.GetBannedKeyword();
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
         public void Dispose()
         {
@@ -209,7 +209,7 @@ namespace PictureSpider.Pixiv
 
         private async Task RunSchedule()
         {
-            int last_daily_task = DateTime.Now.Day-1;//启动的第一天不执行dailyTask，防止反复重启时执行很多次dailytask
+            int last_daily_task = DateTime.Now.Day-1;
             int process_speed = 140;
             var day_of_week = DateTime.Now.DayOfWeek;
             await DownloadIllustsInExplorerQueue();
@@ -221,8 +221,6 @@ namespace PictureSpider.Pixiv
                 {
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask(day_of_week);
-                    for(int i=0;i<3;++i)
-                        await DownloadIllustsInExplorerQueue();//考虑到会失败，尝试多次并且每天都下载
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);

@@ -151,7 +151,11 @@ namespace PictureSpider.Twitter
             media.bookmarked=file.bookmarked;
             database.UpdateMediaProperty(new List<Media> { media},"bookmarked").Wait();
         }
-        public override BaseUser GetUserById(string id) { return database.GetUserById(id).Result; }
+        public override BaseUser GetUserById(string id) { 
+            var user=database.GetUserById(id).Result;
+            user.InitDisplayText();
+            return user;
+        }
         public override void SetUserFollowOrQueue(BaseUser user) { database.UpdateUserFollowOrQueue(user as User).Wait(); }
         private async Task RunSchedule()
         {
@@ -174,7 +178,7 @@ namespace PictureSpider.Twitter
                 //每次间隔下载media
                 {
                     var medias = await database.GetWaitingDownloadMedia(200);
-                    Log($"Start Download:{medias.Count()}");
+                    //Log($"Start Download:{medias.Count()}");
                     foreach (var media in medias)
                     {
                         var dir = download_dir_tmp;

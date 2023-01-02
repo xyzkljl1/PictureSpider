@@ -114,12 +114,12 @@ namespace PictureSpider
                 int waiting = result.Value<Int32>("numWaiting");
                 int done = result.Value<Int32>("numStoppedTotal");
 
-                Console.WriteLine($"{process_name} Download Status:{speed}MB/s of {active}(Running)/{waiting}(Waiting)/{done}(Done) Task");
                 if(waiting == 0 && active == 0)
                 {
                     Console.WriteLine($"{process_name} Done");
                     return true;
                 }
+                Console.WriteLine($"{process_name} Download Status:{speed}MB/s of {active}(Running)/{waiting}(Waiting)/{done}(Done) Task");
                 return false;
             }
             catch (Exception e)

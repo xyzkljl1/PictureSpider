@@ -284,17 +284,12 @@ namespace PictureSpider.Pixiv
         {
             string url = String.Format("{0}ajax/illust/{1}", base_url, illustId);
             string referer = String.Format("{0}member_illust.php?mode=medium&illust_id={1}", base_url, user_id);
-            //现在R18如95047397需要登录才能查看，但是匿名client仍然能获取到信息？
-            //由于登录后更容易因为访问频率导致请求失败?先尝试匿名获取，失败再用登录的client获取
-            JObject json = await RequestJsonAsync(url, referer,true);
-            if(json.Value<Boolean>("NetError")|| json.Value<Boolean>("error"))//失败时用另一个client重试一下
-            {
-                json = await RequestJsonAsync(url, referer, false);
-                if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
-                    return null;
-                if (json.Value<Boolean>("error"))//否则标记未无效
-                    return new Illust(illustId, false);
-            }
+            //现在R18如95047397需要登录才能查看，用匿名client可以成功返回但是不会获得url
+            JObject json = await RequestJsonAsync(url, referer,false);
+            if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
+                return null;
+            if (json.Value<Boolean>("error"))//否则标记未无效
+                return new Illust(illustId, false);
             if (json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
             {
                 string ugoira_url = String.Format("{0}/ugoira_meta?lang=zh", url);

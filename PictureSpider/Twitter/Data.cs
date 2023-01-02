@@ -42,6 +42,11 @@ namespace PictureSpider.Twitter
             base.followed = _followed;
             base.queued = _queued;
         }
+        public void InitDisplayText()
+        {
+            base.displayId = id;
+            base.displayText = name;
+        }
     }
     internal class Tweet
     {
