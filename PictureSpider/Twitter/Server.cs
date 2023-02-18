@@ -221,6 +221,11 @@ namespace PictureSpider.Twitter
                     await database.AddUserBase(new List<User> { user });
                     return user;
                 }
+            if(ret["errors"]!=null&&ret["errors"].ToString().Contains("User has been suspended"))
+            {
+                Log($"User is suspended,ignore:{user_name}");
+                return null;
+            }
             LogError($"Can't Fetch User {user_name}");
             return null;
             //throw new TopLevelException("Fail");
