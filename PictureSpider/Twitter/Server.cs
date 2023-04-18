@@ -105,14 +105,18 @@ namespace PictureSpider.Twitter
             }
         }
         public override async Task Init() {
+#if DEBUG
             //return;
+#endif
             //await CheckGetUserNameApi();
             if (!await Login())
                 throw new TopLevelException("TwitterServer Login Failed");
             else
                 Log($"Twitter Login Success.");
             //await FetchTweetsByUserAPI("AndyBunyan13", "0");
+#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
+#pragma warning restore CS4014 
             //Task.Run(RunSchedule);
         }
         public override void SetReaded(ExplorerFileBase file)
@@ -213,20 +217,23 @@ namespace PictureSpider.Twitter
             var ret = await GetJsonAsync($"{base_url_v2}users/by/username/{user_name}",false);
             if (ret["data"] != null
                 && ret["data"]["id"] != null)
-                {
-                    var user = new User();
-                    user.id = ret["data"]["id"].ToString();
-                    user.name = user_name;
-                    user.nick_name=ret["data"]["name"].ToString();
-                    await database.AddUserBase(new List<User> { user });
-                    return user;
-                }
-            if(ret["errors"]!=null&&ret["errors"].ToString().Contains("User has been suspended"))
             {
-                Log($"User is suspended,ignore:{user_name}");
-                return null;
+                var user = new User();
+                user.id = ret["data"]["id"].ToString();
+                user.name = user_name;
+                user.nick_name=ret["data"]["name"].ToString();
+                await database.AddUserBase(new List<User> { user });
+                return user;
             }
-            LogError($"Can't Fetch User {user_name}");
+            if(ret["errors"]!=null)
+            {
+                if (ret["errors"].ToString().Contains("User has been suspended"))
+                    Log($"Ignore suspended:{user_name}");
+                else if (ret["errors"].ToString().Contains("Could not find user with username"))
+                    Log($"Ignore deleted:{user_name}");
+                else
+                    LogError($"Can't Fetch User {user_name}");
+            }
             return null;
             //throw new TopLevelException("Fail");
         }

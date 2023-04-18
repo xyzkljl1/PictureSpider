@@ -107,6 +107,9 @@ namespace PictureSpider.Pixiv
         }
         public override async Task Init()
         {
+#if DEBUG
+            return;
+#endif
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = await database.GetBannedKeyword();
             RunSchedule();
