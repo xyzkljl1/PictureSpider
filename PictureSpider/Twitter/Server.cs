@@ -68,7 +68,7 @@ namespace PictureSpider.Twitter
                 httpClient_pub.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_pub.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_pub.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_pub.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36");
+                httpClient_pub.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
                 //httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse($"Bearer {config.TwitterBearerToken}");//My api，develop portal中申请的token
                 httpClient_pub.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse($"Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA");//Public api(浏览器访问网页时使用的固定token)
                                                                                                                                                                                                                      //如果不设置sec-fetch-*,则ct0/x-csrf-token每次请求后都会改变
@@ -100,11 +100,14 @@ namespace PictureSpider.Twitter
                 httpClient_myapi.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_myapi.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_myapi.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_myapi.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36");
+                httpClient_myapi.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
                 httpClient_myapi.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse($"Bearer {config.TwitterBearerToken}");//My api，develop portal中申请的token
             }
         }
         public override async Task Init() {
+            //https://developer.twitter.com/en/portal/products/free
+            //由于免费api变得无法搜索用户，无法使用，fuck Elon Mask
+            return;
 #if DEBUG
             //return;
 #endif
