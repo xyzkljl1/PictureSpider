@@ -88,7 +88,7 @@ namespace PictureSpider.Pixiv
             httpClient.Timeout = new TimeSpan(0, 0, 35);
             httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Host = base_host;
             httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
             //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -101,14 +101,14 @@ namespace PictureSpider.Pixiv
             httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
             httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
             httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36");
+            httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
             httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
             httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
         }
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            //return;
 #endif
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
             banned_keyword = await database.GetBannedKeyword();
@@ -890,23 +890,32 @@ namespace PictureSpider.Pixiv
             VerifyState = "Checking";
             string url = base_url;
             string referer = String.Format("{0}", base_url);
-            var doc =await RequestHtmlAsync(base_url,referer);
-            if(doc != null)
+            //如果程序关闭期间，cookie改变，刚启动时来不及获得新cookie，就会反复登录失败重启
+            //因此登录失败时需要延时等待
+            //最近pixiv似乎不会再长期记住登陆了
+            for (int i= 0;i<3;++i)
             {
-                HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
-                if (headNode != null)
+                var doc = await RequestHtmlAsync(base_url, referer);
+                if (doc != null)
                 {
-                    var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
-                    if (json_object != null && json_object.Value<JObject>("userData") != null)
+                    HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
+                    if (headNode != null)
                     {
-                        var name = json_object.Value<JObject>("userData").Value<String>("name");
-                        if (name == this.user_name)
+                        var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
+                        if (json_object != null && json_object.Value<JObject>("userData") != null)
                         {
-                            VerifyState = "Login Success";
-                            return;
+                            var name = json_object.Value<JObject>("userData").Value<String>("name");
+                            if (name == this.user_name)
+                            {
+                                VerifyState = "Login Success";
+                                return;
+                            }
                         }
                     }
                 }
+                VerifyState = "Login Retrying";
+                LogError("Login Retry");
+                await Task.Delay(1000 * 60 * 10);
             }
             VerifyState = "Login Fail";
             LogError("Login Fail");
