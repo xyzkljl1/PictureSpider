@@ -14,8 +14,9 @@ namespace PictureSpider
         public string PixivUserName = "Name";
         public string PixivUserId = "0";
         public string PixivDownloadDir = "./";
-        public string PixivConnectStr = "server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=pass;";
-        public string TwitterConnectStr = "server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=twitter;";
+        public string PixivConnectStr = "";
+        public string TwitterConnectStr = "";
+        public string HitomiConnectStr = "";
         //public string TwitterAPIKey = "";
         //public string TwitterAPISecret = "";
         public string TwitterBearerToken = "";

@@ -26,14 +26,14 @@ namespace PictureSpider
                 try
                 {
                     var config = LoadConfig();
-                    using (var twitter_server = new Twitter.Server(config))
+                    using (var hitomi_server = new Hitomi.Server(config))
                     using(var pixiv_server = new Pixiv.Server(config))
                     {
                         context.Post(async async => {
-                            await twitter_server.Init();
+                            await hitomi_server.Init();
                             await pixiv_server.Init();
                         },null);
-                        Application.Run(new MainWindow(config, pixiv_server, twitter_server));
+                        Application.Run(new MainWindow(config, pixiv_server, hitomi_server));
                     }
                 }
                 catch (Exception ex)

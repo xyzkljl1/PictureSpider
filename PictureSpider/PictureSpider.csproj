@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0-windows</TargetFramework>
+    <TargetFramework>net6.0-windows10.0.22621.0</TargetFramework>
     <OutputType>WinExe</OutputType>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>publish\</PublishUrl>
@@ -20,6 +20,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
+    <EnableNETAnalyzers>True</EnableNETAnalyzers>
+    <AnalysisLevel>6.0</AnalysisLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>x64</PlatformTarget>
@@ -28,7 +31,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>x64</PlatformTarget>
     <WarningLevel>0</WarningLevel>
-    <RunCodeAnalysis>true</RunCodeAnalysis>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
     <CodeAnalysisRuleSet>SecurityRules.ruleset</CodeAnalysisRuleSet>
     <NoWarn>CA1303 CA1811 CA1303 CA2210 CA1305</NoWarn>
     <DebugSymbols>true</DebugSymbols>
@@ -44,7 +47,7 @@
     <DefineConstants>CODE_ANALYSIS;TRACE</DefineConstants>
     <WarningLevel>0</WarningLevel>
     <NoWarn>CA1303 CA1811 CA1303 CA2210 CA1305</NoWarn>
-    <RunCodeAnalysis>true</RunCodeAnalysis>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
     <CodeAnalysisRuleSet>SecurityRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
@@ -75,31 +78,34 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="MySql.EntityFrameworkCore" Version="7.0.5" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="7.0.0" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
     <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
     <PackageReference Include="System.Management" Version="7.0.2" />
-    <PackageReference Include="Microsoft.AspNetCore.SystemWebAdapters" Version="1.1.0" />
-    <PackageReference Include="EntityFramework" Version="6.4.4" />
-    <PackageReference Include="Microsoft.Extensions.Primitives" Version="6.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SystemWebAdapters" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" Version="7.0.0" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
-    <PackageReference Include="System.Text.Encodings.Web" Version="6.0.0" />
+    <PackageReference Include="System.Text.Encodings.Web" Version="7.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="7.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="BouncyCastle" Version="1.8.5" />
-    <PackageReference Include="Dapper" Version="2.0.123" />
-    <PackageReference Include="Fizzler" Version="1.2.0" />
-    <PackageReference Include="Google.Protobuf" Version="3.14.0" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.11.24" />
-    <PackageReference Include="K4os.Compression.LZ4" Version="1.2.6" />
-    <PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.2.6" />
-    <PackageReference Include="K4os.Hash.xxHash" Version="1.0.6" />
-    <PackageReference Include="morelinq" Version="3.3.2" />
-    <PackageReference Include="MySql.Data" Version="8.0.28" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.3" />
-    <PackageReference Include="Vse.Web.Serialization.ControlledSerializationJsonConverter" Version="1.0.4" />
-    <PackageReference Include="Winista.HtmlParser" Version="1.8.0" />
+    <PackageReference Include="Dapper" Version="2.0.151" />
+    <PackageReference Include="Fizzler" Version="1.3.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.24.2" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.52" />
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.3.6" />
+    <PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.6" />
+    <PackageReference Include="K4os.Hash.xxHash" Version="1.0.8" />
+    <PackageReference Include="morelinq" Version="3.4.2" />
+    <PackageReference Include="MySql.Data" Version="8.1.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.0.2" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Hitomila\Data.cs" />
@@ -108,7 +114,28 @@
     <Compile Remove="Hitomila\Server.cs" />
     <Compile Remove="Hitomila\Server_Util.cs" />
   </ItemGroup>
-  <PropertyGroup />
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Migrations\" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <Optimize>True</Optimize>
+  </PropertyGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="echo D|xcopy &quot;$(SolutionDir)aria2&quot; &quot;$(TargetDir)aria2&quot; /y&#xD;&#xA;echo D|xcopy &quot;$(SolutionDir)config.json&quot; &quot;$(TargetDir)&quot; /y" />
   </Target>

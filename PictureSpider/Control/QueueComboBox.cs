@@ -56,8 +56,7 @@ namespace PictureSpider
         {
             var old_select = SelectedItem as ComboBoxItem;
             Items.Clear();
-            using (BlockSyncContext.Enter())
-                for(int i=0;i<providers.Count; i++)
+            for(int i=0;i<providers.Count; i++)
                 foreach (var item in await providers[i].GetExplorerQueues())
                     Items.Add(new ComboBoxItem(i,item));
             if(old_select!= null)//重新选中之前选中的选项

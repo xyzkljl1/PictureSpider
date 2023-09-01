@@ -5,6 +5,7 @@
   "PixivUserName": "",
   "PixivUserId": "",
   "PixivConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=pixiv;",
+  "HitomiConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=hitomi;",
   "ShowInitButton": false,
   "TwitterConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=twitter;",
   "TwitterAPIKey": "",

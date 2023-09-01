@@ -11,11 +11,9 @@ namespace PictureSpider
 {
     public partial class MainWindow : Form
     {
-        private Pixiv.Server pixiv_server;
-        private Twitter.Server twitter_server;
         private List<BaseServer> servers = new List<BaseServer>();
         //生成64位程序会导致无法用设计器编辑
-        public MainWindow(Config config,Pixiv.Server _pixiv_server, Twitter.Server _twitter_server)
+        public MainWindow(Config config,Pixiv.Server _pixiv_server, Hitomi.Server _hitomi_server)
         {
             //由于蜜汁原因，在x64下频繁绘制足够大的GIF时，其它控件不会根据databinding自动刷新，所以需要让BindHandle手动调用MainWindow.Update()
             //不确定是否会产生额外的刷新
@@ -23,14 +21,13 @@ namespace PictureSpider
             InitializeComponent();
             //初始化
             InitButton.Visible = config.ShowInitButton;
-            twitter_server = _twitter_server;
-            pixiv_server = _pixiv_server;
             servers.Add(_pixiv_server);
-            servers.Add(_twitter_server);
+            servers.Add(_hitomi_server);
+            //servers.Add(_twitter_server);
             {
                 MainExplorer.SetSpecialDir(Path.Combine(config.PixivDownloadDir, "special"));
-                TagBox.SetClient(pixiv_server);
-                AuthorBox.SetClient(pixiv_server);
+                TagBox.SetClient(servers[0]);
+                AuthorBox.SetClient(servers[0]);
                 queueComboBox.SetClient(servers);
             }
             //UI
@@ -58,7 +55,7 @@ namespace PictureSpider
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             RandomSlideCheckBox.Click += (object sender, EventArgs e) => MainExplorer.random_slide=RandomSlideCheckBox.Checked;
-            InitButton.Click += (object sender, EventArgs e) =>pixiv_server.InitTask().Wait();
+            InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
             SystemTrayIcon.DoubleClick += (object sender, EventArgs e) => this.Visible = !this.Visible;
             ExitAction.Click += (object sender, EventArgs e) => { FormClosing -= OnClose; this.Close(); };//退出时先移除阻止关闭的handle
             //绑定属性
@@ -70,7 +67,7 @@ namespace PictureSpider
             BookmarkPageLabel.DataBindings.Add(new Binding("Visible", MainExplorer.GetBindHandle<bool>("PageInvalid"), "Content"));
             TagBox.DataBindings.Add(new Binding("Tags", MainExplorer.GetBindHandle<List<string>>("Tags"), "Content"));
             AuthorBox.DataBindings.Add(new Binding("UserId", MainExplorer.GetBindHandle<string>("UserId"), "Content"));
-            DataBindings.Add(new Binding("Text", pixiv_server.GetBindHandle<string>("VerifyState"), "Content"));
+            DataBindings.Add(new Binding("Text", _pixiv_server.GetBindHandle<string>("VerifyState"), "Content"));
 
             //onListCheckBoxClick(null,null);
         }
@@ -96,6 +93,8 @@ namespace PictureSpider
                 MainExplorer.SetList(servers[e.server_index], servers[e.server_index].GetExplorerQueueItems(e.item).Result);
             }
         }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:验证平台兼容性", Justification = "<挂起>")]
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
