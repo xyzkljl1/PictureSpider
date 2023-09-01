@@ -1,0 +1,11 @@
+/config.json
+.vs
+/json4.json
+/json3.json
+/json2.json
+/json1.json
+/PictureSpider/bin
+*.csproj.user
+/*/obj
+/packages
+/aria2/aria2.log

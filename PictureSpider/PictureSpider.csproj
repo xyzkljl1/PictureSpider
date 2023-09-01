@@ -196,9 +196,9 @@
     <Compile Include="Control\AuthorBox.Designer.cs">
       <DependentUpon>AuthorBox.cs</DependentUpon>
     </Compile>
-    <Compile Include="Twitter\Data.cs" />
-    <Compile Include="Twitter\Database.cs" />
-    <Compile Include="Twitter\Server.cs" />
+    <Compile Include="Twitter%28Abandon%29\Data.cs" />
+    <Compile Include="Twitter%28Abandon%29\Database.cs" />
+    <Compile Include="Twitter%28Abandon%29\Server.cs" />
     <Compile Include="Util\BaseUser.cs" />
     <Compile Include="Util\ExplorerQueue.cs" />
     <Compile Include="Util\Util.cs" />
