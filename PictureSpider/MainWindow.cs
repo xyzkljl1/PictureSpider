@@ -100,12 +100,12 @@ namespace PictureSpider
         {
             this.components = new System.ComponentModel.Container();
             System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
-            BindHandleProvider bindHandleProvider1 = new BindHandleProvider();
+            PictureSpider.BindHandleProvider bindHandleProvider1 = new PictureSpider.BindHandleProvider();
             this.InitButton = new System.Windows.Forms.Button();
-            this.queueComboBox = new QueueComboBox();
+            this.queueComboBox = new PictureSpider.QueueComboBox();
             this.RandomSlideCheckBox = new System.Windows.Forms.CheckBox();
-            this.AuthorBox = new AuthorBox();
-            this.TagBox = new TagBox();
+            this.AuthorBox = new PictureSpider.AuthorBox();
+            this.TagBox = new PictureSpider.TagBox();
             this.DescBrowser = new System.Windows.Forms.WebBrowser();
             this.PlayButton = new System.Windows.Forms.Button();
             this.PageLabel = new System.Windows.Forms.Label();
@@ -115,7 +115,7 @@ namespace PictureSpider
             this.OpenLocalLabel = new System.Windows.Forms.LinkLabel();
             this.SwitchBookmarkButton = new System.Windows.Forms.Label();
             this.BookmarkPageLabel = new System.Windows.Forms.Label();
-            this.MainExplorer = new Explorer();
+            this.MainExplorer = new PictureSpider.Explorer();
             this.SystemTrayIcon = new System.Windows.Forms.NotifyIcon(this.components);
             this.SystemTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.ExitAction = new System.Windows.Forms.ToolStripMenuItem();
@@ -160,15 +160,17 @@ namespace PictureSpider
             this.queueComboBox.FormattingEnabled = true;
             this.queueComboBox.Location = new System.Drawing.Point(3, 83);
             this.queueComboBox.Name = "queueComboBox";
-            this.queueComboBox.Size = new System.Drawing.Size(101, 20);
+            this.queueComboBox.Size = new System.Drawing.Size(90, 28);
             this.queueComboBox.TabIndex = 19;
             // 
             // RandomSlideCheckBox
             // 
-            this.RandomSlideCheckBox.Location = new System.Drawing.Point(107, 80);
+            this.RandomSlideCheckBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.RandomSlideCheckBox.Location = new System.Drawing.Point(96, 80);
             this.RandomSlideCheckBox.Margin = new System.Windows.Forms.Padding(0);
             this.RandomSlideCheckBox.Name = "RandomSlideCheckBox";
-            this.RandomSlideCheckBox.Size = new System.Drawing.Size(50, 24);
+            this.RandomSlideCheckBox.Size = new System.Drawing.Size(62, 24);
             this.RandomSlideCheckBox.TabIndex = 20;
             this.RandomSlideCheckBox.Text = "Rock";
             this.RandomSlideCheckBox.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -176,7 +178,8 @@ namespace PictureSpider
             // 
             // AuthorBox
             // 
-            this.AuthorBox.Location = new System.Drawing.Point(3, 109);
+            this.AuthorBox.Location = new System.Drawing.Point(4, 119);
+            this.AuthorBox.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.AuthorBox.Name = "AuthorBox";
             this.AuthorBox.Size = new System.Drawing.Size(154, 20);
             this.AuthorBox.TabIndex = 12;
@@ -190,7 +193,7 @@ namespace PictureSpider
             this.TagBox.BackColor = System.Drawing.Color.Transparent;
             this.TagBox.CausesValidation = false;
             this.TagBox.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
-            this.TagBox.Location = new System.Drawing.Point(0, 132);
+            this.TagBox.Location = new System.Drawing.Point(0, 144);
             this.TagBox.Margin = new System.Windows.Forms.Padding(0);
             this.TagBox.Name = "TagBox";
             this.TagBox.Size = new System.Drawing.Size(161, 132);
@@ -205,7 +208,7 @@ namespace PictureSpider
             | System.Windows.Forms.AnchorStyles.Right)));
             this.DescBrowser.CausesValidation = false;
             this.DescBrowser.IsWebBrowserContextMenuEnabled = false;
-            this.DescBrowser.Location = new System.Drawing.Point(0, 264);
+            this.DescBrowser.Location = new System.Drawing.Point(0, 276);
             this.DescBrowser.Margin = new System.Windows.Forms.Padding(0);
             this.DescBrowser.MinimumSize = new System.Drawing.Size(20, 20);
             this.DescBrowser.Name = "DescBrowser";
@@ -217,7 +220,7 @@ namespace PictureSpider
             // PlayButton
             // 
             this.PlayButton.CausesValidation = false;
-            this.PlayButton.Font = new System.Drawing.Font("宋体", 24F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PlayButton.Font = new System.Drawing.Font("宋体", 24F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.PlayButton.Location = new System.Drawing.Point(12, 35);
             this.PlayButton.Name = "PlayButton";
             this.PlayButton.Size = new System.Drawing.Size(164, 87);
@@ -230,10 +233,10 @@ namespace PictureSpider
             this.PageLabel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.PageLabel.AutoSize = true;
             this.PageLabel.BackColor = System.Drawing.Color.Transparent;
-            this.PageLabel.Font = new System.Drawing.Font("仿宋", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PageLabel.Font = new System.Drawing.Font("仿宋", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.PageLabel.Location = new System.Drawing.Point(182, 530);
             this.PageLabel.Name = "PageLabel";
-            this.PageLabel.Size = new System.Drawing.Size(124, 64);
+            this.PageLabel.Size = new System.Drawing.Size(154, 80);
             this.PageLabel.TabIndex = 6;
             this.PageLabel.Text = "0/0";
             // 
@@ -242,7 +245,7 @@ namespace PictureSpider
             this.NextButton.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.NextButton.BackColor = System.Drawing.Color.Transparent;
-            this.NextButton.Font = new System.Drawing.Font("宋体", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.NextButton.Font = new System.Drawing.Font("宋体", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.NextButton.Location = new System.Drawing.Point(972, 12);
             this.NextButton.Name = "NextButton";
             this.NextButton.Size = new System.Drawing.Size(60, 508);
@@ -255,7 +258,7 @@ namespace PictureSpider
             this.PrevButton.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
             this.PrevButton.BackColor = System.Drawing.Color.Transparent;
-            this.PrevButton.Font = new System.Drawing.Font("宋体", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PrevButton.Font = new System.Drawing.Font("宋体", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.PrevButton.Location = new System.Drawing.Point(182, 9);
             this.PrevButton.Name = "PrevButton";
             this.PrevButton.Size = new System.Drawing.Size(60, 511);
@@ -299,7 +302,7 @@ namespace PictureSpider
             this.BookmarkPageLabel.BackColor = System.Drawing.Color.Transparent;
             this.BookmarkPageLabel.CausesValidation = false;
             this.BookmarkPageLabel.Enabled = false;
-            this.BookmarkPageLabel.Font = new System.Drawing.Font("宋体", 40F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.BookmarkPageLabel.Font = new System.Drawing.Font("宋体", 40F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.BookmarkPageLabel.Location = new System.Drawing.Point(941, 530);
             this.BookmarkPageLabel.Name = "BookmarkPageLabel";
             this.BookmarkPageLabel.Size = new System.Drawing.Size(91, 64);
@@ -328,16 +331,17 @@ namespace PictureSpider
             // 
             // SystemTrayMenu
             // 
+            this.SystemTrayMenu.ImageScalingSize = new System.Drawing.Size(20, 20);
             this.SystemTrayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.ExitAction});
             this.SystemTrayMenu.Name = "SystemTrayMenu";
-            this.SystemTrayMenu.Size = new System.Drawing.Size(181, 48);
+            this.SystemTrayMenu.Size = new System.Drawing.Size(109, 28);
             this.SystemTrayMenu.Opening += new System.ComponentModel.CancelEventHandler(this.SystemTrayMenu_Opening);
             // 
             // ExitAction
             // 
             this.ExitAction.Name = "ExitAction";
-            this.ExitAction.Size = new System.Drawing.Size(180, 22);
+            this.ExitAction.Size = new System.Drawing.Size(108, 24);
             this.ExitAction.Text = "退出";
             // 
             // MainWindow
@@ -353,6 +357,7 @@ namespace PictureSpider
             this.Controls.Add(this.NextButton);
             this.Controls.Add(this.MainExplorer);
             this.Controls.Add(this.PlayButton);
+            this.Icon = global::PictureSpider.Properties.Resources.baseIcon;
             this.KeyPreview = true;
             this.Name = "MainWindow";
             this.Load += new System.EventHandler(this.MainWindow_Load);

@@ -892,7 +892,7 @@ namespace PictureSpider.Pixiv
             string referer = String.Format("{0}", base_url);
             //如果程序关闭期间，cookie改变，刚启动时来不及获得新cookie，就会反复登录失败重启
             //因此登录失败时需要延时等待
-            //最近pixiv似乎不会再长期记住登陆了
+            //这是chrome的cookie文件被锁住导致每次网页上都要重新登录产生的问题，由于pixiv正常会一直记住登陆状态，chrome那边解决后应该不会再出现了
             for (int i= 0;i<3;++i)
             {
                 var doc = await RequestHtmlAsync(base_url, referer);
