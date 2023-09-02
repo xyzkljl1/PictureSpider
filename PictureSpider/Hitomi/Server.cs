@@ -262,10 +262,10 @@ namespace PictureSpider.Hitomi
         }
         public async override Task<List<ExplorerQueue>> GetExplorerQueues() {
             var ret=new List<ExplorerQueue>();
-            foreach (var user in database.Users.Where(x=>x.queued).ToList())
-                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.name, user.name));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Hitomi-Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Hitomi-Main"));
+            foreach (var user in database.Users.Where(x => x.queued).ToList())
+                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.name, user.name));
             return ret;
         }
         public async override Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
@@ -279,6 +279,7 @@ namespace PictureSpider.Hitomi
                                  select illustGroup).ToList();
                 foreach(var illustGroup in illustGroups)
                 {
+                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     result.Add(exploreFile);
                 }
@@ -290,10 +291,11 @@ namespace PictureSpider.Hitomi
                                        && illustGroup.user.name==queue.id
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
-                    {
-                        var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
-                        result.Add(exploreFile);
-                    }
+                {
+                    database.LoadFK(illustGroup);
+                    var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
+                    result.Add(exploreFile);
+                }
             }
             result.Sort((l, r) =>(l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;

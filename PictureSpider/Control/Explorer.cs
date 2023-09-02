@@ -185,7 +185,7 @@ namespace PictureSpider
                             Console.WriteLine("Can't Load Image "+path);
                             Console.WriteLine(e.Message);
                             Console.WriteLine("Delete Image");
-                            //File.Delete(path);
+                            File.Delete(path);
                             var img = (Image)empty_image.Clone();
                             img.Tag = -1;
                             cache.data.Add(img);
@@ -193,7 +193,7 @@ namespace PictureSpider
                     }
                     else
                     {
-                        var img = (Image)empty_image.Clone();
+                        var img = new Bitmap(1, 1);
                         img.Tag = -1;
                         cache.data.Add(img);
                     }
