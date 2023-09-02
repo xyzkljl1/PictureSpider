@@ -82,7 +82,7 @@ namespace PictureSpider.Hitomi
         {
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
-            int last_daily_task = DateTime.Now.Day-1;
+            int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
             do
             {
@@ -93,8 +93,8 @@ namespace PictureSpider.Hitomi
                     SyncLocalFile();
                 }
                 //同时下载太多503
-                await ProcessIllustDownloadQueue(downloadQueue, 10);
-                await Task.Delay(new TimeSpan(0, 10, 0));
+                await ProcessIllustDownloadQueue(downloadQueue, 25);
+                await Task.Delay(new TimeSpan(0, 5, 0));
             }
             while (true);
         }
@@ -295,6 +295,7 @@ namespace PictureSpider.Hitomi
                         result.Add(exploreFile);
                     }
             }
+            result.Sort((l, r) =>(l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;
         }
         private HashSet<string> tt=new HashSet<string>();
@@ -440,7 +441,7 @@ namespace PictureSpider.Hitomi
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if (try_ct < 1)
-                        Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                        LogError(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     //if (try_ct == 0)
                     //throw;
                 }
@@ -470,7 +471,7 @@ namespace PictureSpider.Hitomi
                 {
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if (try_ct < 1)
-                        Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                       LogError(msg + "Re Try " + try_ct.ToString() + " On :" + url);
                     //if (try_ct == 0)
                     //throw;
                 }
