@@ -43,6 +43,21 @@ namespace PictureSpider.Hitomi
         }
         public DbSet<Illust> Illusts { get; set; }
         public DbSet<IllustGroup> IllustGroups { get; set; }
-
+        public DbSet<User> Users { get; set; }
+        //加载外键(导航属性)，外键对应的对象不会自动加载，只有已经在别处查询过或显示Load才会有效
+        //例如User有10个illustGroup，直接查询User则illustGroups为空，如果select其中一个illustGroup则user.illustGroups获得一个成员；如果Load则user.illustGroups获得全部成员
+        public void LoadFK(User obj)
+        {
+            Entry(obj).Collection(r => r.illustGroups).Load();
+        }
+        public void LoadFK(IllustGroup obj)
+        {
+            Entry(obj).Collection(r => r.illusts).Load();
+            Entry(obj).Reference(r => r.user).Load();
+        }
+        public void LoadFK(Illust obj)
+        {
+            Entry(obj).Reference(r => r.illustGroup).Load();
+        }
     }
 }

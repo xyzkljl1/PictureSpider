@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PictureSpider": {
+      "commandName": "Project",
+      "workingDirectory": "$(OutDir)"
+    }
+  }
+}
