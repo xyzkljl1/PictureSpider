@@ -53,7 +53,7 @@ namespace PictureSpider.Twitter
 
             request_proxy = config.Proxy;
             database = new Database(config.TwitterConnectStr);
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Twitter, config.Proxy);
+            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Twitter, config.Proxy,"");
             {
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
                 var handler = new HttpClientHandler()

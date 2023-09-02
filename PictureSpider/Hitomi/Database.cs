@@ -41,6 +41,15 @@ namespace PictureSpider.Hitomi
             }
             builder.UseMySql(ConnStr, new MySqlServerVersion(new Version()));
         }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            //级联删除
+            modelBuilder
+                .Entity<Illust>()
+                .HasOne(e => e.illustGroup)
+                .WithMany(e => e.illusts)
+                .OnDelete(DeleteBehavior.Cascade);
+        }
         public DbSet<Illust> Illusts { get; set; }
         public DbSet<IllustGroup> IllustGroups { get; set; }
         public DbSet<User> Users { get; set; }

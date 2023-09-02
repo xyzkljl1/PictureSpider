@@ -164,7 +164,17 @@ namespace PictureSpider
                     {
                         try
                         {
-                            var img = Image.FromFile(path);
+                            Image img = null;
+                            if (Path.GetExtension(path).ToLower() == ".webp")//自带Image读取webp会直接报out of memeory
+                                using (SixLabors.ImageSharp.Image webp = SixLabors.ImageSharp.Image.Load(path))
+                                {
+                                    //用ImageSharp转成bitmap再读
+                                    var tmpStream = new MemoryStream();
+                                    webp.Save(tmpStream, new SixLabors.ImageSharp.Formats.Bmp.BmpEncoder());
+                                    img = Image.FromStream(tmpStream);
+                                }
+                            else
+                                img = Image.FromFile(path);
                             //我内存贼大，不用裁剪
                             img.Tag = i;//图片在illust中的原本index
                             cache.data.Add(img);
@@ -175,7 +185,7 @@ namespace PictureSpider
                             Console.WriteLine("Can't Load Image "+path);
                             Console.WriteLine(e.Message);
                             Console.WriteLine("Delete Image");
-                            File.Delete(path);
+                            //File.Delete(path);
                             var img = (Image)empty_image.Clone();
                             img.Tag = -1;
                             cache.data.Add(img);

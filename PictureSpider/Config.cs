@@ -17,6 +17,7 @@ namespace PictureSpider
         public string PixivConnectStr = "";
         public string TwitterConnectStr = "";
         public string HitomiConnectStr = "";
+        public string HitomiDownloadDir = "./";
         //public string TwitterAPIKey = "";
         //public string TwitterAPISecret = "";
         public string TwitterBearerToken = "";

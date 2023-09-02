@@ -10,11 +10,11 @@ namespace PictureSpider
     {
         public string id;
         public string title;
-        public string description;
+        public string description="";
         public string userId;
         public bool bookmarked;
         public bool bookmarkPrivate;
-        public List<string> tags;
+        public List<string> tags=new List<string>();
         public bool readed;
         public abstract int pageCount();
         public abstract int validPageCount();

@@ -26,8 +26,8 @@ namespace PictureSpider
         [MaxLength(128)]
         public string displayText { get; set; }//显示在UI上的队列名
         [Required]
-        public bool followed { get; set; }
+        public bool followed { get; set; } = false;
         [Required]
-        public bool queued { get; set; }
+        public bool queued { get; set; } = false;
     }
 }

@@ -21,44 +21,63 @@ namespace PictureSpider.Migrations
 
             modelBuilder.Entity("PictureSpider.Hitomi.Illust", b =>
                 {
-                    b.Property<string>("hash")
-                        .HasColumnType("varchar(95)");
-
-                    b.Property<int?>("illustGroupid")
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<string>("url")
+                    b.Property<bool>("excluded")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("fileName")
                         .HasColumnType("longtext");
 
-                    b.HasKey("hash");
+                    b.Property<string>("hash")
+                        .HasColumnType("longtext");
 
-                    b.HasIndex("illustGroupid");
+                    b.Property<int?>("illustGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("index")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("illustGroupId");
 
                     b.ToTable("Illusts");
                 });
 
             modelBuilder.Entity("PictureSpider.Hitomi.IllustGroup", b =>
                 {
-                    b.Property<int>("id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<string>("PageURL")
+                    b.Property<bool>("fav")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("fetched")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("readed")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("title")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("userid")
+                    b.Property<string>("username")
                         .HasColumnType("varchar(95)");
 
-                    b.HasKey("id");
+                    b.HasKey("Id");
 
-                    b.HasIndex("userid");
+                    b.HasIndex("username");
 
                     b.ToTable("IllustGroups");
                 });
 
             modelBuilder.Entity("PictureSpider.Hitomi.User", b =>
                 {
-                    b.Property<string>("id")
+                    b.Property<string>("name")
                         .HasColumnType("varchar(95)");
 
                     b.Property<string>("displayId")
@@ -77,7 +96,7 @@ namespace PictureSpider.Migrations
                     b.Property<bool>("queued")
                         .HasColumnType("tinyint(1)");
 
-                    b.HasKey("id");
+                    b.HasKey("name");
 
                     b.ToTable("Users");
                 });
@@ -86,7 +105,8 @@ namespace PictureSpider.Migrations
                 {
                     b.HasOne("PictureSpider.Hitomi.IllustGroup", "illustGroup")
                         .WithMany("illusts")
-                        .HasForeignKey("illustGroupid");
+                        .HasForeignKey("illustGroupId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("illustGroup");
                 });
@@ -95,7 +115,7 @@ namespace PictureSpider.Migrations
                 {
                     b.HasOne("PictureSpider.Hitomi.User", "user")
                         .WithMany("illustGroups")
-                        .HasForeignKey("userid");
+                        .HasForeignKey("username");
 
                     b.Navigation("user");
                 });

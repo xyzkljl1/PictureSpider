@@ -73,7 +73,7 @@ namespace PictureSpider.Pixiv
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
             cookie_server = new CookieServer(database, request_proxy);
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy);
+            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy, "https://www.pixiv.net/");
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -182,7 +182,6 @@ namespace PictureSpider.Pixiv
             }
             return result;
         }
-
         public override void SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
         {
             var illust = (file as ExplorerFile).illust;
