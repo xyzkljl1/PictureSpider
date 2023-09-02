@@ -84,6 +84,7 @@ namespace PictureSpider.Hitomi
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
+            SyncLocalFile();
             do
             {
                 if (DateTime.Now.Day != last_daily_task)//每日一次
@@ -278,6 +279,18 @@ namespace PictureSpider.Hitomi
                                     && illustGroup.user.followed
                                  select illustGroup).ToList();
                 foreach(var illustGroup in illustGroups)
+                {
+                    database.LoadFK(illustGroup);
+                    var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
+                    result.Add(exploreFile);
+                }
+            }
+            else if(queue.type==ExplorerQueue.QueueType.Fav)
+            {
+                var illustGroups = (from illustGroup in database.IllustGroups
+                                    where illustGroup.fetched && illustGroup.fav
+                                    select illustGroup).ToList();
+                foreach (var illustGroup in illustGroups)
                 {
                     database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
