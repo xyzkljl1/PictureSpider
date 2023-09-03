@@ -118,7 +118,7 @@ namespace PictureSpider.Hitomi
                         database.LoadFK(illust);
                         if (!(illustGroup.fav && !illust.excluded))//没有排除
                             if (!downloadQueue.Contains(illust)) //不在下载队列
-                                if (!File.Exists($"{download_dir_tmp}/{illust.fileName}")) //不在本地
+                                if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
                                     downloadQueue.Add(illust);
                     }
                 }
@@ -136,8 +136,8 @@ namespace PictureSpider.Hitomi
                     database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.illusts)
                     {
-                        var tmp_path = $"{download_dir_tmp}/{illust.fileName}";
-                        var fav_path = $"{download_dir_fav}/{illust.fileName}";
+                        var tmp_path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
+                        var fav_path = $"{download_dir_fav}/{illust.fileName}{illust.ext}";
                         if (!illust.excluded)
                         {
                             if (existedFiles.Contains(fav_path))//从existedFiles中移除
@@ -166,7 +166,7 @@ namespace PictureSpider.Hitomi
                     //是否应当下载在外部判断
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
-                    await downloader.Add(illust.url, download_dir_tmp, illust.fileName);
+                    await downloader.Add(illust.url, download_dir_tmp, $"{illust.fileName}{illust.ext}");
                     download_ct++;
                     download_illusts.Add(illust);
                     if (limit >= 0 && download_ct >= limit)
@@ -180,7 +180,7 @@ namespace PictureSpider.Hitomi
                     var fail_illusts = new HashSet<int>();
                     foreach (var illust in download_illusts)
                     {
-                        var path = $"{download_dir_tmp}/{illust.fileName}";
+                        var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
                             Log($"Download Fail: {illust.url}");
@@ -257,7 +257,12 @@ namespace PictureSpider.Hitomi
                 for (var i = 0; i < urls.length; ++i)
                     if(illusts.ContainsKey(hashs[i] as string))
                     {
-                        illusts[hashs[i] as string].url = urls[i] as string;
+                        var illust = illusts[hashs[i] as string];
+                        illust.url = urls[i] as string;
+                        illust.ext = "";
+                        var pos = illust.url.LastIndexOf('.');
+                        if (pos > 0)
+                            illust.ext = illust.url.Substring(pos);
                     }
             }
             database.SaveChanges();
@@ -338,11 +343,7 @@ namespace PictureSpider.Hitomi
                     //url随时间变化，下载时再计算
                     illust.hash = hashs[i] as string;
                     illust.index=i;//有序
-                    var ext = "";
-                    var pos=illust.url.LastIndexOf('.');
-                    if(pos > 0)
-                        ext=illust.url.Substring(pos);
-                    illust.fileName = $"{illustGroup.Id}_{i:000}{ext}";
+                    illust.fileName = $"{illustGroup.Id}_{i:000}";
                     illustGroup.illusts.Add(illust);
                 }
             }

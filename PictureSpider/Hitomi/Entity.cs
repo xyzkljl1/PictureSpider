@@ -21,6 +21,8 @@ namespace PictureSpider.Hitomi
         public string hash { get; set; }
         [NotMapped]
         public string url { get; set; } = "";
+        //注意ext虽然是由url决定，但是需要保存，因为检查本地文件存在时需要ext
+        public string ext { get; set; } = "";
         //页号        
         public int index { get; set; } = -1;
         //文件名,应当考虑到使用其它方式浏览时的排序
