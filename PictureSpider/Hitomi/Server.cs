@@ -275,7 +275,7 @@ namespace PictureSpider.Hitomi
             if(queue.type == ExplorerQueue.QueueType.Main)
             {
                 var illustGroups=(from illustGroup in database.IllustGroups
-                                 where illustGroup.fetched && illustGroup.readed==false 
+                                 where illustGroup.fetched && illustGroup.readed==false  && illustGroup.fav==false
                                     && illustGroup.user.followed
                                  select illustGroup).ToList();
                 foreach(var illustGroup in illustGroups)
