@@ -251,7 +251,8 @@ namespace PictureSpider.Hitomi
                 var hashs = engine.Script.myhash;
                 var illusts = new Dictionary<string, Illust>();
                 foreach (var illust in illustGroup.illusts)
-                    illusts.Add(illust.hash,illust);
+                    if(!illusts.ContainsKey(illust.hash))
+                        illusts.Add(illust.hash,illust);
 
                 for (var i = 0; i < urls.length; ++i)
                     if(illusts.ContainsKey(hashs[i] as string))
