@@ -73,7 +73,7 @@ namespace PictureSpider.Hitomi
             //await downloader.Add("https://ba.hitomi.la/webp/1693684802/1571/417b229d440f9eccb321e44a7a54fe66098e022daa3972eb6af5b24543cc5236.webp","E:\\","123");
             //await downloader.WaitForAll();
             //var t=database.IllustGroups.FirstOrDefault();
-            //await FetchIllustGroupById(t);
+            //await FetchIllustGroupByIdx(t);
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014
@@ -249,15 +249,13 @@ namespace PictureSpider.Hitomi
                 engine.Execute(script);
                 var urls = engine.Script.myurl;
                 var hashs = engine.Script.myhash;
-                var illusts = new Dictionary<string, Illust>();
-                foreach (var illust in illustGroup.illusts)
-                    if(!illusts.ContainsKey(illust.hash))
-                        illusts.Add(illust.hash,illust);
+                var illusts = illustGroup.illusts.ToList();
+                //同一个illustGroup里也可能有相同hash的图片,此处不能用hash查找要用index
+                illusts.Sort((l, r) =>l.index.CompareTo(r.index));
 
-                for (var i = 0; i < urls.length; ++i)
-                    if(illusts.ContainsKey(hashs[i] as string))
+                for (var i = 0; i < urls.length&&i<illusts.Count; ++i)
                     {
-                        var illust = illusts[hashs[i] as string];
+                        var illust = illusts[i];
                         illust.url = urls[i] as string;
                         illust.ext = "";
                         var pos = illust.url.LastIndexOf('.');
