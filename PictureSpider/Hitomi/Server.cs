@@ -177,16 +177,16 @@ namespace PictureSpider.Hitomi
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;
-                    var fail_illusts = new HashSet<int>();
+                    var fail_illustGroup=new HashSet<IllustGroup>();
                     foreach (var illust in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
                             Log($"Download Fail: {illust.url}");
-                            illustList.Remove(illust);
-                            illustList.Add(illust);
-                            illust.url = "";//移到队末并重置url
+                            illustList.Remove(illust);//移到队末并重置url
+                            illustList.Add(illust);                            
+                            fail_illustGroup.Add(illust.illustGroup);
                             //throw new Exception("debug");
                         }
                         else
@@ -195,6 +195,8 @@ namespace PictureSpider.Hitomi
                             illustList.Remove(illust);
                         }
                     }
+                    //下载失败可能是由于gg.js过期，此时该illustGroup的其它图片可能还在下载队列前端，重新获取一遍url以避免过多的下载失败
+                    fail_illustGroup.ToList().ForEach(async x=>await CalcIllustURL(x));
                     Log($"Process Download Queue: {success_ct}/{download_illusts.Count} Success, {downloadQueue.Count} Left.");
                 }
             }

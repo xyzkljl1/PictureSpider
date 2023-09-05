@@ -78,7 +78,7 @@ namespace PictureSpider.Hitomi
         }
         public override string FilePath(int page)
         {
-            return Path.Combine(download_dir_tmp, sortedIllusts[page].fileName);
+            return Path.Combine(download_dir_tmp, sortedIllusts[page].fileName+sortedIllusts[page].ext);
         }
 
         public override int pageCount() { return illustGroup.illusts.Count; }
