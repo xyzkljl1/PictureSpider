@@ -14,6 +14,9 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace PictureSpider.Hitomi
 {
@@ -70,10 +73,6 @@ namespace PictureSpider.Hitomi
         public override async Task Init()
         {
             PrepareJS();
-            //await downloader.Add("https://ba.hitomi.la/webp/1693684802/1571/417b229d440f9eccb321e44a7a54fe66098e022daa3972eb6af5b24543cc5236.webp","E:\\","123");
-            //await downloader.WaitForAll();
-            //var t=database.IllustGroups.FirstOrDefault();
-            //await FetchIllustGroupByIdx(t);
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014
@@ -112,6 +111,8 @@ namespace PictureSpider.Hitomi
                     {
                         illust.ext = ".gif";
                         encoder = new SixLabors.ImageSharp.Formats.Gif.GifEncoder();
+                        if (webp.Frames.First().Metadata.GetGifMetadata().FrameDelay == 0)//FrameDelay为0时，有些软件如PicMos能正常播放动画，但是本程序无法播放，因此重设为3
+                            webp.Frames.First().Metadata.GetGifMetadata().FrameDelay = 3;
                     }
                     else
                     {
@@ -213,6 +214,8 @@ namespace PictureSpider.Hitomi
                     //是否应当下载在外部判断
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
+                    illust.ResetEXTByURL();//下载前重新获取ext，因为本地文件会被转换格式，如果下载后又丢失文件，ext就和url不符
+                    database.SaveChanges();
                     await downloader.Add(illust.url, download_dir_tmp, $"{illust.fileName}{illust.ext}");
                     download_ct++;
                     download_illusts.Add(illust);
@@ -306,14 +309,11 @@ namespace PictureSpider.Hitomi
                 illusts.Sort((l, r) =>l.index.CompareTo(r.index));
 
                 for (var i = 0; i < urls.length&&i<illusts.Count; ++i)
-                    {
-                        var illust = illusts[i];
-                        illust.url = urls[i] as string;
-                        illust.ext = "";
-                        var pos = illust.url.LastIndexOf('.');
-                        if (pos > 0)
-                            illust.ext = illust.url.Substring(pos).ToLower();
-                    }
+                {
+                    var illust = illusts[i];
+                    illust.url = urls[i] as string;
+                    illust.ResetEXTByURL();
+                }
             }
             database.SaveChanges();
         }

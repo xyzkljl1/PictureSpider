@@ -32,6 +32,14 @@ namespace PictureSpider.Hitomi
         public bool excluded { get; set; }=false;
         //外键
         public virtual IllustGroup illustGroup { get; set; }
+        //根据url获得ext,注意并未调用database.SaveChanges();
+        public void ResetEXTByURL()
+        {
+            ext = "";
+            var pos = url.LastIndexOf('.');
+            if (pos > 0)
+                ext = url.Substring(pos).ToLower();
+        }
     }
     [Table("IllustGroups")]
     public class IllustGroup
