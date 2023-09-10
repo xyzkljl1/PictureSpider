@@ -160,17 +160,13 @@ namespace PictureSpider
                     if (eFile.bookmarked && !eFile.isPageValid(i))
                         continue;
                     string path = eFile.FilePath(i);
-                    if (File.Exists(path))
+                    if (File.Exists(path)
+                        && Path.GetExtension(path).ToLower() != ".webp")//自带Image读取webp会直接报out of memeory,此时可能是图片尚未转换，不删除原图
                     {
                         try
                         {
                             Image img = null;
-                            if (Path.GetExtension(path).ToLower() == ".webp")//自带Image读取webp会直接报out of memeory
-                            {
-                                throw new Exception("Can't Load webp");
-                            }
-                            else
-                                img = Image.FromFile(path);
+                            img = Image.FromFile(path);
                             //我内存贼大，不用裁剪
                             img.Tag = i;//图片在illust中的原本index
                             cache.data.Add(img);
