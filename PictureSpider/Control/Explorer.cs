@@ -356,8 +356,9 @@ namespace PictureSpider
         //在浏览器中打开当前图片
         public void OpenInBrowser(object sender, EventArgs args)
         {
-            if(file_list.Count>0) 
-                System.Diagnostics.Process.Start(file_list[index].WebsiteURL(sub_index));
+            //更新net版本后UseShellExecute默认值变为false导致无法打开url，需要指定为true
+            if (file_list.Count>0)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file_list[index].WebsiteURL(sub_index)) { UseShellExecute = true });
         }
         //打开本地
         public void OpenInLocal(object sender, EventArgs args)
