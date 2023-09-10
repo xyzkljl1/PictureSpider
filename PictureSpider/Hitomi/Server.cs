@@ -130,8 +130,8 @@ namespace PictureSpider.Hitomi
             }
             catch (Exception e)
             {
-                Console.WriteLine("Can't Transform webp:" + path);
-                Console.WriteLine(e.Message);
+                LogError("Can't Transform webp:" + path);
+                LogError(e.Message);
                 throw e;
             }
         }
@@ -491,7 +491,6 @@ namespace PictureSpider.Hitomi
             {
                 try
                 {
-                    //Console.WriteLine("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
                     if (string.IsNullOrEmpty(url))
                         throw new ArgumentNullException("url");
                     if (!url.StartsWith("https"))
@@ -521,7 +520,6 @@ namespace PictureSpider.Hitomi
             {
                 try
                 {
-                    //Console.WriteLine("Begin " + try_ct.ToString() + " " + (url.Length>150?url.Substring(0, 150) :url));
                     if (string.IsNullOrEmpty(url))
                         throw new ArgumentNullException("url");
                     if (!url.StartsWith("https"))
