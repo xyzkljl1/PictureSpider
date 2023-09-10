@@ -99,6 +99,41 @@ namespace PictureSpider.Hitomi
             }
             while (true);
         }
+        private void WEBP2JPGorGIF(Illust illust)
+        {
+            //自带Image读取webp会直接报out of memeory,浏览时再转换格式又会卡，所以提前把webp都转成其它格式
+            var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
+            try
+            {
+                using (SixLabors.ImageSharp.Image webp = SixLabors.ImageSharp.Image.Load(path))
+                {
+                    SixLabors.ImageSharp.Formats.IImageEncoder encoder = null;
+                    if (webp.Frames.Count > 1)//动图
+                    {
+                        illust.ext = ".gif";
+                        encoder = new SixLabors.ImageSharp.Formats.Gif.GifEncoder();
+                    }
+                    else
+                    {
+                        encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder();
+                        illust.ext = ".jpg";
+                    }
+                    var new_path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
+                    using (var tmpStream = new FileStream(new_path, FileMode.OpenOrCreate))
+                        webp.Save(tmpStream, encoder);
+                    if (!File.Exists(new_path))
+                        throw new Exception("Can't Transform webp/unkown issue.");
+                    File.Delete(path);
+                    database.SaveChanges();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Can't Transform webp:" + path);
+                Console.WriteLine(e.Message);
+                throw e;
+            }
+        }
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件
         private void SyncLocalFile()
         {
@@ -124,6 +159,17 @@ namespace PictureSpider.Hitomi
                 }
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
+            }
+            //转换格式，正常应该是下载完立刻转换，但是种种原因可能产生一些漏网之鱼
+            //因为这会改变ext，需要放到整理Fav文件夹前面
+            {
+                var illusts = (from illust in database.Illusts
+                               where illust.ext == ".webp"
+                               select illust).ToList();
+                var tmp = downloadQueue.Count;
+                foreach (var illust in illusts)//如果收藏或未读的作品
+                    if (File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}"))
+                        WEBP2JPGorGIF(illust);
             }
             //整理Fav文件夹
             {
@@ -193,6 +239,9 @@ namespace PictureSpider.Hitomi
                         {
                             success_ct++;
                             illustList.Remove(illust);
+                            //转换格式
+                            if (illust.ext ==".webp")//一定是小写，不需要.ToLower()
+                                WEBP2JPGorGIF(illust);
                         }
                     }
                     //下载失败可能是由于gg.js过期，此时该illustGroup的其它图片可能还在下载队列前端，重新获取一遍url以避免过多的下载失败
@@ -262,7 +311,7 @@ namespace PictureSpider.Hitomi
                         illust.ext = "";
                         var pos = illust.url.LastIndexOf('.');
                         if (pos > 0)
-                            illust.ext = illust.url.Substring(pos);
+                            illust.ext = illust.url.Substring(pos).ToLower();
                     }
             }
             database.SaveChanges();

@@ -166,13 +166,9 @@ namespace PictureSpider
                         {
                             Image img = null;
                             if (Path.GetExtension(path).ToLower() == ".webp")//自带Image读取webp会直接报out of memeory
-                                using (SixLabors.ImageSharp.Image webp = SixLabors.ImageSharp.Image.Load(path))
-                                    using(var tmpStream=new MemoryStream())
-                                    {
-                                        //用ImageSharp转成bitmap再读
-                                        webp.Save(tmpStream, new SixLabors.ImageSharp.Formats.Bmp.BmpEncoder());
-                                        img = Image.FromStream(tmpStream);
-                                    }
+                            {
+                                throw new Exception("Can't Load webp");
+                            }
                             else
                                 img = Image.FromFile(path);
                             //我内存贼大，不用裁剪
