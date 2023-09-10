@@ -182,15 +182,16 @@ namespace PictureSpider.Hitomi
                     database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.illusts)
                     {
+                        var file_name = $"{illust.fileName}{illust.ext}";
                         var tmp_path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
                         var fav_path = $"{download_dir_fav}/{illust.fileName}{illust.ext}";
                         if (!illust.excluded)
                         {
-                            if (existedFiles.Contains(fav_path))//从existedFiles中移除
-                                existedFiles.Remove(fav_path);
+                            if (existedFiles.Contains(file_name))//从existedFiles中移除
+                                existedFiles.Remove(file_name);
                             else
                                 if (File.Exists(tmp_path))      //如果不存在就从tmp目录拷过来
-                                File.Copy(tmp_path, fav_path);
+                                    File.Copy(tmp_path, fav_path);
                         }
                     }
                 }

@@ -185,32 +185,32 @@ namespace PictureSpider.Pixiv
         public override void SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
         {
             var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustReaded(illust.id).Wait();
+            database.UpdateIllustReadedSync(illust.id);
         }
         public override void SetBookmarked(ExplorerFileBase file)
         {
             var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustBookmarked(illust.id,file.bookmarked,file.bookmarkPrivate).Wait();
+            database.UpdateIllustBookmarkedSync(illust.id,file.bookmarked,file.bookmarkPrivate);
         }
         public override void SetBookmarkEach(ExplorerFileBase file)
         {
             var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustBookmarkEach(illust.id,illust.bookmarkEach).Wait();
+            database.UpdateIllustBookmarkEachSync(illust.id,illust.bookmarkEach);
         }
         public override BaseUser GetUserById(string id)
         {
             int user_id = 0;
             if(int.TryParse(id, out user_id))
-                return database.GetUserById(user_id).Result;
+                return database.GetUserByIdSync(user_id);
             return null;
         }
         public override void SetUserFollowOrQueue(BaseUser user)
         {
-            database.UpdateUser(user as User).Wait();
+            database.UpdateUserSync(user as User);
         }
-        public override Dictionary<string, TagStatus> GetAllTagsStatus() { return database.GetAllTagsStatus().Result; }
-        public override Dictionary<string, string> GetAllTagsDesc() { return database.GetAllTagsDesc().Result; }
-        public override void UpdateTagStatus(string tag, TagStatus status) { database.UpdateTagStatus(tag, status).Wait(); }
+        public override Dictionary<string, TagStatus> GetAllTagsStatus() { return database.GetAllTagsStatusSync(); }
+        public override Dictionary<string, string> GetAllTagsDesc() { return database.GetAllTagsDescSync(); }
+        public override void UpdateTagStatus(string tag, TagStatus status) { database.UpdateTagStatusSync(tag, status); }
         /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
         private async Task RunSchedule()

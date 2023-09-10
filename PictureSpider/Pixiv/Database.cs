@@ -142,9 +142,9 @@ namespace PictureSpider.Pixiv
             return await StandardQuery("select `word` from keyword where `status`='Follow' and type='tag' ORDER BY word ",
                         (DbDataReader reader) => { return reader.GetString(0); });
         }
-        public async Task<Dictionary<string, TagStatus>> GetAllTagsStatus()
+        public Dictionary<string, TagStatus> GetAllTagsStatusSync()
         {
-            var tags = await StandardQuery("select `word`,`status` from keyword where `type`='tag'",
+            var tags = StandardQuerySync("select `word`,`status` from keyword where `type`='tag'",
                         (DbDataReader reader) => { return new Tuple<string, string>(reader.GetString(0), reader.GetString(1)); });
             var ret = new Dictionary<string, TagStatus>();
             foreach (var pair in tags)
@@ -152,9 +152,9 @@ namespace PictureSpider.Pixiv
             return ret;
         }
 
-        public async Task<Dictionary<string,string>> GetAllTagsDesc()
+        public Dictionary<string,string> GetAllTagsDescSync()
         {
-            var tags=await StandardQuery("select `word`,`desc` from keyword where `type`='tag'",
+            var tags=StandardQuerySync("select `word`,`desc` from keyword where `type`='tag'",
                         (DbDataReader reader) => { return new Tuple<string,string>(reader.GetString(0),reader.GetString(1)); });
             var ret=new Dictionary<string, string>();
             foreach(var pair in tags)
@@ -176,14 +176,13 @@ namespace PictureSpider.Pixiv
             return (await StandardQuery(String.Format("SELECT Queue FROM status WHERE id=\"Current\";"),
                         (DbDataReader reader) => { return reader.GetString(0); }))[0];
         }
-        public async Task<User> GetUserById(int userId)
+        public User GetUserByIdSync(int userId)
         {
-            var ret=(await StandardQuery(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
-                    (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2),reader.GetBoolean(3)); }));
+            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
+                    (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
             if (ret != null && ret.Count > 0)
                 return ret.First();
             return null;
-
         }
         public async Task<List<User>> GetFollowedUser(bool followed=true)
         {
@@ -201,9 +200,9 @@ namespace PictureSpider.Pixiv
                        (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
         }
 
-        public async Task UpdateTagStatus(string tag, TagStatus followed)
+        public void UpdateTagStatusSync(string tag, TagStatus followed)
         {
-            await StandardNoneQuery("insert into keyword(`word`,`type`,`status`) values(@0,'tag',@1) on duplicate key update `status`=@1",
+            StandardNoneQuerySync("insert into keyword(`word`,`type`,`status`) values(@0,'tag',@1) on duplicate key update `status`=@1",
                 (cmd) => { cmd.Parameters.AddWithValue("@0", tag);
                     if (followed == TagStatus.Follow)
                         cmd.Parameters.AddWithValue("@1", "Follow");
@@ -213,22 +212,22 @@ namespace PictureSpider.Pixiv
                         cmd.Parameters.AddWithValue("@1", "None");
                 });
         }
-        public async Task UpdateIllustReaded(int id)
+        public void UpdateIllustReadedSync(int id)
         {
-            await StandardNoneQuery("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
+            StandardNoneQuerySync("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
         }
-        public async Task UpdateIllustBookmarked(int id,bool enable,bool is_private)
+        public void UpdateIllustBookmarkedSync(int id,bool enable,bool is_private)
         {
-            await StandardNoneQuery("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
+            StandardNoneQuerySync("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
                 (cmd) => {
                     cmd.Parameters.AddWithValue("@0", enable?1:0);
                     cmd.Parameters.AddWithValue("@1", is_private ? 1:0);
                     cmd.Parameters.AddWithValue("@2", id);
                 });
         }
-        public async Task UpdateIllustBookmarkEach(int id,string bookmarkEach)
+        public void UpdateIllustBookmarkEachSync(int id,string bookmarkEach)
         {
-            await StandardNoneQuery("update illust set bookmarkEach=@0 where id=@1",
+            StandardNoneQuerySync("update illust set bookmarkEach=@0 where id=@1",
                 (cmd) => {
                     cmd.Parameters.AddWithValue("@0", bookmarkEach);
                     cmd.Parameters.AddWithValue("@1", id);
@@ -304,9 +303,9 @@ namespace PictureSpider.Pixiv
                 }
             }
         }
-        public async Task UpdateUser(User user)
+        public void UpdateUserSync(User user)
         {
-            await StandardNoneQuery("update user set userName=@0,followed=@1,queued=@2 where userId=@3;"
+            StandardNoneQuerySync("update user set userName=@0,followed=@1,queued=@2 where userId=@3;"
                 , (cmd) => {
                     cmd.Parameters.AddWithValue("@0", user.userName);
                     cmd.Parameters.AddWithValue("@1", user.followed);
@@ -442,6 +441,26 @@ namespace PictureSpider.Pixiv
                 throw;
             }
         }
+        public int StandardNoneQuerySync(String cmd_text, Action<MySqlCommand> add_para)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    var cmd = new MySqlCommand(cmd_text, connection);
+                    add_para(cmd);
+                    int ret = cmd.ExecuteNonQuery();
+                    Console.WriteLine("Update {0} Rows", ret);
+                    return ret;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("Database Exception1 {0}", e.Message);
+                throw;
+            }
+        }
         public async Task<List<T>> StandardQuery<T>(String cmd_text,Func<DbDataReader, T> converter)
         {
             try
@@ -488,6 +507,66 @@ namespace PictureSpider.Pixiv
                     }
                     if(cmd.Length>0)
                         using (var dataReader = await (new MySqlCommand(cmd, connection)).ExecuteReaderAsync())
+                            do
+                                while (dataReader.Read())
+                                    ret.Add(converter(dataReader));
+                            while (dataReader.NextResult());
+
+                    Console.WriteLine("Select {0} Rows", ret.Count);
+                    return ret;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("Database Exception3 {0}", e.Message);
+                throw;
+            }
+        }
+        public List<T> StandardQuerySync<T>(String cmd_text, Func<DbDataReader, T> converter)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    var ret = new List<T>();
+                    var cmd = new MySqlCommand(cmd_text, connection);
+                    using (var dataReader = cmd.ExecuteReader())
+                        while (dataReader.Read())
+                            ret.Add(converter(dataReader));
+                    return ret;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("Database Exception2 {0}", e.Message);
+                throw;
+            }
+        }
+        public List<T> StandardQuerySync<T>(List<String> cmd_text_list, Func<DbDataReader, T> converter)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+                {
+                    connection.Open();
+                    var ret = new List<T>();
+                    var cmd = "";
+                    foreach (var cmd_text in cmd_text_list)
+                    {
+                        cmd += cmd_text;
+                        if (cmd.Length > 30000)
+                        {
+                            using (var dataReader = (new MySqlCommand(cmd, connection)).ExecuteReader())
+                                do
+                                    while (dataReader.Read())
+                                        ret.Add(converter(dataReader));
+                                while (dataReader.NextResult());
+                            cmd = "";
+                        }
+                    }
+                    if (cmd.Length > 0)
+                        using (var dataReader = (new MySqlCommand(cmd, connection)).ExecuteReader())
                             do
                                 while (dataReader.Read())
                                     ret.Add(converter(dataReader));
