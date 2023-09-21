@@ -94,7 +94,7 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
-                await Task.Delay(new TimeSpan(0, 5, 0));
+                await Task.Delay(new TimeSpan(0, 1, 0));
             }
             while (true);
         }
@@ -120,6 +120,8 @@ namespace PictureSpider.Hitomi
                         illust.ext = ".jpg";
                     }
                     var new_path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
+                    if(File.Exists(new_path))
+                        File.Delete(new_path);
                     using (var tmpStream = new FileStream(new_path, FileMode.OpenOrCreate))
                         webp.Save(tmpStream, encoder);
                     if (!File.Exists(new_path))
