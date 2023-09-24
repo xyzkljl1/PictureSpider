@@ -94,7 +94,7 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
-                await Task.Delay(new TimeSpan(0, 1, 0));
+                await Task.Delay(new TimeSpan(0, 5, 0));
             }
             while (true);
         }
@@ -160,7 +160,6 @@ namespace PictureSpider.Hitomi
                                     downloadQueue.Add(illust);
                     }
                 }
-                database.SaveChanges();
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
             }
