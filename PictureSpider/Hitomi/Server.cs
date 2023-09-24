@@ -154,12 +154,13 @@ namespace PictureSpider.Hitomi
                     foreach (var illust in illustGroup.illusts)
                     {
                         database.LoadFK(illust);
-                        if (!(illustGroup.fav && !illust.excluded))//没有排除
+                        if (illustGroup.fav==false || illust.excluded==false)//没有排除
                             if (!downloadQueue.Contains(illust)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
                                     downloadQueue.Add(illust);
                     }
                 }
+                database.SaveChanges();
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
             }
@@ -314,7 +315,6 @@ namespace PictureSpider.Hitomi
                 {
                     var illust = illusts[i];
                     illust.url = urls[i] as string;
-                    illust.ResetEXTByURL();
                 }
             }
             database.SaveChanges();
