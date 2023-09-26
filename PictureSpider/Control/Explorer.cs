@@ -32,7 +32,7 @@ namespace PictureSpider
             }
         }
         //cache的大小，应大于SlideTo最多可能预加载的数量，以防止反复加载卸载和卸载正在显示的图片
-        private const int cache_size = 1500;
+        private const int cache_size = 500;
         //ImageCache需要手动dispose
         //key是图片路径
         private ConcurrentDictionary<string,ImageCache> cache_pool = new ConcurrentDictionary<string, ImageCache>();
@@ -243,9 +243,9 @@ namespace PictureSpider
                 {
                     //不能写成Task.Run(() => Load(illust_list[idx]));否则[]运行函数时才执行，此时idx的值已经改变
                     ExplorerFileBase tmp = file_list[idx];
-                    Task.Run(() => Load(tmp,0,100));
+                    Task.Run(() => Load(tmp,0,30));
                 }
-            Task.Run(() => Load(illust, j-50, j+50));
+            Task.Run(() => Load(illust, j-20, j+20));
         }
         //标记当前为已读
         private void MarkReaded()
