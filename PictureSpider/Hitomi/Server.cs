@@ -94,7 +94,7 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
-                await Task.Delay(new TimeSpan(0, 5, 0));
+                await Task.Delay(new TimeSpan(0, 15, 0));
             }
             while (true);
         }

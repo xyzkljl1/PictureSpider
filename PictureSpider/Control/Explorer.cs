@@ -30,6 +30,8 @@ namespace PictureSpider
             }
         }
         private const int cache_size = 30;
+        private const int cache_data_size = 2000;
+        private const int cache_size_min = 5;
         //ImageCache需要手动dispose
         private ConcurrentDictionary<string,ImageCache> cache_pool = new ConcurrentDictionary<string, ImageCache>();
         private List<ExplorerFileBase> file_list = new List<ExplorerFileBase>();
@@ -192,13 +194,27 @@ namespace PictureSpider
                 }
                 if (!cache_pool.TryAdd(eFile.id, cache))//开头就检测过hit，如果此时已经存在，那肯定是刚加进去的，没必要更新required_time
                     cache.Dispose();
-                while (cache_pool.Count > cache_size)
+                while (true)
                 {
+                    bool need_release = false;
+                    if(cache_pool.Count > cache_size)
+                        need_release = true;
+                    else if(cache_pool.Count > cache_size_min)
+                    {               
+                        //hitomi单组图片很多，会占用过多内存，图片数合计过多时也释放，但是不会令cache_pool小于cache_size_min
+                        var ct = 0;
+                        foreach (var c in cache_pool.Values)
+                            ct += c.data.Count;
+                        if (ct > cache_data_size)
+                            need_release=true;
+                    }
+                    if (!need_release)
+                        break;
                     //C#里可修改的Pair类是什么？
-                    string oldest_cache=null;
+                    string oldest_cache = null;
                     DateTime oldest_cache_time = DateTime.MaxValue;
-                    foreach(var tmp_cache in cache_pool)
-                        if(tmp_cache.Value.required_time < oldest_cache_time)
+                    foreach (var tmp_cache in cache_pool)
+                        if (tmp_cache.Value.required_time < oldest_cache_time)
                         {
                             oldest_cache = tmp_cache.Key;
                             oldest_cache_time = tmp_cache.Value.required_time;
@@ -206,7 +222,7 @@ namespace PictureSpider
                     if (oldest_cache is null)
                         continue;
                     ImageCache ignored;
-                    if(cache_pool.TryRemove(oldest_cache, out ignored))
+                    if (cache_pool.TryRemove(oldest_cache, out ignored))
                         ignored.Dispose();
                 }
                 return cache;
