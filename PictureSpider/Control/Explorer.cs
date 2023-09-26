@@ -16,31 +16,31 @@ namespace PictureSpider
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
         class ImageCache:IDisposable
         {
-            public ExplorerFileBase eFile;
-            public List<Image> data;
+            public Image data=null;
             public DateTime required_time;
             public void Dispose()
             {
-                data.ForEach(x => x.Dispose());
-                data.Clear();
+                if(data != null)
+                {
+                    data.Dispose();
+                    data = null;
+                }
             }
             ~ImageCache()
             {
                 Dispose();
             }
         }
-        private const int cache_size = 30;
-        private const int cache_data_size = 2000;
-        private const int cache_size_min = 5;
+        //cache的大小，应大于SlideTo最多可能预加载的数量，以防止反复加载卸载和卸载正在显示的图片
+        private const int cache_size = 1500;
         //ImageCache需要手动dispose
+        //key是图片路径
         private ConcurrentDictionary<string,ImageCache> cache_pool = new ConcurrentDictionary<string, ImageCache>();
         private List<ExplorerFileBase> file_list = new List<ExplorerFileBase>();
         private int index = 0;
         private int sub_index = 0;
-        private int next_random_index = 0;
         private Image empty_image;
         public BaseServer server;
-        public bool random_slide = false;
         private Timer timer = new Timer();
         private bool playing = false;
 
@@ -51,7 +51,7 @@ namespace PictureSpider
                 int count_1 = file_list[index].validPageCount();
                 int count_2 = file_list[index].pageCount();
                 return (sub_index+1).ToString()+"/"+ 
-                       (count_1 == count_2 ? count_1.ToString():(count_1.ToString()+"("+count_2.ToString()+")"));
+                       (count_1 == count_2 ? count_1.ToString():(count_2.ToString()+"("+count_1.ToString()+")"));
             } }
         [Bindable(true)]
         public string DescText{get { return file_list.Count > 0 ? file_list[index].title + "</br>" + file_list[index].description : "";} }
@@ -141,12 +141,13 @@ namespace PictureSpider
                 this.NotifyChange<string>("IndexText");
             }
         }
-        //载入某个Illust的全部图片
-        private ImageCache Load(ExplorerFileBase eFile)
+        //载入某个Illust的一张图片
+        private ImageCache Load(ExplorerFileBase eFile,int i)
         {
+            var path = eFile.FilePath(i);
             {//hit
                 ImageCache cache;
-                if (cache_pool.TryGetValue(eFile.id,out cache))
+                if (cache_pool.TryGetValue(path, out cache))
                 {
                     cache.required_time = DateTime.UtcNow;
                     return cache;
@@ -154,24 +155,19 @@ namespace PictureSpider
             }
             {//not hit
                 ImageCache cache = new ImageCache();
-                cache.eFile = eFile;
                 cache.required_time = DateTime.UtcNow;
-                cache.data = new List<Image>();
-                for (int i = 0; i < eFile.pageCount(); i++)
+                //不检查i越界，由调用者保证
+                if ((!eFile.bookmarked) || eFile.isPageValid(i))
                 {
-                    if (eFile.bookmarked && !eFile.isPageValid(i))
-                        continue;
-                    string path = eFile.FilePath(i);
                     if (File.Exists(path)
                         && Path.GetExtension(path).ToLower() != ".webp")//自带Image读取webp会直接报out of memeory,此时可能是图片尚未转换，不删除原图
                     {
                         try
                         {
-                            Image img = null;
-                            img = Image.FromFile(path);
+                            Image img = Image.FromFile(path);
                             //我内存贼大，不用裁剪
                             img.Tag = i;//图片在illust中的原本index
-                            cache.data.Add(img);
+                            cache.data = img;
                         }
                         catch (Exception e)
                         {
@@ -182,34 +178,20 @@ namespace PictureSpider
                             File.Delete(path);
                             var img = (Image)empty_image.Clone();
                             img.Tag = -1;
-                            cache.data.Add(img);
+                            cache.data = img;
                         }
                     }
                     else
                     {
-                        var img = new Bitmap(1, 1);
+                        var img = new Bitmap(1, 1);//(Image)empty_image.Clone();
                         img.Tag = -1;
-                        cache.data.Add(img);
+                        cache.data = img;
                     }
                 }
-                if (!cache_pool.TryAdd(eFile.id, cache))//开头就检测过hit，如果此时已经存在，那肯定是刚加进去的，没必要更新required_time
+                if (!cache_pool.TryAdd(path, cache))//开头就检测过hit，如果此时已经存在，那肯定是刚加进去的，没必要更新required_time
                     cache.Dispose();
-                while (true)
+                while (cache_pool.Count > cache_size)
                 {
-                    bool need_release = false;
-                    if(cache_pool.Count > cache_size)
-                        need_release = true;
-                    else if(cache_pool.Count > cache_size_min)
-                    {               
-                        //hitomi单组图片很多，会占用过多内存，图片数合计过多时也释放，但是不会令cache_pool小于cache_size_min
-                        var ct = 0;
-                        foreach (var c in cache_pool.Values)
-                            ct += c.data.Count;
-                        if (ct > cache_data_size)
-                            need_release=true;
-                    }
-                    if (!need_release)
-                        break;
                     //C#里可修改的Pair类是什么？
                     string oldest_cache = null;
                     DateTime oldest_cache_time = DateTime.MaxValue;
@@ -228,17 +210,20 @@ namespace PictureSpider
                 return cache;
             }
         }
+        private void Load(ExplorerFileBase eFile, int s,int t)
+        {
+            for(int i = s;i<t;++i)
+                if(i>=0&&i<eFile.pageCount())
+                    Load(eFile,i);
+        }
         //切图实现
         private void SlideTo(int i, int j,bool force_update=false)
         {
             if (i >= file_list.Count || i < 0)
                 return;
             ExplorerFileBase illust = file_list[i];
-            ImageCache cache = Load(illust);
-            if (j < cache.data.Count)
-               this.Image = cache.data[j];
-            else
-               this.Image = empty_image;
+            ImageCache cache = Load(illust,j);
+            this.Image = cache.data;
             bool index_changed = index != i;
             bool sub_index_changed = sub_index!=j;
             index = i;//index和sub_index需要都更新完才能刷新
@@ -252,18 +237,15 @@ namespace PictureSpider
             }
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");
+            //载入相邻illustGroup的前n张图和当前illusgGroup浏览位置附近n张图
             for (int idx = i - 5; idx < i + 5; ++idx)
-                if (idx >= 0 && idx < file_list.Count)
+                if (idx >= 0 && idx < file_list.Count && idx!=i)
                 {
                     //不能写成Task.Run(() => Load(illust_list[idx]));否则[]运行函数时才执行，此时idx的值已经改变
                     ExplorerFileBase tmp = file_list[idx];
-                    Task.Run(() => Load(tmp));
+                    Task.Run(() => Load(tmp,0,100));
                 }
-            if (next_random_index >= 0 && next_random_index < file_list.Count)
-            {
-                ExplorerFileBase tmp = file_list[next_random_index];//同上
-                Task.Run(() => Load(tmp));
-            }
+            Task.Run(() => Load(illust, j-50, j+50));
         }
         //标记当前为已读
         private void MarkReaded()
@@ -275,44 +257,54 @@ namespace PictureSpider
                 server.SetReaded(eFile);
             }
         }
-        private bool SlideRandom()
-        {
-            if (file_list.Count < 1)
-                return false;
-            //预先生成下一个随机数，以提前加载
-            MarkReaded();
-            var random = new Random();
-            SlideTo(next_random_index, random.Next(0, Load(file_list[next_random_index]).data.Count));
-            next_random_index = random.Next(0, file_list.Count());
-            return true;
-        }
         //切图的UI响应,通过UI切图时先将当前标记为已读
         private bool SlideVertical(int i,bool to_end=false)
         {
-            if (random_slide)
-                return SlideRandom();
             int new_index = index + i;
             if (new_index >= 0 && new_index < file_list.Count)
             {
                 MarkReaded();
-                SlideTo(new_index, to_end? Load(file_list[new_index]).data.Count - 1: 0);
-                return true;
+                if(to_end)//找到最前/最后一个valid的page
+                {
+                    for (int new_sub_index = file_list[new_index].pageCount()-1;
+                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
+                            new_sub_index--)
+                        if (file_list[new_index].isPageValid(new_sub_index))
+                        {
+                            MarkReaded();
+                            SlideTo(new_index, new_sub_index);
+                            return true;
+                        }
+                }
+                else
+                {
+                    for (int new_sub_index = 0;
+                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
+                            new_sub_index++)
+                        if (file_list[new_index].isPageValid(new_sub_index))
+                        {
+                            MarkReaded();
+                            SlideTo(new_index, new_sub_index);
+                            return true;
+                        }
+                }
             }
             return false;
         }
         private bool SlideHorizon(int i)
         {
-            if (random_slide)
-                return SlideRandom();
-            int new_sub_index = sub_index + i;
-            if(index>=0&&index<file_list.Count)
-                if (new_sub_index >= 0 && new_sub_index < file_list[index].pageCount()
-                    &&new_sub_index < Load(file_list[index]).data.Count)
-                    {
-                        MarkReaded();
-                        SlideTo(index, new_sub_index);
-                        return true;
-                    }
+            if (index < 0 || index >= file_list.Count)
+                return false;
+            int step = i > 0 ? 1 : -1;
+            for(int new_sub_index = sub_index + i;
+                    new_sub_index>=0&&new_sub_index < file_list[index].pageCount();
+                    new_sub_index+=step)
+                if(file_list[index].isPageValid(new_sub_index))
+                {
+                    MarkReaded();
+                    SlideTo(index, new_sub_index);
+                    return true;
+                }
             return false;
         }
         public void SlideRight(object sender,EventArgs args)

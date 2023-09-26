@@ -54,7 +54,6 @@ namespace PictureSpider
             queueComboBox.QueueChanged+=new EventHandler<QueueChangeEventArgs>(OnQueueComboBoxChanged);
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
-            RandomSlideCheckBox.Click += (object sender, EventArgs e) => MainExplorer.random_slide=RandomSlideCheckBox.Checked;
             InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
             SystemTrayIcon.DoubleClick += (object sender, EventArgs e) => this.Visible = !this.Visible;
             ExitAction.Click += (object sender, EventArgs e) => { FormClosing -= OnClose; this.Close(); };//退出时先移除阻止关闭的handle
@@ -102,7 +101,6 @@ namespace PictureSpider
             PictureSpider.BindHandleProvider bindHandleProvider1 = new PictureSpider.BindHandleProvider();
             this.InitButton = new System.Windows.Forms.Button();
             this.queueComboBox = new PictureSpider.QueueComboBox();
-            this.RandomSlideCheckBox = new System.Windows.Forms.CheckBox();
             this.AuthorBox = new PictureSpider.AuthorBox();
             this.TagBox = new PictureSpider.TagBox();
             this.DescBrowser = new System.Windows.Forms.WebBrowser();
@@ -131,7 +129,6 @@ namespace PictureSpider
             flowLayoutPanel1.BackColor = System.Drawing.Color.Transparent;
             flowLayoutPanel1.Controls.Add(this.InitButton);
             flowLayoutPanel1.Controls.Add(this.queueComboBox);
-            flowLayoutPanel1.Controls.Add(this.RandomSlideCheckBox);
             flowLayoutPanel1.Controls.Add(this.AuthorBox);
             flowLayoutPanel1.Controls.Add(this.TagBox);
             flowLayoutPanel1.Controls.Add(this.DescBrowser);
@@ -161,19 +158,6 @@ namespace PictureSpider
             this.queueComboBox.Name = "queueComboBox";
             this.queueComboBox.Size = new System.Drawing.Size(90, 28);
             this.queueComboBox.TabIndex = 19;
-            // 
-            // RandomSlideCheckBox
-            // 
-            this.RandomSlideCheckBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.RandomSlideCheckBox.Location = new System.Drawing.Point(96, 80);
-            this.RandomSlideCheckBox.Margin = new System.Windows.Forms.Padding(0);
-            this.RandomSlideCheckBox.Name = "RandomSlideCheckBox";
-            this.RandomSlideCheckBox.Size = new System.Drawing.Size(62, 24);
-            this.RandomSlideCheckBox.TabIndex = 20;
-            this.RandomSlideCheckBox.Text = "Rock";
-            this.RandomSlideCheckBox.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.RandomSlideCheckBox.UseVisualStyleBackColor = true;
             // 
             // AuthorBox
             // 
@@ -380,7 +364,6 @@ namespace PictureSpider
         private AuthorBox AuthorBox;
         private QueueComboBox queueComboBox;
         private Label BookmarkPageLabel;
-        private CheckBox RandomSlideCheckBox;
         private Button InitButton;
         private NotifyIcon SystemTrayIcon;
         private System.ComponentModel.IContainer components;
