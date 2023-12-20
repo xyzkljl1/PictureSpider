@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -27,13 +28,15 @@ namespace PictureSpider
                 {
                     var config = LoadConfig();
                     using (var hitomi_server = new Hitomi.Server(config))
-                    using(var pixiv_server = new Pixiv.Server(config))
+                    using (var pixiv_server = new Pixiv.Server(config))
+                    using (var lsf_server = new LocalSingleFile.Server(config))
                     {
                         context.Post(async async => {
                             await hitomi_server.Init();
                             await pixiv_server.Init();
+                            await lsf_server.Init();
                         },null);
-                        Application.Run(new MainWindow(config, pixiv_server, hitomi_server));
+                        Application.Run(new MainWindow(config, pixiv_server, hitomi_server, lsf_server));
                     }
                 }
                 catch (Exception ex)
@@ -72,6 +75,17 @@ namespace PictureSpider
                             if (jsonObject[fieldInfo.Name] != null
                                 && jsonObject[fieldInfo.Name].Type == JTokenType.Integer)
                                 fieldInfo.SetValue(config, jsonObject[fieldInfo.Name].ToObject<int>());
+                        }
+                        else if (fieldInfo.FieldType == typeof(List<String>))
+                        {
+                            if (jsonObject[fieldInfo.Name] != null
+                                && jsonObject[fieldInfo.Name].Type == JTokenType.Array)
+                            {
+                                var list = new List<string>();
+                                foreach (var item in jsonObject[fieldInfo.Name].Value<JArray>())
+                                    list.Add(item.ToString());
+                                fieldInfo.SetValue(config, list);
+                            }
                         }
                     return config;
                 }

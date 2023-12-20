@@ -13,7 +13,7 @@ namespace PictureSpider
     {
         private List<BaseServer> servers = new List<BaseServer>();
         //生成64位程序会导致无法用设计器编辑
-        public MainWindow(Config config,Pixiv.Server _pixiv_server, Hitomi.Server _hitomi_server)
+        public MainWindow(Config config,Pixiv.Server _pixiv_server, Hitomi.Server _hitomi_server, LocalSingleFile.Server _lsf_server)
         {
             //由于蜜汁原因，在x64下频繁绘制足够大的GIF时，其它控件不会根据databinding自动刷新，所以需要让BindHandle手动调用MainWindow.Update()
             //不确定是否会产生额外的刷新
@@ -23,6 +23,7 @@ namespace PictureSpider
             InitButton.Visible = config.ShowInitButton;
             servers.Add(_pixiv_server);
             servers.Add(_hitomi_server);
+            servers.Add(_lsf_server);
             //servers.Add(_twitter_server);
             {
                 MainExplorer.SetSpecialDir(Path.Combine(config.PixivDownloadDir, "special"));

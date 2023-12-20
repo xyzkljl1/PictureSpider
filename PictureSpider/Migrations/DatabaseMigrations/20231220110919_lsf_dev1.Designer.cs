@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.LocalSingleFile;
 
@@ -10,9 +11,11 @@ using PictureSpider.LocalSingleFile;
 namespace PictureSpider.Migrations.DatabaseMigrations
 {
     [DbContext(typeof(Database))]
-    partial class DatabaseModelSnapshot : ModelSnapshot
+    [Migration("20231220110919_lsf_dev1")]
+    partial class lsf_dev1
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,18 +24,19 @@ namespace PictureSpider.Migrations.DatabaseMigrations
 
             modelBuilder.Entity("PictureSpider.LocalSingleFile.Illust", b =>
                 {
-                    b.Property<string>("path")
-                        .HasColumnType("varchar(95)");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("date")
                         .HasColumnType("datetime");
 
-                    b.Property<bool>("fav")
-                        .HasColumnType("tinyint(1)");
+                    b.Property<string>("path")
+                        .HasColumnType("longtext");
 
-                    b.HasKey("path");
+                    b.HasKey("Id");
 
-                    b.ToTable("Waited");
+                    b.ToTable("Readed");
                 });
 #pragma warning restore 612, 618
         }

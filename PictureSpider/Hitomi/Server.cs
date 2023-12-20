@@ -69,10 +69,16 @@ namespace PictureSpider.Hitomi
         public void Dispose()
         {
             httpClient.Dispose();
+            database.Dispose();
         }
         public override async Task Init()
         {
+#if DEBUG
+            return;
+#endif
+#pragma warning disable CS0162 // 检测到无法访问的代码
             PrepareJS();
+#pragma warning restore CS0162
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014
@@ -370,7 +376,6 @@ namespace PictureSpider.Hitomi
             result.Sort((l, r) =>(l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;
         }
-        private HashSet<string> tt=new HashSet<string>();
         //获取illustGroup详细信息
         private async Task FetchIllustGroupById(IllustGroup illustGroup)
         {            

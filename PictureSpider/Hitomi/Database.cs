@@ -15,12 +15,12 @@ using Microsoft.Extensions.Configuration;
    //仅初次需要
    Enable-Migrations  
    //在Migrations下生成迁移文件
-   //有多个dbContext时必须使用--context指定
+   //有多个dbContext时必须使用-Context指定,context为类名，如-Context PictureSpider.Hitomi.Database
    //因为此时并不会运行程序无法获得参数，需要从命令行传入-Args；其中A可以是任意字符，用来占位使得configuration派生参数时key和value不会错位
    //似乎可以忽略的警报？：An error occurred while accessing the Microsoft.Extensions.Hosting services. Continuing without the application service provider. Error: The entry point exited without ever building an IHost.
-   Add-Migration -Args "A ConnStr=server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=hitomi;" <版本名>
+   Add-Migration -Context PictureSpider.Hitomi.Database -Args "A ConnStr=server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=hitomi;" <版本名>
    //执行迁移文件
-   Update-Database -Args "A ConnStr=server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=hitomi;"
+   Update-Database -Context PictureSpider.Hitomi.Database -Args "A ConnStr=server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=hitomi;"
  */
 namespace PictureSpider.Hitomi
 {

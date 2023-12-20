@@ -69,8 +69,11 @@ namespace PictureSpider
             if (frozen)
                 return;
             followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
-            user.followed = followCheckBox.CheckState == CheckState.Checked;
-            user.queued = followCheckBox.CheckState == CheckState.Indeterminate;
+            if(user!=null)
+            {
+                user.followed = followCheckBox.CheckState == CheckState.Checked;
+                user.queued = followCheckBox.CheckState == CheckState.Indeterminate;
+            }
             server.SetUserFollowOrQueue(user);
             AuthorModified(this,new EventArgs());
         }

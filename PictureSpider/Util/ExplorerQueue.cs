@@ -31,7 +31,8 @@ namespace PictureSpider
             FavR,
             Main,
             MainR,
-            User
+            User,
+            Folder
         };
         public QueueType type;//队列类型
         public string id;//区分队列的id,在不同Server中意义不同
