@@ -42,7 +42,7 @@ namespace PictureSpider.LocalSingleFile
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            //return;
 #endif
 #pragma warning disable CS0162 // 检测到无法访问的代码
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
@@ -64,6 +64,8 @@ namespace PictureSpider.LocalSingleFile
         {
             var illusts = (from illust in database.Waited
                           select illust).ToList<Illust>();
+            int del_ct = 0;
+            int mv_ct = 0;
             foreach(var illust in illusts)
             {
                 if (!File.Exists(illust.path))
@@ -84,6 +86,7 @@ namespace PictureSpider.LocalSingleFile
                         File.Move(illust.path, dest_path);
                         database.Waited.Remove(illust);
                         database.SaveChanges();
+                        mv_ct++;
                     }
                     catch (System.IO.IOException)
                     {
@@ -97,6 +100,7 @@ namespace PictureSpider.LocalSingleFile
                         File.Delete(illust.path);
                         database.Waited.Remove(illust);
                         database.SaveChanges();
+                        del_ct++;
                     }
                     catch (System.IO.IOException)
                     {
@@ -104,6 +108,7 @@ namespace PictureSpider.LocalSingleFile
                     }
                 }
             }
+            Log($"Weekly Task Done:Move {mv_ct}/Del {del_ct}.");
         }
         public async override Task<List<ExplorerQueue>> GetExplorerQueues()
         {
@@ -137,6 +142,8 @@ namespace PictureSpider.LocalSingleFile
         HashSet<string> GetFiles(string dir)
         {
             var result=new HashSet<string>();
+            if(!Directory.Exists(dir))
+                return result;
             foreach (var path in Directory.GetFiles(dir))
             {
                 var ext=Path.GetExtension(path).ToLower();
