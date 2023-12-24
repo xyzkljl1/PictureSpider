@@ -107,12 +107,12 @@ namespace PictureSpider.Pixiv
         }
         public override async Task Init()
         {
+            banned_keyword = await database.GetBannedKeyword();
 #if DEBUG
             return;
 #endif
 #pragma warning disable CS0162 // 检测到无法访问的代码
             await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
-            banned_keyword = await database.GetBannedKeyword();
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014

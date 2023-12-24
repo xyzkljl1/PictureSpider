@@ -334,7 +334,7 @@ namespace PictureSpider.Pixiv
                         if(illust.valid)
                         {
                             string cmdText = "insert ignore user(userId) values(@userId);\n" +
-                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW(),@18,@19)" +
+                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW(),@18,@19,@20,@21)" +
                                              "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
                                              "userId=@5,width=@6,height=@7,pageCount=@8," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW(),"+
