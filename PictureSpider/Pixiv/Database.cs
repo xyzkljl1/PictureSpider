@@ -75,9 +75,11 @@ namespace PictureSpider.Pixiv
                                readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
                                bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
                                updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
+                               uploadDate = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("uploadDate"))),
                                valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
+                               viewCount = dataReader.GetInt32(dataReader.GetOrdinal("viewCount")),
                                ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
                                ugoiraFrames = dataReader.IsDBNull(dataReader.GetOrdinal("ugoiraFrames")) ? "" : dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
                    };
@@ -109,9 +111,11 @@ namespace PictureSpider.Pixiv
                                 readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
                                 bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
                                 updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
+                                uploadDate = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("uploadDate"))),
                                 valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                 likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                                 bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
+                                viewCount = dataReader.GetInt32(dataReader.GetOrdinal("viewCount")),
                                 ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
                                 ugoiraFrames = dataReader.IsDBNull(dataReader.GetOrdinal("ugoiraFrames")) ? "" : dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
                             };
@@ -334,7 +338,7 @@ namespace PictureSpider.Pixiv
                                              "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
                                              "userId=@5,width=@6,height=@7,pageCount=@8," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW(),"+
-                                             "ugoiraFrames=@18,ugoiraURL=@19;\n";
+                                             "ugoiraFrames=@18,ugoiraURL=@19,viewCount=@20,uploadDate=@21;\n";
                             var cmd = new MySqlCommand(cmdText, connection, ts);
                             cmd.Parameters.AddWithValue("@userId", illust.userId);
                             cmd.Parameters.AddWithValue("@0", illust.id);
@@ -357,6 +361,8 @@ namespace PictureSpider.Pixiv
                             cmd.Parameters.AddWithValue("@17", illust.bookmarkCount);
                             cmd.Parameters.AddWithValue("@18", illust.ugoiraFrames);
                             cmd.Parameters.AddWithValue("@19", illust.ugoiraURL);
+                            cmd.Parameters.AddWithValue("@20", illust.viewCount);
+                            cmd.Parameters.AddWithValue("@21", illust.uploadDate);
                             affected += cmd.ExecuteNonQuery();
                         }
                         else

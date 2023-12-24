@@ -47,8 +47,11 @@ namespace PictureSpider.Pixiv
         public Boolean bookmarked;//整体
         public Boolean bookmarkPrivate;
         public int likeCount = 0;
-        public int bookmarkCount=0;
+        public int bookmarkCount = 0;
+        public int viewCount = 0;
         public bool valid;//不在json里,获取不到(即已删除)则为无效
+
+        public DateTime uploadDate;//illust上传的时间 
         //Modified data
         public string urlFormat;//假定每P的格式都相同
         public string urlThumbFormat;
@@ -59,7 +62,7 @@ namespace PictureSpider.Pixiv
         public string bookmarkEach="";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
                                         string浪费空间且修改消耗大，但是考虑到读远比写次数多，且多数illust的bookmarkEach为空，直接使用string以方便数据库交互
                                         */
-        public DateTime updateTime;
+        public DateTime updateTime;//数据库中该条record更新的时间(不是illust更新时间)
         //tmp
         public string userName;
         public int score;
@@ -94,7 +97,9 @@ namespace PictureSpider.Pixiv
             height = json.Value<int>("height");
             pageCount = json.Value<int>("pageCount");
             bookmarkCount = json.Value<int>("bookmarkCount");
+            viewCount = json.Value<int>("viewCount");
             likeCount = json.Value<int>("likeCount");
+            uploadDate = json.Value<DateTime>("uploadDate");//形如2019-05-30T08:08:00+00:00
             if (json.Value<JObject>("bookmarkData") != null)
             {
                 bookmarked = true;

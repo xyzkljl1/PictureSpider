@@ -107,6 +107,7 @@ namespace PictureSpider.Pixiv
         }
         public override async Task Init()
         {
+            RequestIllustAsync(74974207);
 #if DEBUG
             return;
 #endif
@@ -318,8 +319,9 @@ namespace PictureSpider.Pixiv
                     int FOLLOWED_USER_MAGIC_NUMBER = 1000000;//关注作者对illust分数的加算加成
                     var illust_list = tmp[i];
                     int follow_ct = 0;
-                    //关注作者最优先，其余按收藏和喜欢数加权
-                    foreach(var illust in illust_list)
+                    //关注作者最优先
+                    //收藏、点赞高的优先，浏览量低的优先，时间近的优先
+                    foreach (var illust in illust_list)
                     {
                         illust.score = 0;
                         if (followed_user.Contains(illust.userId))
@@ -327,7 +329,10 @@ namespace PictureSpider.Pixiv
                             follow_ct++;
                             illust.score += FOLLOWED_USER_MAGIC_NUMBER;
                         }
-                        illust.score += illust.bookmarkCount / 10 + illust.likeCount / 100;
+                        int years = (int)(DateTime.Now - illust.uploadDate).TotalDays / 365;
+                        //暂定：浏览量是后加入数据库的，很多图片尚未获取为默认值0，为了让已获取浏览量的图片排在前面，统一将旧图片按200k浏览量计算
+                        var viewCount=illust.viewCount==0?200000:illust.viewCount;
+                        illust.score = ((illust.bookmarkCount + illust.likeCount / 2)-viewCount/50)*(20-years);
                     }
                     illust_list.Sort((l, r) => r.score.CompareTo(l.score));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
