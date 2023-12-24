@@ -107,7 +107,6 @@ namespace PictureSpider.Pixiv
         }
         public override async Task Init()
         {
-            RequestIllustAsync(74974207);
 #if DEBUG
             return;
 #endif
@@ -332,7 +331,7 @@ namespace PictureSpider.Pixiv
                         int years = (int)(DateTime.Now - illust.uploadDate).TotalDays / 365;
                         //暂定：浏览量是后加入数据库的，很多图片尚未获取为默认值0，为了让已获取浏览量的图片排在前面，统一将旧图片按200k浏览量计算
                         var viewCount=illust.viewCount==0?200000:illust.viewCount;
-                        illust.score = ((illust.bookmarkCount + illust.likeCount / 2)-viewCount/50)*(20-years);
+                        illust.score = (int)(((illust.bookmarkCount + illust.likeCount / 2)-viewCount/50)*((20-years)/10.0));
                     }
                     illust_list.Sort((l, r) => r.score.CompareTo(l.score));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
