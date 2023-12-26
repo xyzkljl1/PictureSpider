@@ -211,6 +211,7 @@ namespace PictureSpider.Pixiv
             bookmarked=illust.bookmarked;
             bookmarkPrivate =illust.bookmarkPrivate;
             readed=illust.readed;
+            debugMessage = illust.debugMsg;
         }
         public override string FilePath(int page)
         {

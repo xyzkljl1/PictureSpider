@@ -16,6 +16,7 @@ namespace PictureSpider
         public bool bookmarkPrivate;
         public List<string> tags=new List<string>();
         public bool readed;
+        public string debugMessage = "";
         public abstract int pageCount();
         public abstract int validPageCount();
         public abstract string WebsiteURL(int page);

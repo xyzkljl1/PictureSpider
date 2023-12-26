@@ -51,8 +51,10 @@ namespace PictureSpider.Pixiv
 
         private HashSet<int> illust_fetch_queue = new HashSet<int>();//计划更新的illustid,线程不安全,只在RunSchedule里使用
         private HashSet<int> illust_download_queue = new HashSet<int>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
-
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
+
+        private Dictionary<int,string> illust_debug_msg= new Dictionary<int,string>();//only for debug
+
         public Server(Config config)
         {
             base.tripleBookmarkState = true;
@@ -168,6 +170,8 @@ namespace PictureSpider.Pixiv
             var result = new List<ExplorerFileBase>();
             foreach(var illust in illusts)
             {
+                if(illust_debug_msg.ContainsKey(illust.id))//debug code
+                    illust.debugMsg= illust_debug_msg[illust.id];
                 result.Add(new ExplorerFile(illust, download_dir_main));
                 //已删除(valid=false)的图也加入队列，以防止valid=0&readed=0且没有下载的图越来越多每次都要检查
                 /*
@@ -389,14 +393,16 @@ namespace PictureSpider.Pixiv
                 string queue = "";
                 foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
                     queue += " " + illust.id;
-                var debug_msg = "";
                 foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
-                {
                     queue += " " + illust.id;
-                    debug_msg += $"{illust.id} {illust.debugMsg}\n";
-                }
                 //debug code
-                //File.WriteAllText("E:\\1.txt",debug_msg);
+                {
+                    illust_debug_msg.Clear();
+                    foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
+                        illust_debug_msg.Add(illust.id,illust.debugMsg);
+                    foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
+                        illust_debug_msg.Add(illust.id, illust.debugMsg);
+                }
                 await database.UpdateQueue(queue);
                 Log("Generate Queue Done");
             }

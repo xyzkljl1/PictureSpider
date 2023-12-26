@@ -54,7 +54,7 @@ namespace PictureSpider
                        (count_1 == count_2 ? count_1.ToString():(count_2.ToString()+"("+count_1.ToString()+")"));
             } }
         [Bindable(true)]
-        public string DescText{get { return file_list.Count > 0 ? file_list[index].title + "</br>" + file_list[index].description : "";} }
+        public string DescText{get { return file_list.Count > 0 ?$"{file_list[index].title}</br>{file_list[index].debugMessage}</br>{file_list[index].description}" : "";} }
         [Bindable(true)]
         public string TotalPageText{get { return (playing?"Pause":"Play")+"\n"+(file_list.Count > 0 ? (index+1).ToString()+"/"+file_list.Count.ToString() : "0/0"); }}
         [Bindable(true)]
