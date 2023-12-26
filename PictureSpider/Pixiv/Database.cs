@@ -19,15 +19,20 @@ namespace PictureSpider.Pixiv
         {
             connect_str = _connect_str;
         }
-        public async Task<List<int>> GetAllIllustId(string condition="")
+        public async Task<List<int>> GetAllIllustId(string condition = "")
         {
-            return await StandardQuery(String.Format("select id from illust {0}",condition),
+            return await StandardQuery(String.Format("select id from illust {0}", condition),
                         (DbDataReader reader) => { return reader.GetInt32(0); });
+        }
+        public async Task<int> GetIllustCount()
+        {
+            return (await StandardQuery<int>("select count(id) from illust",(DbDataReader reader) => { return reader.GetInt32(0); }))[0];
         }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time,float ratio=1.0f,bool reverse=false)
         {
             var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString("yyyy-MM-dd HH:mm:ss")));
-            return new List<int>(list.Take((int)(list.Count * ratio)));
+            var ct = await GetIllustCount();
+            return new List<int>(list.Take((int)(ct * ratio)));
         }
         public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
         {

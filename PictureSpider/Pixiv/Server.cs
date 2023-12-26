@@ -168,6 +168,9 @@ namespace PictureSpider.Pixiv
             var result = new List<ExplorerFileBase>();
             foreach(var illust in illusts)
             {
+                result.Add(new ExplorerFile(illust, download_dir_main));
+                //已删除(valid=false)的图也加入队列，以防止valid=0&readed=0且没有下载的图越来越多每次都要检查
+                /*
                 if (illust.valid)
                     result.Add(new ExplorerFile(illust, download_dir_main));
                 else //如果Illust已被删除，检测本地是否有图，如果本地至少有一张图也加入result
@@ -178,7 +181,7 @@ namespace PictureSpider.Pixiv
                             result.Add(new ExplorerFile(illust, download_dir_main));
                             break;
                         }
-                }
+                }*/
             }
             return result;
         }
@@ -216,7 +219,7 @@ namespace PictureSpider.Pixiv
         private async Task RunSchedule()
         {
             int last_daily_task = DateTime.Now.Day-1;
-            int process_speed = 140;
+            int process_speed = 120;
             var day_of_week = DateTime.Now.DayOfWeek;
             await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
@@ -230,12 +233,12 @@ namespace PictureSpider.Pixiv
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);
-                await ProcessIllustDownloadQueue(120);
-                if (illust_fetch_queue.Count / process_speed > 24 * 7)//积压量大于一周时逐渐加速
+                await ProcessIllustDownloadQueue(process_speed);
+                if (illust_fetch_queue.Count / process_speed > 24 * 7 * 2)//积压量大于一周时逐渐加速
                     process_speed++;
-                else if (illust_fetch_queue.Count / process_speed < 24 &&process_speed>140)//积压量小于一天时逐渐减速
+                else if (illust_fetch_queue.Count / process_speed < 24 * 2 &&process_speed>140)//积压量小于一天时逐渐减速
                     process_speed--;
-                await Task.Delay(new TimeSpan(1, 0, 0));//每隔一个小时执行一次
+                await Task.Delay(new TimeSpan(0, 30, 0));//每隔半小时执行一次
             }
             while (true);
         }
@@ -251,7 +254,7 @@ namespace PictureSpider.Pixiv
             if (do_week_task)
                 //更新关注和入列作者的作品
                 illust_list_bytime.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
-            //更新1/700的数据库，每两年更新一轮
+            //更新1/700的数据库，每两年更新一轮（实际因为总数在增长，两年不能更新一轮)
             illust_list_bytime.UnionWith(await database.GetIllustIdByUpdateTime(DateTime.UtcNow.AddDays(-UPDATE_INTERVAL), 1.0f / UPDATE_INTERVAL));
             //关键字搜索。分散成若干块进行
             illust_list_bylike.Union(await RequestAllKeywordSearchIllustBlock((DateTime.Now-new DateTime(2000,1,1)).Days));
@@ -327,11 +330,13 @@ namespace PictureSpider.Pixiv
                         {
                             follow_ct++;
                             illust.score += FOLLOWED_USER_MAGIC_NUMBER;
+                            illust.debugMsg += "Followed ";
                         }
                         int years = (int)(DateTime.Now - illust.uploadDate).TotalDays / 365;
                         //暂定：浏览量是后加入数据库的，很多图片尚未获取为默认值0，为了让已获取浏览量的图片排在前面，统一将旧图片按200k浏览量计算
                         var viewCount=illust.viewCount==0?200000:illust.viewCount;
                         illust.score = (int)(((illust.bookmarkCount + illust.likeCount / 2)-viewCount/50)*((20-years)/10.0));
+                        illust.debugMsg += $"{illust.score}={illust.bookmarkCount}+{illust.likeCount}-{viewCount}*{years};  ";
                     }
                     illust_list.Sort((l, r) => r.score.CompareTo(l.score));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
@@ -369,6 +374,7 @@ namespace PictureSpider.Pixiv
                                  */
                                 if(max_tag!="")
                                     addition_in_tag[max_tag] = (addition_in_tag[max_tag] - 1.0f) * 0.9f + 1.0f;
+                                illust.debugMsg = $"{(int)((float)illust.score * max_addup)}:{illust.score}*{max_addup};  {illust.debugMsg}";
                                 illust.score = (int)((float)illust.score*max_addup);
                             }
                         //重新排序
@@ -383,11 +389,17 @@ namespace PictureSpider.Pixiv
                 string queue = "";
                 foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
                     queue += " " + illust.id;
+                var debug_msg = "";
                 foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
+                {
                     queue += " " + illust.id;
+                    debug_msg += $"{illust.id} {illust.debugMsg}\n";
+                }
+                //debug code
+                //File.WriteAllText("E:\\1.txt",debug_msg);
                 await database.UpdateQueue(queue);
                 Log("Generate Queue Done");
-            }            
+            }
         }
 
         /*

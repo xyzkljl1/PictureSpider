@@ -66,6 +66,7 @@ namespace PictureSpider.Pixiv
         //tmp
         public string userName;
         public int score;
+        public string debugMsg;
         public Illust(int _id,bool _valid)
         {
             id = _id;
