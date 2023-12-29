@@ -199,8 +199,13 @@ namespace PictureSpider.LocalSingleFile
                     database.Waited.Add(new Illust((file as ExplorerFile).path, true));
                 else//默认只有一个
                 {
-                    exists.First().fav = true;
-                    exists.First().date = DateTime.Now;
+                    if((file as ExplorerFile).in_fav_dir)//原本在fav目录则无需操作，从队列里移除
+                        database.Waited.Remove(exists.First());
+                    else//原本不在则需要留在队列
+                    {
+                        exists.First().fav = true;
+                        exists.First().date = DateTime.Now;
+                    }
                 }
             }
             else

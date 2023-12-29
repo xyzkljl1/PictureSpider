@@ -34,10 +34,14 @@ namespace PictureSpider.LocalSingleFile
     public class ExplorerFile : ExplorerFileBase
     {
         public string path;
+        //是否位于fav目录(即创建时的bookmarked值)，这会影响后续操作
+        //原本位于fav目录的文件，取消fav->fav后，应当原地不动
+        //原本不位于fav目录的文件，fav->取消fav->fav,应当加入待处理队列
+        public bool in_fav_dir=false;
         public ExplorerFile(string _path,bool _b)
         {
             path = _path;
-            bookmarked = _b;
+            in_fav_dir = bookmarked = _b;
             readed = false;
         }
         public override string FilePath(int page) { return path; }
