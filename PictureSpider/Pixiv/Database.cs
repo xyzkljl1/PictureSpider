@@ -36,7 +36,7 @@ namespace PictureSpider.Pixiv
         }
         public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
         {
-            return await StandardQuery<Illust>("select id,updateTime,likeCount from illust where readed=0 or bookmarked=1",
+            return await StandardQuery<Illust>("select id,updateTime,likeCount from illust",
                (DbDataReader dataReader) => {
                    return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")),true)
                    {
