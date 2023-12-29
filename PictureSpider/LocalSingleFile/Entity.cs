@@ -16,6 +16,7 @@ namespace PictureSpider.LocalSingleFile
     public class Illust
     {
         [Key]
+        [StringLength(600)]
         public string path { get; set; }
         public DateTime date { get; set; }
         //数据库内的文件要么fav要么readed，其它状态的不会进入数据库，因此fav和readed共用一个变量存储
