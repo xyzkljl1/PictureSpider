@@ -334,32 +334,36 @@ namespace PictureSpider
                 return;
             var illust = file_list[index];
             if (args.Button == MouseButtons.Left)//左键切换整组是否收藏
-            {
-                if (server.tripleBookmarkState)
-                {
-                    if (!illust.bookmarked)//0->1
-                        illust.bookmarked = true;
-                    else if (illust.bookmarkPrivate)//2->0
-                        illust.bookmarked = illust.bookmarkPrivate = false;
-                    else//1->2
-                        illust.bookmarkPrivate = true;
-                }
-                else
-                    illust.bookmarked = !illust.bookmarked;
-                server.SetBookmarked(illust);
-                this.NotifyChange<Bitmap>("FavIcon");
-                this.NotifyChange<bool>("PageInvalid");
-                this.NotifyChange<string>("IndexText");
-            }
+                SwitchBookmarkStatusImpLeftClick(illust);
             else if (args.Button == MouseButtons.Right&&illust.bookmarked&&illust.validPageCount()>1)//右键切换单张收藏，不允许全部屏蔽
+                SwitchBookmarkStatusImpRightClick(illust);
+        }
+        private void SwitchBookmarkStatusImpLeftClick(ExplorerFileBase illust)
+        {
+            if (server.tripleBookmarkState)
             {
-                int i_index = (int)this.Image.Tag;
-                illust.switchPageValid(i_index);
-                server.SetBookmarkEach(illust);
-                this.NotifyChange<Bitmap>("FavIcon");
-                this.NotifyChange<bool>("PageInvalid");
-                this.NotifyChange<string>("IndexText");
+                if (!illust.bookmarked)//0->1
+                    illust.bookmarked = true;
+                else if (illust.bookmarkPrivate)//2->0
+                    illust.bookmarked = illust.bookmarkPrivate = false;
+                else//1->2
+                    illust.bookmarkPrivate = true;
             }
+            else
+                illust.bookmarked = !illust.bookmarked;
+            server.SetBookmarked(illust);
+            this.NotifyChange<Bitmap>("FavIcon");
+            this.NotifyChange<bool>("PageInvalid");
+            this.NotifyChange<string>("IndexText");
+        }
+        private void SwitchBookmarkStatusImpRightClick(ExplorerFileBase illust)
+        {
+            int i_index = (int)this.Image.Tag;
+            illust.switchPageValid(i_index);
+            server.SetBookmarkEach(illust);
+            this.NotifyChange<Bitmap>("FavIcon");
+            this.NotifyChange<bool>("PageInvalid");
+            this.NotifyChange<string>("IndexText");
         }
         //在浏览器中打开当前图片
         public void OpenInBrowser(object sender, EventArgs args)
@@ -387,6 +391,7 @@ namespace PictureSpider
         {
             //左右键盘逐帧切换，到头时进入下一组
             //上下键直接进入下一组
+            //按Del等于左键点击收藏按钮
             if (e.KeyCode == Keys.Left)
             {
                 if(!SlideHorizon(-1))
@@ -401,6 +406,13 @@ namespace PictureSpider
                 SlideVertical(-1);
             else if (e.KeyCode == Keys.Down)
                 SlideVertical(1);
+            else if (e.KeyCode == Keys.Delete)
+            {
+                if (index < 0 || index >= file_list.Count)
+                    return;
+                var illust = file_list[index];
+                SwitchBookmarkStatusImpLeftClick(illust);
+            }
         }
     }
 }
