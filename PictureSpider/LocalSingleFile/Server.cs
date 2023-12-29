@@ -42,7 +42,7 @@ namespace PictureSpider.LocalSingleFile
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            /return;
 #endif
 #pragma warning disable CS0162 // 检测到无法访问的代码
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
@@ -173,7 +173,6 @@ namespace PictureSpider.LocalSingleFile
                     exists.First().readed = true;//默认只有一个
                     exists.First().date = DateTime.Now;
                 }
-                database.SaveChanges();
             }
             else
             {
@@ -186,6 +185,7 @@ namespace PictureSpider.LocalSingleFile
                     foreach (var illust in exists)
                         database.Waited.Remove(illust);
             }
+            database.SaveChanges();
         }
         public override void SetBookmarked(ExplorerFileBase file)
         {
@@ -202,7 +202,6 @@ namespace PictureSpider.LocalSingleFile
                     exists.First().fav = true;
                     exists.First().date = DateTime.Now;
                 }
-                database.SaveChanges();
             }
             else
             {
@@ -215,6 +214,7 @@ namespace PictureSpider.LocalSingleFile
                     exists.First().date = DateTime.Now;
                 }
             }
+            database.SaveChanges();
         }
     }
 }
