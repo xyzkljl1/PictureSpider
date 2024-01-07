@@ -136,6 +136,12 @@ namespace PictureSpider.Hitomi
                     database.SaveChanges();
                 }
             }
+            catch (ImageFormatException)
+            {
+                //损坏的文件，直接删除
+                Log($"Can't Transform webp.Delete Invalid File:{path}");
+                File.Delete(path);
+            }
             catch (Exception e)
             {
                 LogError("Can't Transform webp:" + path);
