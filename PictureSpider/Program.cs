@@ -28,16 +28,16 @@ namespace PictureSpider
                 {
                     var config = LoadConfig();
                     using (var hitomi_server = new Hitomi.Server(config))
-                    using (var pixiv_server = new Pixiv.Server(config))
-                    using (var lsf_server = new LocalSingleFile.Server(config))
-                    {
-                        context.Post(async async => {
-                            await hitomi_server.Init();
-                            await pixiv_server.Init();
-                            await lsf_server.Init();
-                        },null);
-                        Application.Run(new MainWindow(config, pixiv_server, hitomi_server, lsf_server));
-                    }
+                        using (var pixiv_server = new Pixiv.Server(config))
+                            using (var lsf_server = new LocalSingleFile.Server(config))
+                            {
+                                context.Post(async async => {
+                                    await hitomi_server.Init();
+                                    await pixiv_server.Init();
+                                    await lsf_server.Init();
+                                },null);
+                                Application.Run(new MainWindow(config, pixiv_server, hitomi_server, lsf_server));
+                            }
                 }
                 catch (Exception ex)
                 {

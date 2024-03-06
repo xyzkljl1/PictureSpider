@@ -12,6 +12,7 @@ namespace PictureSpider
     public partial class MainWindow : Form
     {
         private List<BaseServer> servers = new List<BaseServer>();
+        private ListenerServer listenerServer = null;
         //生成64位程序会导致无法用设计器编辑
         public MainWindow(Config config,Pixiv.Server _pixiv_server, Hitomi.Server _hitomi_server, LocalSingleFile.Server _lsf_server)
         {
@@ -70,6 +71,8 @@ namespace PictureSpider
             DataBindings.Add(new Binding("Text", _pixiv_server.GetBindHandle<string>("VerifyState"), "Content"));
 
             //onListCheckBoxClick(null,null);
+
+            listenerServer = new ListenerServer(_pixiv_server, servers, config.Proxy);
         }
         private void OnClose(object sender, FormClosingEventArgs e)
         {

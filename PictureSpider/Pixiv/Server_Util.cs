@@ -184,7 +184,7 @@ namespace PictureSpider.Pixiv
                     throw new ArgumentNullException("There must be a Bookmark ID when delete a bookmark");
                 var ret=await RequestPixivAsyncPost(String.Format("{0}bookmark_setting.php", base_url),
                     new Uri(String.Format("{0}bookmark_add.php?type=illust&illust_id={1}",base_url,illust_id)),
-                    String.Format("tt={0}&p=1&untagged=0&rest=show&book_id%5B%5D={1}&del=1",cookie_server.csrf_token,bookmark_id));
+                    String.Format("tt={0}&p=1&untagged=0&rest=show&book_id%5B%5D={1}&del=1",await database.GetCSRFToken(),bookmark_id));
                 Console.WriteLine(ret);
                 return false;
             }
@@ -288,7 +288,7 @@ namespace PictureSpider.Pixiv
             JObject json = await RequestJsonAsync(url, referer,false);
             if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
                 return null;
-            if (json.Value<Boolean>("error"))//否则标记未无效
+            if (json.Value<Boolean>("error"))//否则标记为无效
                 return new Illust(illustId, false);
             if (json.Value<JObject>("body").Value<Int32>("illustType")==2)//动图需要额外获取动图信息
             {

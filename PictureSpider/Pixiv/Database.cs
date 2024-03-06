@@ -314,12 +314,12 @@ namespace PictureSpider.Pixiv
         }
         public void UpdateUserSync(User user)
         {
-            StandardNoneQuerySync("update user set userName=@0,followed=@1,queued=@2 where userId=@3;"
+            StandardNoneQuerySync("insert into user values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n"
                 , (cmd) => {
-                    cmd.Parameters.AddWithValue("@0", user.userName);
-                    cmd.Parameters.AddWithValue("@1", user.followed);
-                    cmd.Parameters.AddWithValue("@2", user.queued);
-                    cmd.Parameters.AddWithValue("@3", user.userId);
+                    cmd.Parameters.AddWithValue("@0", user.userId);
+                    cmd.Parameters.AddWithValue("@1", user.userName);
+                    cmd.Parameters.AddWithValue("@2", user.followed);
+                    cmd.Parameters.AddWithValue("@3", user.queued);
                 });
         }
         /*插入或更新illust

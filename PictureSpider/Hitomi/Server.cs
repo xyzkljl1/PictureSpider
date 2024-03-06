@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Text.RegularExpressions;
 
 namespace PictureSpider.Hitomi
 {
@@ -295,12 +296,17 @@ namespace PictureSpider.Hitomi
                         var gid=galleryinfo.id;
                         var myurl=[];
                         var myhash=[];
+                        var myartists=[];
                         var mytitle=galleryinfo.japanese_title || galleryinfo.title;
                         for(let file of galleryinfo.files){
                             var src=url_from_url_from_hash(galleryinfo.id,file,'webp',undefined,'a');
                             myurl.push(src);
                             myhash.push(file.hash);
-                        }";
+                        }
+                        for(let artInfo of galleryinfo.artists){
+                            myartists.push(artInfo.artist);
+                        }
+                        ";
         }
         public async Task CalcIllustURL(IllustGroup illustGroup)
         {
@@ -412,6 +418,23 @@ namespace PictureSpider.Hitomi
             illustGroup.fetched = true;
             database.SaveChanges();
             Log($"Fetch IllustGroup Done:{illustGroup.Id} {illustGroup.title}");
+        }
+        //FetchUse
+        private async Task<List<string>> FetchUserIDsByIllustGroupID(int id)
+        {
+            var ret=new List<string>();
+            var galleryInfoJS = await HttpGet($"{baseUrlLtn}/galleries/{id}.js");
+            var ggJS = await HttpGet($"{baseUrlLtn}/gg.js");
+
+            using (var engine = new V8ScriptEngine())
+            {
+                var script = galleryInfoJS + "\n" + commonjs + "\n" + ggJS + "\n" + myjs;
+                engine.Execute(script);
+                var users = engine.Script.myartists;
+                for (var i = 0; i < users.length; ++i)
+                    ret.Add(users[i] as string);
+            }
+            return ret;
         }
         //获取作品列表
         private async Task FetchUserAndIllustGroups()
@@ -559,6 +582,74 @@ namespace PictureSpider.Hitomi
         {
             if (!response.IsSuccessStatusCode)
                 throw new Exception("HTTP Not Success");
+        }
+        public override bool ListenerUtil_IsValidUrl(string url)
+        {
+            if (url.StartsWith("https://hitomi.la/"))
+                return true;
+            return false;
+        }
+        public override async Task<bool> ListenerUtil_FollowUser(string url)
+        {
+            if (url.StartsWith("https://hitomi.la/manga/")||url.StartsWith("https://hitomi.la/doujinshi/")||
+                url.StartsWith("https://hitomi.la/cg/")||url.StartsWith("https://hitomi.la/imageset/"))
+            {
+                var regex = new Regex("https://hitomi.la/(manga|doujinshi|cg|imageset)/.*-([0-9]+).html");
+                var results = regex.Match(url).Groups;
+                if (results.Count > 1)
+                {
+                    var id = Int32.Parse(results[2].Value);
+                    var users = await FetchUserIDsByIllustGroupID(id);
+                    if (users.Count > 0)
+                    {
+                        users.ForEach(u => AddQueuedUser(u));
+                        return true;
+                    }
+                }
+            }
+            else if (url.StartsWith("https://hitomi.la/reader/"))
+            {
+                var regex = new Regex("https://hitomi.la/reader/([0-9]+).html");
+                var results = regex.Match(url).Groups;
+                if (results.Count > 1)
+                {
+                    var id = Int32.Parse(results[1].Value);
+                    var users=await FetchUserIDsByIllustGroupID(id);
+                    if(users.Count>0)
+                    {
+                        users.ForEach(u => AddQueuedUser(u));
+                        return true;
+                    }
+                }
+            }
+            else if (url.StartsWith("https://hitomi.la/artist/"))
+            {
+                var regex = new Regex("https://hitomi.la/artist/([0-9a-zA-Z ]+)-all.html");
+                var results = regex.Match(url).Groups;
+                if (results.Count > 1)
+                {
+                    var id = results[1].Value;
+                    return AddQueuedUser(id);
+                }
+            }
+            return false;
+        }
+        public bool AddQueuedUser(string id)
+        {
+            User user=null;
+            if (database.Users.Count(x => x.name == id) > 0)
+                user = database.Users.Where(x => x.name == id).First();
+            else
+            {
+                user = new User(id);
+                user.displayText = user.displayId = id;
+                database.Users.Add(user);
+            }
+            if (user.followed || user.queued)
+                return true;
+            user.queued = true;
+            database.SaveChanges();
+            return true;
         }
     }
 }

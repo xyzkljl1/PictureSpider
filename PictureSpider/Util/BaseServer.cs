@@ -26,7 +26,6 @@ namespace PictureSpider
         public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }
         public virtual Dictionary<string, string> GetAllTagsDesc() { return new Dictionary<string, string>(); }
         public virtual void UpdateTagStatus(string tag,TagStatus status) { }
-
         public virtual void Log(string text)
         {
             Console.WriteLine($"{logPrefix} {DateTime.Now.ToString("MM/dd-HH:mm:ss")} {text}");
@@ -35,6 +34,9 @@ namespace PictureSpider
         {
             Console.Error.WriteLine($"ERROR {logPrefix} {DateTime.Now.ToString("MM/dd-HH:mm:ss")} {text}");
         }
-
+        //以下是给listenerServer调用的部分
+        public virtual bool ListenerUtil_IsValidUrl(string url) { return false; }
+        public async virtual Task<bool> ListenerUtil_FollowUser(string url) { return false; }
+        public virtual async Task ListenerUtil_SetCookie(string cookie) { }
     }
 }

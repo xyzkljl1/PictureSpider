@@ -15,6 +15,10 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using MoreLinq;
+using Windows.Web.Http;
+using HttpClient = System.Net.Http.HttpClient;
+using HttpResponseMessage = System.Net.Http.HttpResponseMessage;
+using System.Text.RegularExpressions;
 namespace PictureSpider.Pixiv
 {
     partial class Server : BaseServer, IBindHandleProvider, IDisposable
@@ -41,10 +45,10 @@ namespace PictureSpider.Pixiv
         public string download_dir_main;
         private string download_dir_ugoira_tmp;
         public string special_dir;
-        private CookieServer cookie_server;
         public Database database;
         private HttpClient httpClient;
         private HttpClient httpClient_anonymous;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
+        private HttpClient httpClientCSRF;//用于获取csrf的client
         private HashSet<string> banned_keyword;
         Aria2DownloadQueue downloader;
         private string request_proxy;
@@ -74,9 +78,8 @@ namespace PictureSpider.Pixiv
             request_proxy = config.Proxy;
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
-            cookie_server = new CookieServer(database, request_proxy);
             downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy, "https://www.pixiv.net/");
-
+            //初始化httpClient
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
             {
@@ -85,27 +88,50 @@ namespace PictureSpider.Pixiv
                 Proxy = new WebProxy(request_proxy, false)
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
-            httpClient = new HttpClient(handler);
-            //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
-            httpClient.Timeout = new TimeSpan(0, 0, 35);
-            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
-            httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
-            httpClient.DefaultRequestHeaders.Host = base_host;
-            httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
-            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
-            //            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
-            httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
-            httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
-
-            httpClient_anonymous = new HttpClient(handler);
-            httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
-            httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
-            httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-            httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
-            httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
-            httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            {
+                httpClient = new HttpClient(handler);
+                //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
+                httpClient.Timeout = new TimeSpan(0, 0, 35);
+                httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+                httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                httpClient.DefaultRequestHeaders.Host = base_host;
+                //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
+                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
+                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
+                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
+                httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+               // httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
+            }
+            {
+                httpClient_anonymous = new HttpClient(handler);
+                httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
+                httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+                httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
+                httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            }
+            {
+                System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                var handlerCSRF = new HttpClientHandler()
+                {
+                    MaxConnectionsPerServer = 256,
+                    UseCookies = false,
+                    Proxy = new WebProxy(request_proxy, false)
+                };
+                handlerCSRF.ServerCertificateCustomValidationCallback = delegate { return true; };
+                httpClientCSRF = new HttpClient(handlerCSRF);
+                httpClientCSRF.Timeout = new TimeSpan(0, 0, 35);
+                httpClientCSRF.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+                httpClientCSRF.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
+                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
+                httpClientCSRF.DefaultRequestHeaders.Host = "www.pixiv.net";
+                //httpClientCSRF.DefaultRequestHeaders.Add("Cookie", this.cookie);
+                httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
+                httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-site", "none");
+                httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
+            }
         }
         public override async Task Init()
         {
@@ -113,8 +139,11 @@ namespace PictureSpider.Pixiv
 #if DEBUG
             return;
 #endif
+            //设置cookie和csrftoken
+            await UpdateHttpClientByDatabaseCookie();
 #pragma warning disable CS0162 // 检测到无法访问的代码
-            await CheckHomePage();//会修改属性引发UI更新，需要从主线程调用或使用invoke
+            //会修改属性引发UI更新，需要从主线程调用或使用invoke
+            await CheckHomePage();
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014
@@ -945,6 +974,103 @@ namespace PictureSpider.Pixiv
             VerifyState = "Login Fail";
             LogError("Login Fail");
             throw new TopLevelException("Login Not Success");
+        }
+        /*
+         * CSRFToken是和cookie中的phpsessionid一一对应的token，随机生成并随登陆表单提交
+         * 部分操作如收藏作品必须在请求头附带登录时所用的CSRFToken，该token会在部分网页作为不显示的元素出现
+         * x-csrf-token/post_key/tt都可指代CSRFToken
+         */
+        private async Task FetchCSRFToken()
+        {
+            httpClientCSRF.DefaultRequestHeaders.Add("Cookie",await database.GetCookie());
+            //id为1的作品的编辑收藏页面，这个作品存不存在/是否已加入收藏不影响，设置语言表单里会带token
+            var url = "https://www.pixiv.net/bookmark_add.php?type=illust&illust_id=1";
+            var csrf_token = "";
+            for (int try_ct = 5; try_ct >= 0; --try_ct)
+                try
+                {
+                    using (HttpResponseMessage response = await httpClientCSRF.GetAsync(url))
+                    //if(response.StatusCode==HttpStatusCode.OK)
+                    {
+                        var ret = await response.Content.ReadAsStringAsync();
+                        var doc = new HtmlDocument();
+                        doc.LoadHtml(ret);
+                        HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//input[@name='tt']");
+                        if (headNode != null)
+                        {
+                            csrf_token = headNode.Attributes["value"].Value;
+                            break;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message + "Re Try " + try_ct.ToString() + " On :" + url);
+                    if (try_ct == 0)
+                        throw;
+                }
+            await database.UpdateCSRFToken(csrf_token);
+        }
+        public override async Task ListenerUtil_SetCookie(string cookie)
+        {
+            //获取cookie和csrftoken
+            var old_cookie = await database.GetCookie();
+            if (cookie!=old_cookie)
+            {
+                await database.UpdateCookie(cookie);
+                await UpdateHttpClientByDatabaseCookie();
+            }
+        }
+        public override bool ListenerUtil_IsValidUrl(string url)
+        {
+            if (url.StartsWith("https://www.pixiv.net"))
+                return true;
+            return false;
+        }
+        public override async Task<bool> ListenerUtil_FollowUser(string url)
+        {
+            if (url.StartsWith("https://www.pixiv.net/artworks/"))
+            {
+                var regex = new Regex("https://www.pixiv.net/artworks/([0-9]+)");
+                var id = Int32.Parse(regex.Match(url).Groups[1].Value);
+                var illust = await RequestIllustAsync(id);
+                if(illust is not null&&illust.userId!=0)
+                    return AddQueuedUser(illust.userId);
+            }
+            else if (url.StartsWith("https://www.pixiv.net/users/"))
+            {
+                var regex = new Regex("https://www.pixiv.net/users/([0-9]+)");
+                var results = regex.Match(url).Groups;
+                if(results.Count > 1)
+                {
+                    var id = Int32.Parse(results[1].Value);
+                    return AddQueuedUser(id);
+                }
+            }
+            return false;
+        }
+        public bool AddQueuedUser(int id)
+        {
+            var user = database.GetUserByIdSync(id);
+            if (user is null)
+                user = new User(id, "", false, false);
+            else if (user.followed || user.queued)//已经关注过视作成功
+                return true;
+            user.queued = true;//默认标记为queued
+            database.UpdateUserSync(user);
+            return true;
+        }
+        public async Task UpdateHttpClientByDatabaseCookie()
+        {
+            var cookie = await database.GetCookie();
+            if (!string.IsNullOrEmpty(cookie))
+            {
+                var csrf_token = await database.GetCSRFToken();
+                if (string.IsNullOrEmpty(csrf_token) && !string.IsNullOrEmpty(cookie))
+                    await FetchCSRFToken();
+                httpClient.DefaultRequestHeaders.Add("Cookie", cookie);
+                httpClient.DefaultRequestHeaders.Add("x-csrf-token", await database.GetCSRFToken());
+            }
         }
     }
 }

@@ -66,6 +66,7 @@ namespace PictureSpider.Hitomi
         public virtual ICollection<IllustGroup> illustGroups { get; set; }
 
         public User() { }
+        public User(string _name) { name = _name; }
     }
     public class ExplorerFile : ExplorerFileBase
     {

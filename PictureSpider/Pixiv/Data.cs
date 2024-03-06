@@ -40,7 +40,7 @@ namespace PictureSpider.Pixiv
         public string description;// same as illustComment
         public int xRestrict;//is not public
         public List<string> tags;//name
-        public int userId;
+        public int userId=0;
         public int width;
         public int height;
         public int pageCount;
