@@ -68,7 +68,7 @@ namespace PictureSpider
         }
         public async Task WaitForAll()
         {
-            while (!await CheckIfDownloadDone()) await Task.Delay(new TimeSpan(0, 3, 0));
+            while (!await CheckIfDownloadDone()) await Task.Delay(new TimeSpan(0, 1, 0));
         }
         private void CheckIfProcessRunning()
         {
