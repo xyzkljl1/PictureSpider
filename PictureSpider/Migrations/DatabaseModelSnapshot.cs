@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.LocalSingleFile;
 
@@ -16,8 +17,10 @@ namespace PictureSpider.Migrations.DatabaseMigrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "7.0.10")
+                .HasAnnotation("ProductVersion", "8.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("PictureSpider.LocalSingleFile.Illust", b =>
                 {
@@ -30,6 +33,10 @@ namespace PictureSpider.Migrations.DatabaseMigrations
 
                     b.Property<bool>("fav")
                         .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("sub_path")
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
 
                     b.HasKey("path");
 

@@ -18,16 +18,19 @@ namespace PictureSpider.LocalSingleFile
         [Key]
         [StringLength(600)]
         public string path { get; set; }
+        [StringLength(600)]
+        public string sub_path { get; set; }
         public DateTime date { get; set; }
         //数据库内的文件要么fav要么readed，其它状态的不会进入数据库，因此fav和readed共用一个变量存储
         public bool fav { get; set; }
         [NotMapped]
         public bool readed { get { return !fav; } set { fav = !value; } }
         public Illust() { }
-        public Illust(string _p,bool _f)
+        public Illust(string _path,string _sub_path,bool _fav)
         {
-            path = _p;
-            fav = _f;
+            path = _path;
+            sub_path = _sub_path;
+            fav = _fav;
             date = DateTime.Now;
         }
     }
@@ -35,13 +38,16 @@ namespace PictureSpider.LocalSingleFile
     public class ExplorerFile : ExplorerFileBase
     {
         public string path;
+        //相对于根目录(如FavDir)的路径，为了在从tmp移动到fav时保持目录结构
+        public string sub_path;
         //是否位于fav目录(即创建时的bookmarked值)，这会影响后续操作
         //原本位于fav目录的文件，取消fav->fav后，应当原地不动
         //原本不位于fav目录的文件，fav->取消fav->fav,应当加入待处理队列
         public bool in_fav_dir=false;
-        public ExplorerFile(string _path,bool _b)
+        public ExplorerFile(string _path,string _root_path,bool _b)
         {
             path = _path;
+            sub_path= Path.GetRelativePath(_root_path, _path);
             in_fav_dir = bookmarked = _b;
             readed = false;
         }

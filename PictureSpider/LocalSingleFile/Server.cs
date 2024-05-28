@@ -73,14 +73,15 @@ namespace PictureSpider.LocalSingleFile
                 if(illust.fav)
                 {
                     var filename = Path.GetFileName(illust.path);
-                    //用目录的hash作前缀加原文件名命名，从而使本来具有一定关联的图片，在移动到fav目录后仍然能排在一起
-                    var prefix = $"{Path.GetDirectoryName(illust.path).GetHashCode()}".Substring(0,3);
-                    var dest_path = "";
-                    do
+                    var dest_path = Path.Combine(FavDir, illust.sub_path);
+                    var dest_dir= Path.GetDirectoryName(dest_path);
+                    while (File.Exists(dest_path))
                     {//如果目的地存在同名文件就一直加_直到不重名
                         filename = $"_{filename}";
-                        dest_path=Path.Combine(FavDir, $"{prefix}{filename}");
-                    }while(File.Exists(dest_path));
+                        dest_path=Path.Combine(dest_dir,filename);
+                    }
+                    if(!Directory.Exists(dest_dir))
+                        Directory.CreateDirectory(dest_dir);
                     try
                     {
                         File.Move(illust.path, dest_path);
@@ -125,7 +126,7 @@ namespace PictureSpider.LocalSingleFile
             {
                 var existedFiles = GetFiles(FavDir);
                 foreach (var path in existedFiles)
-                    result.Add(new ExplorerFile(Path.GetFullPath(path), true));
+                    result.Add(new ExplorerFile(Path.GetFullPath(path),FavDir, true));
             }
             else if (queue.type == ExplorerQueue.QueueType.Folder)
             {
@@ -134,7 +135,7 @@ namespace PictureSpider.LocalSingleFile
                 var existedFiles = GetFiles(dir);
                 foreach (var path in existedFiles)
                     if(!readed.Contains(path))
-                        result.Add(new ExplorerFile(Path.GetFullPath(path), false));
+                        result.Add(new ExplorerFile(Path.GetFullPath(path),dir, false));
             }
             return result;
         }
@@ -167,7 +168,7 @@ namespace PictureSpider.LocalSingleFile
             if (file.readed)
             {
                 if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, false));
+                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, false));
                 else 
                 {
                     exists.First().readed = true;//默认只有一个
@@ -196,7 +197,7 @@ namespace PictureSpider.LocalSingleFile
             if (file.bookmarked)
             {
                 if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, true));
+                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, true));
                 else//默认只有一个
                 {
                     if((file as ExplorerFile).in_fav_dir)//原本在fav目录则无需操作，从队列里移除
@@ -212,7 +213,7 @@ namespace PictureSpider.LocalSingleFile
             {
                 //被取消bookmark的图片一定是已读的，仍然需要删除
                 if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, false));
+                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, false));
                 else//默认只有一个
                 {
                     exists.First().fav = false;
