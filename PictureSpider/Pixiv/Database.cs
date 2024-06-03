@@ -40,7 +40,7 @@ namespace PictureSpider.Pixiv
                (DbDataReader dataReader) => {
                    return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")),true)
                    {
-                       updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
+                       updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
                        likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                    };
                });
@@ -79,8 +79,8 @@ namespace PictureSpider.Pixiv
                                urlThumbFormat = dataReader.GetString(dataReader.GetOrdinal("urlThumbFormat")),
                                readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
                                bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
-                               updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
-                               uploadDate = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("uploadDate"))),
+                               updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
+                               uploadDate = dataReader.GetDateTime(dataReader.GetOrdinal("uploadDate")),
                                valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
@@ -115,8 +115,8 @@ namespace PictureSpider.Pixiv
                                 urlThumbFormat = dataReader.GetString(dataReader.GetOrdinal("urlThumbFormat")),
                                 readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
                                 bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
-                                updateTime = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("updateTime"))),
-                                uploadDate = Convert.ToDateTime(dataReader.GetString(dataReader.GetOrdinal("uploadDate"))),
+                                updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
+                                uploadDate = dataReader.GetDateTime(dataReader.GetOrdinal("uploadDate")),
                                 valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
                                 likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
                                 bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
