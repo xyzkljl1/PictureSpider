@@ -300,6 +300,7 @@ namespace PictureSpider.Pixiv
                     throw new TopLevelException("Get Ugoira Error");
                 return new Illust(json.Value<JObject>("body"), ugoira_json.Value<JObject>("body"));
             }
+            //Log($"Fetch {illustId} Done");
             return new Illust(json.Value<JObject>("body"));
         }
     }

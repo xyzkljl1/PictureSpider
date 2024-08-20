@@ -94,7 +94,7 @@ namespace PictureSpider.Pixiv
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
                 httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -108,7 +108,7 @@ namespace PictureSpider.Pixiv
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -681,7 +681,9 @@ namespace PictureSpider.Pixiv
                 foreach (var word in tags.Take(tags_count * (idx_word + 1) / BLOCKS_WORD).Skip(tags_count * idx_word / BLOCKS_WORD))
                 {
                     tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
-                    if (tmp.Length > 1600)
+                    //出于某种神秘原因，p站对长关键字的容忍大幅降低了，1600->500，保险起见使用300长度
+                    //超出长度时正常返回但是不包含任何illust
+                    if (tmp.Length > 300)
                     {
                         key_word_list.Add(tmp);
                         tmp = "";
@@ -713,7 +715,7 @@ namespace PictureSpider.Pixiv
             var ret = new HashSet<int>();
             //按页搜索
             int start_page = 0;
-            int step = 50;
+            int step = 10;
             int page_count = 0;
             while(key_word_list.Count>0)
             {
@@ -745,7 +747,7 @@ namespace PictureSpider.Pixiv
         }
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
         {
-            var queue = new TaskQueue<List<int>>(1000);
+            var queue = new TaskQueue<List<int>>(10);
             (await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             (await database.GetQueuedUser()  ).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             return await queue.GetResultSet();
@@ -813,17 +815,29 @@ namespace PictureSpider.Pixiv
         private async Task ProcessIllustFetchQueue(int count)
         {
             int tmp = illust_fetch_queue.Count;
-            var queue = new TaskQueue<Illust>(30);
-            foreach( var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
-                await queue.Add(RequestIllustAsync(id));
-            await queue.Done();
-
             var illustList = new List<Illust>();
-            queue.done_task_list.ForEach(task =>
+            if (false)
             {
-                if (task.Result != null)
-                    illustList.Add(task.Result);
-            });
+                var queue = new TaskQueue<Illust>(15);
+                foreach (var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
+                    await queue.Add(RequestIllustAsync(id));
+                await queue.Done();
+
+                queue.done_task_list.ForEach(task =>
+                {
+                    if (task.Result != null)
+                        illustList.Add(task.Result);
+                });
+            }
+            else
+            {//似乎p站对频繁illust请求的容忍度大幅降低了？被迫改为非并发
+                foreach (var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
+                {
+                    var res = await RequestIllustAsync(id);
+                    if(res != null)
+                        illustList.Add(res);
+                }
+            }
             database.UpdateIllustOriginalData(illustList);
 
             illustList.ForEach(illust=>illust_fetch_queue.Remove(illust.id));
