@@ -251,8 +251,8 @@ namespace PictureSpider.Pixiv
 
         private async Task RunSchedule()
         {
-            int last_daily_task = DateTime.Now.Day-1;
-            int process_speed = 120;
+            int last_daily_task = DateTime.Now.Day;
+            int process_speed = 50;
             var day_of_week = DateTime.Now.DayOfWeek;
             await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
@@ -683,7 +683,7 @@ namespace PictureSpider.Pixiv
                     tmp += (tmp.Length > 0 ? "%20OR%20" : "") + System.Web.HttpUtility.UrlEncode(word);
                     //出于某种神秘原因，p站对长关键字的容忍大幅降低了，1600->500，保险起见使用300长度
                     //超出长度时正常返回但是不包含任何illust
-                    if (tmp.Length > 300)
+                    if (tmp.Length > 500)
                     {
                         key_word_list.Add(tmp);
                         tmp = "";
