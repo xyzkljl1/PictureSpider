@@ -13,10 +13,11 @@ namespace PictureSpider.Telegram
 {
     public enum MessageState
     {
-        Ignore,
-        Wait,
-        Done,
-        Dup,
+        Ignore=0,
+        Wait=1,
+        Done=2,
+        Dup=3,
+        NotFound=4,
     };
     public enum DownloadType
     {
@@ -28,6 +29,7 @@ namespace PictureSpider.Telegram
     //Message
     [Table("Messages")]
     [PrimaryKey(nameof(id), nameof(chat))]
+    [Index(nameof(albumid))]
     public class Message
     {
         //注意id并非唯一，id+chatId才是唯一的
@@ -79,7 +81,7 @@ namespace PictureSpider.Telegram
         [StringLength(600)]
         public string url { get; set; } = "";
         public string comment { get; set; } = "";
-        [StringLength(50)]
+        [StringLength(100)]
         public string fileid { get; set; } = "";
         public FinishedTask() { }
     }

@@ -14,6 +14,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading;
@@ -52,6 +53,8 @@ namespace PictureSpider.Telegram
 
     public partial class Server : BaseServer, IDisposable
     {
+        [DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
         private string download_dir_root;
         private string download_dir_organized;
         private string download_dir_other;
@@ -70,6 +73,7 @@ namespace PictureSpider.Telegram
             base.logPrefix = "G";
             tgClient = new TdClient();
             //这破玩意输出的log太多了，直接关了
+            //但是执行完之前还会输出一段日志到error，怎么解决？
             tgClient.Execute(new TdApi.SetLogVerbosityLevel { NewVerbosityLevel = 0 });
 
             myDownloadServerAddr=config.MyDownloadServerAddress;
@@ -100,12 +104,16 @@ namespace PictureSpider.Telegram
 #endif
             try
             {
+                //Log("1");
                 var ok =await tgClient.SetTdlibParametersAsync(apiId:apiId,apiHash:apiHash, systemLanguageCode: "zh-hans", deviceModel:"Desktop",applicationVersion:"5.6.2",
                                 useChatInfoDatabase:true,useFileDatabase:true,useMessageDatabase:true,useSecretChats:true);
+                //Log("2");
+                //var proxy = await tgClient.AddProxyAsync("127.0.0.1", 1195, true, new TdApi.ProxyType.ProxyTypeSocks5());
+                //Log("3");
                 //似乎不需要设置代理？？
-                //var proxy=await tgClient.AddProxyAsync("127.0.0.1",1195,true, new TdApi.ProxyType.ProxyTypeSocks5());
-                if(!await Login())
+                if (!await Login())
                 {
+                    Log("3");
                     LogError("Stop Init because login failed");
                     return;
                 }
@@ -115,7 +123,7 @@ namespace PictureSpider.Telegram
                 LogError($"Fail to Init :{ex.Message}");
                 return;
             }
-
+            Log("Init Done.Start Schedule");
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
 #pragma warning restore CS4014 
@@ -130,7 +138,20 @@ namespace PictureSpider.Telegram
                 //login,似乎不需要密码或验证码？
                 await tgClient.SetAuthenticationPhoneNumberAsync(phone_number);
                 loginState = await tgClient.GetAuthorizationStateAsync();
-                if (loginState.DataType != "authorizationStateReady")
+                if(loginState.DataType== "authorizationStateWaitCode")
+                {
+                    AllocConsole();
+                    var code=Console.ReadLine();
+                    await tgClient.CheckAuthenticationCodeAsync(code);
+                    //await tgClient.CheckAuthenticationCodeAsync("78164");
+                    LogError("Need Input Auth Code Manually");
+                    loginState = await tgClient.GetAuthorizationStateAsync();
+                    if (loginState.DataType != "authorizationStateReady")
+                        LogError($"Login With Code Fail: {loginState.DataType}");
+                    else
+                        Log("Login by code with phone number");
+                }
+                else if (loginState.DataType != "authorizationStateReady")
                 {
                     LogError($"Login Fail: {loginState.DataType}");
                     return false;
@@ -184,6 +205,7 @@ namespace PictureSpider.Telegram
         }
         public async Task FetchMessageList()
         {
+            Log("Start Fetch Message List");
             foreach (var channel in database.Channels.ToList())//要tolist获得一份拷贝，否则database会处于占用中
             {
                 if (!(channel.download_telegraph || channel.download_video || channel.download_illust || channel.download_comments))
@@ -220,13 +242,14 @@ namespace PictureSpider.Telegram
                 Log($"Fetch {ct} Messages from {channel.title}");
             }
         }
-        public void ReplaceInvalidCharInFilename(ref string path)
+        public void ReplaceInvalidCharInFilename(ref string filename)
         {
             //注意和GetInvalidPathChars的区别
             foreach (var c in Path.GetInvalidFileNameChars())
-                path = path.Replace(c, '_');
+                filename = filename.Replace(c, '_');
+            filename.Trim(' ');
         }
-        public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo)
+        public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30)
         {
             //一组图中只有一个有captain文本
             //升序排列，一般文本在id最小的message上
@@ -241,7 +264,12 @@ namespace PictureSpider.Telegram
                     if (captionText != null&&captionText.Text!=null&&captionText.Text!="")
                     {
                         var ret=captionText.Text;
+                        if(ret.Length>length_limit)
+                            ret=ret.Substring(0, length_limit);
                         ReplaceInvalidCharInFilename(ref ret);
+                        ret = ret.Trim(' ');//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？
+                        ret = ret.Trim('#');//去掉tag的#
+                        ret=ret.Replace("[", "").Replace("]","");
                         return ret;
                     }
                 }
@@ -249,20 +277,39 @@ namespace PictureSpider.Telegram
             return "";
         }
         public async Task DownloadByMessages()
-        {
+        { 
+            Log("Start Download Try");
             foreach (var channel in database.Channels.ToList())//要tolist获得一份拷贝，否则database会处于占用中
             {
                 if (!(channel.download_telegraph || channel.download_video || channel.download_illust || channel.download_comments))
                     continue;
+                //if (channel.id != -1002404835607)
+                //    continue;
                 int ct = 0;
                 int ct2 = 0;
                 var messages = database.Messages.Where(message => message.state == MessageState.Wait && message.chat == channel.id).ToList();
-                foreach(var message in messages)
+                //var messages = database.Messages.Where(message => message.chat == channel.id&&message.timestamp>= 1728880449).ToList();
+                foreach (var message in messages)
                     if(message.state == MessageState.Wait)//有的下载会改变其它message的状态，此处还要再判断一次state
                     {
                         try
                         {
-                            var messageInfo = await tgClient.GetMessageAsync(message.chat,message.id);
+                            TdApi.Message messageInfo;
+                            try
+                            {
+                                messageInfo = await tgClient.GetMessageAsync(message.chat, message.id);
+                            }
+                            catch (TdLib.TdException e)
+                            {
+                                if(e.Error.Code==404&&e.Error.Message=="Not Found")//not found
+                                {
+                                    message.state = MessageState.NotFound;
+                                    database.SaveChanges();
+                                    Log($"Drop Message {message.id} for not found");
+                                    continue;
+                                }
+                                throw e;
+                            }
                             if (messageInfo.Content == null) continue;
                             if (channel.download_telegraph)
                             {
@@ -298,7 +345,6 @@ namespace PictureSpider.Telegram
                                 if(channel.download_illust)//单张下载，放到channel目录下
                                 {
                                     comment_title=filename_prefix = await GetAlbumCaptionText(messageInfo);
-                                    if (filename_prefix.Length > 30) filename_prefix = filename_prefix.Substring(0, 30);
                                     filename_prefix += $"_{message.id}";
                                     parent_dir = Path.Combine(download_dir_other, $"{channel.id}");//考虑到title可能会变，不用title作目录名
                                 }
@@ -317,7 +363,6 @@ namespace PictureSpider.Telegram
                                         continue;
                                     var album_title = await GetAlbumCaptionText(cursor);
                                     comment_title=album_title;
-                                    if (album_title.Length > 30) album_title = album_title.Substring(0, 30);
 
                                     if (album_title != "")
                                         parent_dir = Path.Combine(download_dir_organized, album_title);
@@ -328,14 +373,20 @@ namespace PictureSpider.Telegram
                                     Directory.CreateDirectory(parent_dir);
                                 var content = messageInfo.Content as MessagePhoto;
                                 var file = content.Photo.Sizes.Last().Photo;
-                                var fileUniqueId = file.Remote.UniqueId;
-                                if (fileUniqueId is not null&&fileUniqueId!="")//注意id可能为空
+                                //https://github.com/tdlib/td/issues/1025
+                                //注意unique id不是unique的,不同文件可以有同一个unique id,但是同一个文件只会有一个unique id且不会随时间改变，类似md5
+                                //file.id是动态的，每次启动都会改变，在一次tdlib运行期间一个文件只会有一个file.id
+                                //一个文件可以有多个file.remote.id，不同文件不会有相同的file.remote.id, 即使在一次运行时也可能从一个file获取到不同的file.remote.id，但是只要文件仍然可以访问，之前可用的id就仍然可用
+                                //真tm坑爹                                
+                                //只好使用file.remote.id判重，但是这样一个文件仍然可能下载多次
+                                //由于remote.id不会失效,推测一个文件只会有有限个remote.id,期待每个都下载过一次后就不会重复下载
+                                var fileRemoteId = file.Remote.Id;
+                                if (fileRemoteId is not null&&fileRemoteId!="")//注意id可能为空
                                 {
-                                    if(database.FinishedTasks.FirstOrDefault(ele => ele.fileid == fileUniqueId) != null)//重复
-                                        message.state=MessageState.Dup; 
+                                    if(database.FinishedTasks.FirstOrDefault(ele => ele.fileid == fileRemoteId) != null)//重复
+                                        message.state = MessageState.Dup;
                                     else
                                     {
-                                        //下载用的是id不是uniqueid,查重要用uniqueId
                                         //原地等待到下载完成
                                         //TODO:多线程？
                                         var downloadedFile=await tgClient.DownloadFileAsync(fileId:file.Id,priority:32,synchronous:true);
@@ -348,7 +399,7 @@ namespace PictureSpider.Telegram
                                                 System.IO.File.Delete(target_path);
                                             System.IO.File.Move(downloadedFile.Local.Path,Path.Combine(parent_dir, filename));
                                             //修改数据库要放在移动文件后面以防移动文件失败
-                                            database.FinishedTasks.Add(new FinishedTask { title = comment_title,fileid=fileUniqueId, 
+                                            database.FinishedTasks.Add(new FinishedTask { title = comment_title,fileid=fileRemoteId, 
                                                 comment = channel.download_illust?
                                                     $"Download single illust from {message.id} in {channel.title} at {DateTime.Now}: {filename}" :
                                                     $"Download illust of comment set from {message.id} in {channel.title} at {DateTime.Now}: {filename}"
@@ -365,38 +416,6 @@ namespace PictureSpider.Telegram
                                     LogError($"Empty File ID {message.id}");
                                 }
                                 database.SaveChanges();
-                            }
-                            else if(channel.download_comments)
-                            {
-                                continue;
-
-                                //if (message.albumid == 0) continue;
-                                //里面可能混了几个视频
-                                //if((messageInfo.Content as MessagePhoto) is null&& (messageInfo.Content as MessageVideo) is null)
-                                //    continue;
-                                //messagethread没搞明白是什么
-                                //var messageThread=await tgClient.GetMessageThreadAsync(channel.id,message.id);
-                                var replyto = messageInfo.ReplyTo as MessageReplyTo.MessageReplyToMessage;
-                                if (replyto!=null)
-                                {
-                                    Log($"{messageInfo.Id} -> {replyto.MessageId}");
-                                }
-                                if((messageInfo.Content as MessagePhoto)!=null)
-                                    Log($"{messageInfo.Id} : {(messageInfo.Content as MessagePhoto).Caption.Text}");
-                                else
-                                    Log($"{messageInfo.Id} : {messageInfo.Content.DataType}");
-                                var channel_dir = Path.Combine(download_dir_other, $"{channel.id}");//考虑到title可能会变，不用title作目录名
-                                if (!Directory.Exists(channel_dir))
-                                    Directory.CreateDirectory(channel_dir);
-
-                                if ((messageInfo.Content as MessagePhoto)!=null)
-                                {
-                                    var photo= (messageInfo.Content as MessagePhoto).Photo.Sizes.First().Photo;
-                                    var file=await tgClient.DownloadFileAsync(photo.Id,priority:32,synchronous:true);
-                                    var filename = $"{message.id}_{Path.GetFileName(file.Local.Path)}";
-                                    System.IO.File.Move(file.Local.Path, Path.Combine(channel_dir, filename));
-                                }
-
                             }
                         }
                         catch (Exception ex)
@@ -445,6 +464,7 @@ namespace PictureSpider.Telegram
                     await FetchMessageList();
                     await DownloadByMessages();
                     daily_interval = new TimeSpan(0, 0, 0);
+                    Log("Daily Task Done");
                 }
                 daily_interval += interval;
                 weekly_interval += interval;
