@@ -28,5 +28,11 @@ namespace PictureSpider
         public string TwitterUserName = "";
         public string TwitterPassword = "";
         public bool ShowInitButton = false;
+        public string TelegramPhoneNumber = "";
+        public string TelegramDownloadDir = "";
+        public int TelegramApiID = 0;
+        public string TelegramApiHash = "";
+        public string TelegramConnectStr = "";
+        public string MyDownloadServerAddress = "";
     }
 }

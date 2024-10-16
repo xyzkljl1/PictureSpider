@@ -21,6 +21,7 @@ using HttpResponseMessage = System.Net.Http.HttpResponseMessage;
 using System.Text.RegularExpressions;
 namespace PictureSpider.Pixiv
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     partial class Server : BaseServer, IBindHandleProvider, IDisposable
     {
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();

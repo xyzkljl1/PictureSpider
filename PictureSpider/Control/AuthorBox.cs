@@ -11,6 +11,7 @@ using PictureSpider;
 
 namespace PictureSpider
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     partial class AuthorBox : UserControl
     {
         public event EventHandler AuthorModified;

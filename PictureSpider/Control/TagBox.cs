@@ -10,6 +10,7 @@ using System.ComponentModel;
 
 namespace PictureSpider
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class TagBox : FlowLayoutPanel
     {
         public List<string> Tags

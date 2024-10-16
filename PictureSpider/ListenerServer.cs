@@ -16,6 +16,7 @@ using System.Web;
  */
 namespace PictureSpider
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class ListenerServer
     {
         private string proxy;

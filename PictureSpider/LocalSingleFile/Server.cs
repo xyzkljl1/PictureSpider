@@ -222,5 +222,44 @@ namespace PictureSpider.LocalSingleFile
             }
             database.SaveChanges();
         }
+        public override void ExplorerQueueSwitchVertical(List<ExplorerFileBase> file_list,bool manually,int offset, int cur_index, int cur_sub_index, bool to_end, out int new_index, out int new_sub_index)
+        {
+            if (Math.Abs(offset) > 1) throw new NotImplementedException("");
+            if (Math.Abs(offset) == 0) throw new NotImplementedException("");
+            new_sub_index = 0;
+            if (cur_index < 0 || cur_index >= file_list.Count)
+            {
+                new_index = -1;
+                return;
+            }
+            var start_file = file_list[cur_index] as ExplorerFile;
+            string cur_subpath = "";
+            if (start_file.sub_path.Contains("\\"))
+                cur_subpath = start_file.sub_path.Split("\\")[0];
+            //被slideHorizon触发时,或处于根目录下时，和正常一样切到下一张
+            if (cur_subpath==""||!manually)
+            {
+                new_index = cur_index + offset;
+                if (new_index < 0 || new_index >= file_list.Count)
+                    new_index = -1;
+                return;
+            }
+
+            //手动slideVertical时，直接直接切到下一个子文件夹
+            for(new_index=cur_index+offset;new_index >= 0 && new_index < file_list.Count;new_index+=offset)
+            {
+                var file = file_list[new_index] as ExplorerFile;
+                string subpath = "";
+                if (file.sub_path.Contains("\\"))
+                    subpath = file.sub_path.Split("\\")[0];
+                if(subpath!=cur_subpath)
+                    return;
+            }
+            //到队尾都没找到下一个文件夹，则返回队尾
+            new_index = Math.Max(new_index, 0);
+            new_index = Math.Min(new_index, file_list.Count-1);
+            return;
+        }
+
     }
 }

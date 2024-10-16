@@ -2,16 +2,20 @@
   "Proxy": "127.0.0.1:1196",
   "ProxyGo": "127.0.0.1:8000",
   "PixivDownloadDir": "D:/Pixiv/",
-  "PixivUserName": "",
-  "PixivUserId": "",
-  "PixivConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=pixiv;",
-  "HitomiConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=hitomi;",
+  "PixivUserName": "123",
+  "PixivUserId": "123",
+  "PixivConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=pass;",
+  "HitomiConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=hitomi;",
+  "HitomiDownloadDir": "C:/Hitomi/",
   "ShowInitButton": false,
-  "TwitterConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=pwd;database=twitter;",
-  "TwitterAPIKey": "",
-  "TwitterAPISecret": "",
-  "TwitterBearerToken": "",
-  "TwitterDownloadDir": "D:/Twitter/",
-  "TwitterUserName": "",
-  "TwitterPassword": ""
+  "LSFConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=localsinglefile;",
+  "LSFFavDir": "C:\\telegra",
+  "LSFTmpDirs": [
+    "D:\\telegra_tmp"
+  ],
+  "TelegramPhoneNumber": "",
+  "TelegramDownloadDir": "C:\\123",
+  "TelegramConnectStr":"",
+  "MyDownloadServerAddress": "http://127.0.0.1:4000"
+
 }

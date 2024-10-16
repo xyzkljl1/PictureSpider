@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Fizzler;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -18,6 +20,35 @@ namespace PictureSpider
                               //获得一个队列中的所有文件
         public async virtual Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue) { return new List<ExplorerFileBase>(); }
 #pragma warning restore CS1998
+        //默认切到下一组
+        public virtual void ExplorerQueueSwitchVertical(List<ExplorerFileBase> file_list,bool manually,int offset,
+                                                        int cur_index,int cur_sub_index,bool to_end ,
+                                                        out int new_index,out int new_sub_index)
+        {
+            if (Math.Abs(offset) > 1) throw new NotImplementedException("");
+            new_index = cur_index + offset;
+            if (new_index >= 0 && new_index < file_list.Count)
+            {
+                if (to_end)//找到最前/最后一个valid的page
+                {
+                    for (new_sub_index = file_list[new_index].pageCount() - 1;
+                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
+                            new_sub_index--)
+                        if (file_list[new_index].isPageValid(new_sub_index))
+                            return;
+                }
+                else
+                {
+                    for (new_sub_index = 0;
+                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
+                            new_sub_index++)
+                        if (file_list[new_index].isPageValid(new_sub_index))
+                            return;
+                }
+            }
+            new_index = -1;
+            new_sub_index = -1;
+        }
         public virtual void SetReaded(ExplorerFileBase file) { }
         public virtual void SetBookmarked(ExplorerFileBase file) { }
         public virtual void SetBookmarkEach(ExplorerFileBase file) { }

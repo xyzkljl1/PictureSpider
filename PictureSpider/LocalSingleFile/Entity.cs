@@ -48,6 +48,7 @@ namespace PictureSpider.LocalSingleFile
         {
             path = _path;
             sub_path= Path.GetRelativePath(_root_path, _path);
+            description = sub_path.Replace("\\","<br>");
             in_fav_dir = bookmarked = _b;
             readed = false;
         }

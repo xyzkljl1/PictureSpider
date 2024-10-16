@@ -27,7 +27,7 @@ namespace PictureSpider.Hitomi
         private HttpClient httpClient;
         //private string base_host = "hitomi.la";
         //private string base_host_ltn = "ltn.hitomi.la";
-        private string baseUrl = "https://hitomi.la";
+        //private string baseUrl = "https://hitomi.la";
         private string baseUrlLtn = "https://ltn.hitomi.la";
         private string commonjs = "";
         private string myjs = "";

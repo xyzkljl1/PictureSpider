@@ -1,7 +1,9 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -9,13 +11,15 @@ namespace PictureSpider
 {
     static class Program
     {
+        [DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
         /// <summary>
         /// 应用程序的主入口点。
         /// </summary>
         [STAThread]
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         static void Main()
         {
-
             // don't dispatch exceptions to Application.ThreadException 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -26,18 +30,23 @@ namespace PictureSpider
                 System.Threading.SynchronizationContext.SetSynchronizationContext(context);
                 try
                 {
+#if DEBUG
+                    AllocConsole();
+#endif
                     var config = LoadConfig();
                     using (var hitomi_server = new Hitomi.Server(config))
                         using (var pixiv_server = new Pixiv.Server(config))
                             using (var lsf_server = new LocalSingleFile.Server(config))
-                            {
-                                context.Post(async async => {
-                                    await hitomi_server.Init();
-                                    await pixiv_server.Init();
-                                    await lsf_server.Init();
-                                },null);
-                                Application.Run(new MainWindow(config, pixiv_server, hitomi_server, lsf_server));
-                            }
+                                using (var tg_server = new Telegram.Server(config))
+                                {
+                                    var common_servers = new List<BaseServer> { hitomi_server, lsf_server, tg_server };
+                                    context.Post(async async => {
+                                        await pixiv_server.Init();
+                                        foreach(var common_server in common_servers)
+                                            await common_server.Init();
+                                    },null);
+                                    Application.Run(new MainWindow(config, pixiv_server,common_servers));
+                                }
                 }
                 catch (Exception ex)
                 {

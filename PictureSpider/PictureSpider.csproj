@@ -110,7 +110,9 @@
     <PackageReference Include="K4os.Hash.xxHash" Version="1.0.8" />
     <PackageReference Include="morelinq" Version="4.2.0" />
     <PackageReference Include="MySql.Data" Version="8.4.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
+    <PackageReference Include="TDLib" Version="1.8.29" />
+    <PackageReference Include="tdlib.native" Version="1.8.29" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Hitomila\Data.cs" />

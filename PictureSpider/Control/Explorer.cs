@@ -11,6 +11,7 @@ using System.Collections.Concurrent;
 
 namespace PictureSpider
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class Explorer : PictureBox,IBindHandleProvider
     {  
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
@@ -250,7 +251,11 @@ namespace PictureSpider
         //标记当前为已读
         private void MarkReaded()
         {
-            ExplorerFileBase eFile = file_list[index];
+            MarkReaded(this.index);
+        }
+        private void MarkReaded(int _index)
+        {
+            ExplorerFileBase eFile = file_list[_index];
             if ((!eFile.bookmarked) && !eFile.readed)
             {
                 eFile.readed = true;
@@ -258,36 +263,20 @@ namespace PictureSpider
             }
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
-        private bool SlideVertical(int i,bool to_end=false)
+        //manually:是被SlideHorizon失败触发的还是被手动按上下键触发的
+        private bool SlideVertical(int offset,bool to_end=false,bool manually=false)
         {
-            int new_index = index + i;
-            if (new_index >= 0 && new_index < file_list.Count)
+            int new_index = -1,new_sub_index=-1;
+            server.ExplorerQueueSwitchVertical(file_list,manually,offset,index,sub_index,to_end,out new_index,out new_sub_index);
+            if(new_index>=0&&new_sub_index>=0)
             {
-                MarkReaded();
-                if(to_end)//找到最前/最后一个valid的page
-                {
-                    for (int new_sub_index = file_list[new_index].pageCount()-1;
-                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
-                            new_sub_index--)
-                        if (file_list[new_index].isPageValid(new_sub_index))
-                        {
-                            MarkReaded();
-                            SlideTo(new_index, new_sub_index);
-                            return true;
-                        }
-                }
-                else
-                {
-                    for (int new_sub_index = 0;
-                            new_sub_index >= 0 && new_sub_index < file_list[new_index].pageCount();
-                            new_sub_index++)
-                        if (file_list[new_index].isPageValid(new_sub_index))
-                        {
-                            MarkReaded();
-                            SlideTo(new_index, new_sub_index);
-                            return true;
-                        }
-                }
+                //将当前index和目标index之间的所有illust(不包括目标index)标记为已读
+                //不考虑循环，如果index从3->5,就认为[3,5)已读,不考虑从3向前切换经过队头达到5的情况
+                for(int i = Math.Min(new_index,index);i<= Math.Max(new_index, index);++i)
+                    if(i!=new_index)
+                        MarkReaded(i);
+                SlideTo(new_index, new_sub_index);
+                return true;
             }
             return false;
         }
@@ -403,9 +392,9 @@ namespace PictureSpider
                     SlideVertical(1);
             }
             else if (e.KeyCode == Keys.Up)
-                SlideVertical(-1);
+                SlideVertical(-1,false,true);
             else if (e.KeyCode == Keys.Down)
-                SlideVertical(1);
+                SlideVertical(1,false,true);
             else if (e.KeyCode == Keys.Delete)
             {
                 if (index < 0 || index >= file_list.Count)

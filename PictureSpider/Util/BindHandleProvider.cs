@@ -48,6 +48,7 @@ namespace PictureSpider
                 ((BindHandle<T>)handle_map[property_name]).NotifyChange();
         }
     }
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static class BindHandleProviderExtension
     {
         public static MainWindow main_window;

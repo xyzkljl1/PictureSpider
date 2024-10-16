@@ -27,7 +27,8 @@ namespace PictureSpider
         {
             Twitter=0,
             Pixiv=1,
-            Hitomi=2,
+            Hitomi = 2,
+            Telegram = 3,
         }
         public Aria2DownloadQueue(Downloader downloader,string _proxy,string _referer)
         {

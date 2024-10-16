@@ -31,7 +31,8 @@ namespace PictureSpider
         {
             return item.displayText;
         }
-    };
+    }; 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class QueueComboBox:ComboBox
     {
         public event EventHandler<QueueChangeEventArgs> QueueChanged;
