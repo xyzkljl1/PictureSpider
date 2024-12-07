@@ -61,7 +61,7 @@ namespace PictureSpider.Hitomi
             download_dir_root = config.HitomiDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Hitomi, config.Proxy, "https://hitomi.la");
+            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Hitomi, config.ProxySNI, "https://hitomi.la");
             foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
