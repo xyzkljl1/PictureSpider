@@ -100,7 +100,7 @@ namespace PictureSpider.Telegram
         }
         public override async Task Init() {
 #if DEBUG
-            //return;
+            return;
 #endif
             try
             {
@@ -113,7 +113,6 @@ namespace PictureSpider.Telegram
                 //似乎不需要设置代理？？
                 if (!await Login())
                 {
-                    Log("3");
                     LogError("Stop Init because login failed");
                     return;
                 }

@@ -47,7 +47,7 @@ namespace PictureSpider.Hitomi
             {
                 MaxConnectionsPerServer = 256,
                 UseCookies = true,
-                Proxy = new WebProxy(config.Proxy, false)
+                Proxy = new WebProxy(config.ProxySNI, false)
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);

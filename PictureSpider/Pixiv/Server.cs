@@ -90,6 +90,7 @@ namespace PictureSpider.Pixiv
             request_proxy = config.ProxySNI;
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
+            Log("Use SNI Proxy:"+request_proxy);
             downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy, "https://www.pixiv.net/");
             //初始化httpClient
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
