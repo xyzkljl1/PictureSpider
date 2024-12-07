@@ -1,5 +1,6 @@
 ﻿{
   "Proxy": "127.0.0.1:1196",
+  "ProxySNI": "127.0.0.1:7654",
   "ProxyGo": "127.0.0.1:8000",
   "PixivDownloadDir": "D:/Pixiv/",
   "PixivUserName": "123",
@@ -15,7 +16,7 @@
   ],
   "TelegramPhoneNumber": "",
   "TelegramDownloadDir": "C:\\123",
-  "TelegramConnectStr":"",
+  "TelegramConnectStr": "",
   "MyDownloadServerAddress": "http://127.0.0.1:4000"
 
 }

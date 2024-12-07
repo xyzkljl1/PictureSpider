@@ -60,6 +60,16 @@ namespace PictureSpider.Pixiv
 
         private Dictionary<int,string> illust_debug_msg= new Dictionary<int,string>();//only for debug
 
+        /*
+         * 代理：
+         * 既可以使用常规代理，也可以使用绕过SNI的方法"直连"以节约梯子流量
+         * 
+         * 目前Pixiv的ip并未被屏蔽，只有DNS污染和SNI检测
+         * SNI是在连接前明文发送要连接的域名，如果被检测到就会被TCP RST：参考 https://gulut.github.io/gulut-blog/post1/2020/05/31/2020-05-31-by-pass-the-gfw-by-sni/
+         * 绕过SNI有若干方法，例如通过Nginx在本地反代，由于nginx的反代不支持SNI就不会发送： https://github.com/mashirozx/Pixiv-Nginx (此时需要将pixiv的ip解析到127.0.0.1或连接时指定ip以使用反代)
+         * 其它方法参考 https://github.com/SeaHOH/GotoX https://github.com/bypass-GFW-SNI/main https://github.com/bypass-GFW-SNI/proxy
+         * 目前使用的是 https://github.com/URenko/Accesser 在本地的代理,端口号1200(在Accesser目录下config.toml配置)
+         */
         public Server(Config config)
         {
             base.tripleBookmarkState = true;
@@ -76,7 +86,8 @@ namespace PictureSpider.Pixiv
                     Directory.CreateDirectory(dir);
 
             database = new Database(config.PixivConnectStr);
-            request_proxy = config.Proxy;
+            //request_proxy = config.Proxy;
+            request_proxy = config.ProxySNI;
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
             downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy, "https://www.pixiv.net/");
@@ -93,23 +104,23 @@ namespace PictureSpider.Pixiv
                 httpClient = new HttpClient(handler);
                 //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
-                httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
+                httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
                 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
                 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
                 httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
-               // httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
+                // httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
             }
             {
                 httpClient_anonymous = new HttpClient(handler);
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -956,6 +967,7 @@ namespace PictureSpider.Pixiv
         //确认是否成功登录
         private async Task CheckHomePage()
         {
+            await UpdateHttpClientByDatabaseCookie();
             VerifyState = "Checking";
             string url = base_url;
             string referer = String.Format("{0}", base_url);

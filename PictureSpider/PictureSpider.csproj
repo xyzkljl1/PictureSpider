@@ -24,6 +24,8 @@
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisLevel>6.0</AnalysisLevel>
     <Platforms>AnyCPU</Platforms>
+    <Nullable>disable</Nullable>
+    <ApplicationIcon>Resources\baseIcon.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>x64</PlatformTarget>
@@ -113,6 +115,7 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
     <PackageReference Include="TDLib" Version="1.8.29" />
     <PackageReference Include="tdlib.native" Version="1.8.29" />
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Hitomila\Data.cs" />

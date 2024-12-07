@@ -15,41 +15,41 @@ namespace PictureSpider
     {
         public List<string> Tags
         {
-            get { return null; }
-            set {SetTags(value); }
+            get => null;
+            set => SetTags(value);
         }
         private BaseServer server;
-        private Dictionary<string, TagStatus> tags_status;
-        private Dictionary<string, string>    tags_desc;
-        private bool block_signal = false;
-        private Dictionary<CheckState, TagStatus> CheckState2TagStatus =new Dictionary<CheckState, TagStatus>
+        private Dictionary<string, TagStatus> tagsStatus;
+        private Dictionary<string, string>    tagsDesc;
+        private bool blockSignal = false;
+        private static readonly Dictionary<CheckState, TagStatus> CheckState2TagStatus =new Dictionary<CheckState, TagStatus>
                                                                     { { CheckState.Checked, TagStatus.Follow },
                                                                       { CheckState.Unchecked, TagStatus.None },
                                                                       { CheckState.Indeterminate, TagStatus.Ignore }};
-        private Dictionary<TagStatus, CheckState> TagStatus2CheckState = new Dictionary<TagStatus, CheckState>
+        private static readonly Dictionary<TagStatus, CheckState> TagStatus2CheckState = new Dictionary<TagStatus, CheckState>
                                                                     { { TagStatus.Follow,CheckState.Checked },
                                                                       { TagStatus.None, CheckState.Unchecked },
                                                                       { TagStatus.Ignore, CheckState.Indeterminate }};
         public TagBox()
         {
-            this.BackColor = System.Drawing.Color.Transparent;
-            this.Margin = new System.Windows.Forms.Padding(0);
-            this.FlowDirection = FlowDirection.TopDown;
-            this.AutoScroll = true;
-            this.WrapContents = false;
+            base.BackColor = System.Drawing.Color.Transparent;
+            base.Margin = new System.Windows.Forms.Padding(0);
+            base.FlowDirection = FlowDirection.TopDown;
+            base.AutoScroll = true;
+            base.WrapContents = false;
         }
 
         public void SetClient(BaseServer _client)
         {
             server = _client;
-            tags_status = Task.Run(server.GetAllTagsStatus).ConfigureAwait(false).GetAwaiter().GetResult();
-            tags_desc = Task.Run(server.GetAllTagsDesc).ConfigureAwait(false).GetAwaiter().GetResult();
+            tagsStatus = Task.Run(server.GetAllTagsStatus).ConfigureAwait(false).GetAwaiter().GetResult();
+            tagsDesc = Task.Run(server.GetAllTagsDesc).ConfigureAwait(false).GetAwaiter().GetResult();
         }
         private void SetTags(List<string> tags)
         {
             if (tags is null)
                 return;
-            block_signal = true;
+            blockSignal = true;
             this.SuspendLayout();
             if (tags.Count> Controls.Count)//添加控件，多余的无需删除
             {
@@ -74,8 +74,8 @@ namespace PictureSpider
                                           { CheckState.Indeterminate, new List<string>() },
                                           { CheckState.Unchecked, new List<string>() } };
             foreach (var tag in tags)
-                if (tags_status.Keys.Contains(tag))
-                    tag_group[TagStatus2CheckState[tags_status[tag]]].Add(tag);
+                if (tagsStatus.Keys.Contains(tag))
+                    tag_group[TagStatus2CheckState[tagsStatus[tag]]].Add(tag);
                 else
                     tag_group[CheckState.Unchecked].Add(tag);
             //按未关注->已关注->忽略的顺序
@@ -84,8 +84,8 @@ namespace PictureSpider
                 foreach (var tag in tag_group[state])
                 {
                     iterator.MoveNext();
-                    if (tags_desc.ContainsKey(tag) && !string.IsNullOrEmpty(tags_desc[tag]))
-                        ((CheckBox)iterator.Current).Text = String.Format("{0}`{1}", tag, tags_desc[tag]);
+                    if (tagsDesc.ContainsKey(tag) && !string.IsNullOrEmpty(tagsDesc[tag]))
+                        ((CheckBox)iterator.Current).Text = String.Format("{0}`{1}", tag, tagsDesc[tag]);
                     else
                         ((CheckBox)iterator.Current).Text = tag;
                     ((CheckBox)iterator.Current).CheckState = state;
@@ -94,11 +94,11 @@ namespace PictureSpider
             while (iterator.MoveNext())
                 ((CheckBox)iterator.Current).Visible = false;            
             this.ResumeLayout();
-            block_signal = false;
+            blockSignal = false;
         }
         private void ItemCheckHandler(object sender, EventArgs e)
         {
-            if (block_signal)
+            if (blockSignal)
                 return;
             var text = ((CheckBox)sender).Text;
             if (text.Count() == 0)
@@ -106,15 +106,15 @@ namespace PictureSpider
             if (text.Contains('`'))
                 text = text.Substring(0,text.IndexOf('`'));
             var new_status = CheckState2TagStatus[((CheckBox)sender).CheckState];
-            if (!tags_status.ContainsKey(text))
+            if (!tagsStatus.ContainsKey(text))
             {
                 server.UpdateTagStatus(text, new_status);
-                tags_status.Add(text, new_status);
+                tagsStatus.Add(text, new_status);
             }
-            else if(tags_status[text]!= new_status)
+            else if(tagsStatus[text]!= new_status)
             {
                 server.UpdateTagStatus(text, new_status);
-                tags_status[text] = new_status;
+                tagsStatus[text] = new_status;
             }
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

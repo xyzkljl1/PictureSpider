@@ -1,51 +1,38 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using PictureSpider;
 
 namespace PictureSpider
 {
-    public class QueueChangeEventArgs : EventArgs
+    public class QueueChangeEventArgs(int idx, ExplorerQueue item) : EventArgs
     {
-        public int server_index;
-        public ExplorerQueue item;
-        public QueueChangeEventArgs(int _idx, ExplorerQueue _item)
-        {
-            server_index = _idx;
-            item = _item;
-        }
+        public readonly int ServerIndex = idx;
+        public ExplorerQueue Item = item;
     }
-    class ComboBoxItem
+    class ComboBoxItem(int idx, ExplorerQueue item)
     {
-        public int provider_index;
-        public ExplorerQueue item;
-        public ComboBoxItem(int _idx, ExplorerQueue _item)
-        {
-            provider_index = _idx;
-            item = _item;
-        }
+        public readonly int ProviderIndex = idx;
+        public ExplorerQueue Item = item;
+
         public override string ToString()
         {
-            return item.displayText;
+            return Item.displayText;
         }
     }; 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class QueueComboBox:ComboBox
     {
         public event EventHandler<QueueChangeEventArgs> QueueChanged;
-        List<BaseServer> providers;
-        bool block_signal = false;
+        private List<BaseServer> providers;
+        private bool blockSignal = false;
         public QueueComboBox()
         {
             DropDownStyle = ComboBoxStyle.DropDownList;
             SelectedIndexChanged += (object sender, EventArgs e) =>
             {
-                if (!block_signal)
+                if (!blockSignal)
                     if(SelectedItem!=null)
-                        QueueChanged(this, new QueueChangeEventArgs(((ComboBoxItem)SelectedItem).provider_index, ((ComboBoxItem)SelectedItem).item));
+                        QueueChanged?.Invoke(this, new QueueChangeEventArgs(((ComboBoxItem)SelectedItem).ProviderIndex, ((ComboBoxItem)SelectedItem).Item));
             };
         }
         public void SetClient(List<BaseServer> _providers)
@@ -62,17 +49,17 @@ namespace PictureSpider
                     Items.Add(new ComboBoxItem(i,item));
             if(old_select!= null)//重新选中之前选中的选项
             {
-                block_signal = true;
+                blockSignal = true;
                 foreach (ComboBoxItem item in Items)
-                    if (item.provider_index == old_select.provider_index
-                        &&item.item.type== old_select.item.type
-                        &&item.item.id== old_select.item.id)
-                        {
-                            SelectedItem = item;
-                            block_signal = false;
-                            return;
-                        }
-                block_signal = false;
+                    if (item.ProviderIndex == old_select.ProviderIndex
+                        &&item.Item.type== old_select.Item.type
+                        &&item.Item.id== old_select.Item.id)
+                    {
+                        SelectedItem = item;
+                        blockSignal = false;
+                        return;
+                    }
+                blockSignal = false;
                 //即使选中的队列已不存在，也没有必要清空
             }
         }

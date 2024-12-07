@@ -49,21 +49,26 @@ namespace PictureSpider
         public string IndexText{get {
                 if (file_list.Count <= 0)
                     return "";
-                int count_1 = file_list[index].validPageCount();
-                int count_2 = file_list[index].pageCount();
+                int count1 = file_list[index].validPageCount();
+                int count2 = file_list[index].pageCount();
                 return (sub_index+1).ToString()+"/"+ 
-                       (count_1 == count_2 ? count_1.ToString():(count_2.ToString()+"("+count_1.ToString()+")"));
+                       (count1 == count2 ? count1.ToString():(count2.ToString()+"("+count1.ToString()+")"));
             } }
         [Bindable(true)]
-        public string DescText{get { return file_list.Count > 0 ?$"{file_list[index].title}</br>{file_list[index].debugMessage}</br>{file_list[index].description}" : "";} }
+        public string DescText => file_list.Count > 0 ?$"{file_list[index].title}</br>{file_list[index].debugMessage}</br>{file_list[index].description}" : "";
+
         [Bindable(true)]
-        public string TotalPageText{get { return (playing?"Pause":"Play")+"\n"+(file_list.Count > 0 ? (index+1).ToString()+"/"+file_list.Count.ToString() : "0/0"); }}
+        public string TotalPageText => (playing?"Pause":"Play")+"\n"+(file_list.Count > 0 ? (index+1).ToString()+"/"+file_list.Count.ToString() : "0/0");
+
         [Bindable(true)]
-        public string IdText {get { return (file_list.Count > 0 ? "["+file_list[index].id+"]" : "None");}}
+        public string IdText => (file_list.Count > 0 ? "["+file_list[index].id+"]" : "None");
+
         [Bindable(true)]
-        public List<string> Tags{get { return file_list.Count > 0 ? file_list[index].tags : new List<string>(); }}
+        public List<string> Tags => file_list.Count > 0 ? file_list[index].tags : new List<string>();
+
         [Bindable(true)]
-        public string UserId { get { return file_list.Count > 0 ? file_list[index].userId : ""; } }
+        public string UserId => file_list.Count > 0 ? file_list[index].userId : "";
+
         [Bindable(true)]
         public Bitmap FavIcon
         {
@@ -147,8 +152,7 @@ namespace PictureSpider
         {
             var path = eFile.FilePath(i);
             {//hit
-                ImageCache cache;
-                if (cache_pool.TryGetValue(path, out cache))
+                if (cache_pool.TryGetValue(path, out var cache))
                 {
                     cache.required_time = DateTime.UtcNow;
                     return cache;
@@ -204,8 +208,7 @@ namespace PictureSpider
                         }
                     if (oldest_cache is null)
                         continue;
-                    ImageCache ignored;
-                    if (cache_pool.TryRemove(oldest_cache, out ignored))
+                    if (cache_pool.TryRemove(oldest_cache, out var ignored))
                         ignored.Dispose();
                 }
                 return cache;
@@ -213,8 +216,8 @@ namespace PictureSpider
         }
         private void Load(ExplorerFileBase eFile, int s,int t)
         {
-            for(int i = s;i<t;++i)
-                if(i>=0&&i<eFile.pageCount())
+            for(var i = s;i<t;++i)
+                if(i>=0 && i<eFile.pageCount())
                     Load(eFile,i);
         }
         //切图实现
@@ -255,7 +258,7 @@ namespace PictureSpider
         }
         private void MarkReaded(int _index)
         {
-            ExplorerFileBase eFile = file_list[_index];
+            var eFile = file_list[_index];
             if ((!eFile.bookmarked) && !eFile.readed)
             {
                 eFile.readed = true;
@@ -264,21 +267,17 @@ namespace PictureSpider
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
         //manually:是被SlideHorizon失败触发的还是被手动按上下键触发的
-        private bool SlideVertical(int offset,bool to_end=false,bool manually=false)
+        private bool SlideVertical(int offset,bool toEnd=false,bool manually=false)
         {
-            int new_index = -1,new_sub_index=-1;
-            server.ExplorerQueueSwitchVertical(file_list,manually,offset,index,sub_index,to_end,out new_index,out new_sub_index);
-            if(new_index>=0&&new_sub_index>=0)
-            {
-                //将当前index和目标index之间的所有illust(不包括目标index)标记为已读
-                //不考虑循环，如果index从3->5,就认为[3,5)已读,不考虑从3向前切换经过队头达到5的情况
-                for(int i = Math.Min(new_index,index);i<= Math.Max(new_index, index);++i)
-                    if(i!=new_index)
-                        MarkReaded(i);
-                SlideTo(new_index, new_sub_index);
-                return true;
-            }
-            return false;
+            server.ExplorerQueueSwitchVertical(file_list,manually,offset,index,sub_index,toEnd,out var new_index,out var new_sub_index);
+            if (new_index < 0 || new_sub_index < 0) return false;
+            //将当前index和目标index之间的所有illust(不包括目标index)标记为已读
+            //不考虑循环，如果index从3->5,就认为[3,5)已读,不考虑从3向前切换经过队头达到5的情况
+            for(int i = Math.Min(new_index,index);i<= Math.Max(new_index, index);++i)
+                if(i!=new_index)
+                    MarkReaded(i);
+            SlideTo(new_index, new_sub_index);
+            return true;
         }
         private bool SlideHorizon(int i)
         {
@@ -364,16 +363,14 @@ namespace PictureSpider
         //打开本地
         public void OpenInLocal(object sender, EventArgs args)
         {
-            if (file_list.Count > 0)
-            {
-                System.Diagnostics.Process process = new System.Diagnostics.Process();
-                process.StartInfo.FileName = file_list[index].FilePath(sub_index);
-                //使用系统默认浏览器，以最大化方式打开  
-                process.StartInfo.Arguments = "rundl132.exe C://WINDOWS//system32//shimgvw.dll,ImageView_Fullscreen";
-                process.StartInfo.UseShellExecute = true;
-                process.Start();
-                process.Close();
-            }
+            if (file_list.Count <= 0) return;
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = file_list[index].FilePath(sub_index);
+            //使用系统默认浏览器，以最大化方式打开  
+            process.StartInfo.Arguments = "rundl132.exe C://WINDOWS//system32//shimgvw.dll,ImageView_Fullscreen";
+            process.StartInfo.UseShellExecute = true;
+            process.Start();
+            process.Close();
         }
         //响应键盘
         public void OnKeyUp(object sender, KeyEventArgs e)

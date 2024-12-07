@@ -7,11 +7,5 @@ using System.Threading.Tasks;
 namespace PictureSpider
 {
     //其实就是MyException
-    class TopLevelException:Exception
-    {
-        public TopLevelException(string message):base(message)
-        {
-
-        }
-    }
+    class TopLevelException(string message) : Exception(message);
 }

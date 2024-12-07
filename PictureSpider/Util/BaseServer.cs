@@ -25,6 +25,8 @@ namespace PictureSpider
                                                         int cur_index,int cur_sub_index,bool to_end ,
                                                         out int new_index,out int new_sub_index)
         {
+            new_index = -1;
+            new_sub_index = -1;
             if (Math.Abs(offset) > 1) throw new NotImplementedException("");
             new_index = cur_index + offset;
             if (new_index >= 0 && new_index < file_list.Count)

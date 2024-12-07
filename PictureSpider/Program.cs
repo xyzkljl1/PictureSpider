@@ -1,8 +1,11 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SixLabors.ImageSharp;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -34,23 +37,23 @@ namespace PictureSpider
                     AllocConsole();
 #endif
                     var config = LoadConfig();
-                    using (var hitomi_server = new Hitomi.Server(config))
-                        using (var pixiv_server = new Pixiv.Server(config))
-                            using (var lsf_server = new LocalSingleFile.Server(config))
-                                using (var tg_server = new Telegram.Server(config))
+                    using (var hitomiServer = new Hitomi.Server(config))
+                        using (var pixivServer = new Pixiv.Server(config))
+                            using (var lsfServer = new LocalSingleFile.Server(config))
+                                using (var tgServer = new Telegram.Server(config))
                                 {
-                                    var common_servers = new List<BaseServer> { hitomi_server, lsf_server, tg_server };
+                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer };
                                     context.Post(async async => {
-                                        await pixiv_server.Init();
-                                        foreach(var common_server in common_servers)
-                                            await common_server.Init();
+                                        await pixivServer.Init();
+                                        foreach(var commonServer in commonServers)
+                                            await commonServer.Init();
                                     },null);
-                                    Application.Run(new MainWindow(config, pixiv_server,common_servers));
+                                    Application.Run(new MainWindow(config, pixivServer,commonServers));
                                 }
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine(string.Format("捕获到未处理异常：{0}\r\n异常信息：{1}\r\n异常堆栈：{2}", ex.GetType(), ex.Message, ex.StackTrace));
+                    Console.Error.WriteLine($"捕获到未处理异常：{ex.GetType()}\r\n异常信息：{ex.Message}\r\n异常堆栈：{ex.StackTrace}");
                 }
                 finally
                 {
@@ -58,10 +61,9 @@ namespace PictureSpider
                 }
             }
         }
-        static private Config LoadConfig()
+        private static Config LoadConfig()
         {
             if (System.IO.File.Exists(@"config.json"))
-            {
                 using (JsonReader reader = new JsonTextReader(new System.IO.StreamReader("config.json")))
                 {
                     JObject jsonObject = (JObject)JToken.ReadFrom(reader);
@@ -98,7 +100,6 @@ namespace PictureSpider
                         }
                     return config;
                 }
-            }
             return new Config();
         }
 

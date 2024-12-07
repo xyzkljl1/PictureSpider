@@ -17,34 +17,32 @@ namespace PictureSpider
         public event EventHandler AuthorModified;
         public string UserId
         {
-            get { return user is null?"":user.displayId; }
-            set
-            {
-                UpdateByUserId(value);
-            }
+            get => user is null?"":user.displayId;
+            set => UpdateByUserId(value);
         }
         private BaseUser user = null;
         private BaseServer server;
         private Boolean frozen = false;
-        private Dictionary<CheckState, String> CheckState2Text = new Dictionary<CheckState, String> {
+        private static readonly Dictionary<CheckState, String> CheckState2Text = new Dictionary<CheckState, String> {
             { CheckState.Checked, "已关注" }, {  CheckState.Indeterminate, "已入列"  }, { CheckState.Unchecked, "未关注" } };
 
         public AuthorBox()
         {
             InitializeComponent();
-            followCheckBox.CheckStateChanged += onCheckedChange;
+            followCheckBox.CheckStateChanged += OnCheckedChange;
         }
 
         public void SetClient(BaseServer _server)
         {
             server = _server;
         }
-        void UpdateByUserId(string user_id)
+
+        private void UpdateByUserId(string userId)
         {
             frozen = true;
-            if (!string.IsNullOrEmpty(user_id)&&server!=null)
+            if (!string.IsNullOrEmpty(userId)&&server!=null)
             {
-                user = server.GetUserById(user_id);
+                user = server.GetUserById(userId);
                 if(user!=null)
                 {
                     nameLabel.Text = user.displayText;
@@ -65,7 +63,8 @@ namespace PictureSpider
             }
             frozen = false;
         }
-        void onCheckedChange(object sender, EventArgs e)
+
+        private void OnCheckedChange(object sender, EventArgs e)
         {
             if (frozen)
                 return;
@@ -76,7 +75,7 @@ namespace PictureSpider
                 user.queued = followCheckBox.CheckState == CheckState.Indeterminate;
             }
             server.SetUserFollowOrQueue(user);
-            AuthorModified(this,new EventArgs());
+            AuthorModified?.Invoke(this, EventArgs.Empty);
         }
     }
 }

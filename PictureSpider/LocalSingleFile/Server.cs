@@ -39,17 +39,19 @@ namespace PictureSpider.LocalSingleFile
         {
             database.Dispose();
         }
+#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
+#pragma warning disable CS0162 // 检测到无法访问的代码
+#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
         public override async Task Init()
         {
 #if DEBUG
             return;
 #endif
-#pragma warning disable CS0162 // 检测到无法访问的代码
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
+        }
 #pragma warning restore CS4014
 #pragma warning restore CS0162
-        }
+#pragma warning restore CS1998
         private async Task RunSchedule()
         {
             do

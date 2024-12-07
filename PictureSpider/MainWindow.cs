@@ -92,9 +92,9 @@ namespace PictureSpider
         {
             using (BlockSyncContext.Enter())
             {
-                var server=servers[e.server_index];
+                var server=servers[e.ServerIndex];
                 AuthorBox.SetClient(server);
-                MainExplorer.SetList(servers[e.server_index], servers[e.server_index].GetExplorerQueueItems(e.item).Result);
+                MainExplorer.SetList(servers[e.ServerIndex], servers[e.ServerIndex].GetExplorerQueueItems(e.Item).Result);
             }
         }
 
