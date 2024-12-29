@@ -61,8 +61,15 @@ namespace PictureSpider.Hitomi
         }
         public void LoadFK(IllustGroup obj)
         {
-            Entry(obj).Collection(r => r.illusts).Load();
-            Entry(obj).Reference(r => r.user).Load();
+            try
+            {
+                Entry(obj).Collection(r => r.illusts).Load();
+                Entry(obj).Reference(r => r.user).Load();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Database Error:{ex.Message}");
+            }
         }
         public void LoadFK(Illust obj)
         {

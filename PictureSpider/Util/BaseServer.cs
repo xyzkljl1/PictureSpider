@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -71,5 +72,39 @@ namespace PictureSpider
         public virtual bool ListenerUtil_IsValidUrl(string url) { return false; }
         public async virtual Task<bool> ListenerUtil_FollowUser(string url) { return false; }
         public virtual async Task ListenerUtil_SetCookie(string cookie) { }
+
+        //File操作，因为需要Log，放到baseserver里
+        public int DeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    return 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Fail to delete {path}:{ex.Message}");
+            }
+            return 0;
+        }
+        public int CopyFile(string src,string dest)
+        {
+            try
+            {
+                if (File.Exists(src))
+                {
+                    File.Copy(src, dest, true);
+                    return 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Fail to copy {src} to {dest}:{ex.Message}");
+            }
+            return 0;
+        }
     }
 }

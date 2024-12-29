@@ -99,7 +99,7 @@ namespace PictureSpider.Hitomi
 
         public override bool isPageValid(int page) { return !sortedIllusts[page].excluded; }
         public override void switchPageValid(int page) { 
-            sortedIllusts[page].excluded= sortedIllusts[page].excluded;
+            sortedIllusts[page].excluded= !sortedIllusts[page].excluded;
         }
     }
 }

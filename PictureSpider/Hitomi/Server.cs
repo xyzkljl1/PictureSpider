@@ -75,7 +75,7 @@ namespace PictureSpider.Hitomi
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            //return;
 #endif
 #pragma warning disable CS0162 // 检测到无法访问的代码
             PrepareJS();
@@ -150,7 +150,7 @@ namespace PictureSpider.Hitomi
                 throw e;
             }
         }
-        //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件
+        //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         private void SyncLocalFile()
         {
             //下载
@@ -189,7 +189,8 @@ namespace PictureSpider.Hitomi
             }
             //整理Fav文件夹
             {
-                var existedFiles=Directory.GetFiles(download_dir_fav).Select(x=> Path.GetFileName(x)).ToHashSet<string>();
+                //.ToList()以释放数据库连接
+                var existedFiles =Directory.GetFiles(download_dir_fav).Select(x=> Path.GetFileName(x)).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
@@ -206,13 +207,27 @@ namespace PictureSpider.Hitomi
                             if (existedFiles.Contains(file_name))//从existedFiles中移除
                                 existedFiles.Remove(file_name);
                             else
-                                if (File.Exists(tmp_path))      //如果不存在就从tmp目录拷过来
-                                    File.Copy(tmp_path, fav_path);
+                                CopyFile(tmp_path, fav_path);
                         }
                     }
                 }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
-                    File.Delete($"{download_dir_fav}/{file}");
+                    DeleteFile($"{download_dir_fav}/{file}");
+            }
+            //清理tmp文件夹
+            {
+                int ct= 0;
+                var illustGroups = (from illustGroup in database.IllustGroups
+                                    where illustGroup.readed&&illustGroup.fetched && !illustGroup.fav
+                                    select illustGroup).ToList();
+                foreach (var illustGroup in illustGroups)
+                {
+                    database.LoadFK(illustGroup);
+                    foreach (var illust in illustGroup.illusts)
+                        ct+=DeleteFile($"{download_dir_tmp}/{illust.fileName}{illust.ext}");
+                }
+                if(ct>0)
+                    Log($"Delete from tmp:{ct}");
             }
         }
         private async Task ProcessIllustDownloadQueue(List<Illust> illustList, int limit = -1)
