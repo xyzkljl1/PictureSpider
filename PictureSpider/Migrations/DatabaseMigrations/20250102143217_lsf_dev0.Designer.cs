@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.LocalSingleFile;
@@ -11,22 +12,23 @@ using PictureSpider.LocalSingleFile;
 namespace PictureSpider.Migrations.DatabaseMigrations
 {
     [DbContext(typeof(Database))]
-    [Migration("20231229204022_lsf_dev4")]
-    partial class lsf_dev4
+    [Migration("20250102143217_lsf_dev0")]
+    partial class lsf_dev0
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "7.0.10")
+                .HasAnnotation("ProductVersion", "8.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("PictureSpider.LocalSingleFile.Illust", b =>
                 {
-                    b.Property<string>("path")
-                        .HasMaxLength(600)
-                        .HasColumnType("varchar(600)");
+                    b.Property<byte[]>("path_raw")
+                        .HasColumnType("varbinary(767)");
 
                     b.Property<DateTime>("date")
                         .HasColumnType("datetime");
@@ -34,7 +36,10 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("fav")
                         .HasColumnType("tinyint(1)");
 
-                    b.HasKey("path");
+                    b.Property<byte[]>("sub_path_raw")
+                        .HasColumnType("longblob");
+
+                    b.HasKey("path_raw");
 
                     b.ToTable("Waited");
                 });

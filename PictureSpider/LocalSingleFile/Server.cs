@@ -138,7 +138,7 @@ namespace PictureSpider.LocalSingleFile
                 foreach (var path in existedFiles)
                     if(!readed.Contains(path))
                         result.Add(new ExplorerFile(Path.GetFullPath(path),dir, false));
-            }
+                    }
             return result;
         }
         //获取该目录及子目录下所有图片文件,为便于比较统一使用Path.GetFullPath
@@ -164,8 +164,9 @@ namespace PictureSpider.LocalSingleFile
         public override void SetReaded(ExplorerFileBase file)
         {
             var path= (file as ExplorerFile).path;
+            var pathraw = Util.String2Bytes(path);
             var exists = (from illust in database.Waited
-                          where illust.path == path
+                          where illust.path_raw == pathraw
                           select illust).ToList<Illust>();
             if (file.readed)
             {
@@ -193,8 +194,9 @@ namespace PictureSpider.LocalSingleFile
         public override void SetBookmarked(ExplorerFileBase file)
         {
             var path = (file as ExplorerFile).path;
+            var pathraw = Util.String2Bytes(path);
             var exists = (from illust in database.Waited
-                          where illust.path == path
+                          where illust.path_raw == pathraw
                           select illust).ToList<Illust>();
             if (file.bookmarked)
             {

@@ -1,5 +1,4 @@
 ﻿using System;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -7,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace PictureSpider.Migrations.DatabaseMigrations
 {
     /// <inheritdoc />
-    public partial class lsf_dev1 : Migration
+    public partial class lsf_dev0 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -16,18 +15,17 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Readed",
+                name: "Waited",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    path = table.Column<string>(type: "longtext", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    date = table.Column<DateTime>(type: "datetime", nullable: false)
+                    path_raw = table.Column<byte[]>(type: "varbinary(767)", nullable: false),
+                    sub_path_raw = table.Column<byte[]>(type: "longblob", nullable: true),
+                    date = table.Column<DateTime>(type: "datetime", nullable: false),
+                    fav = table.Column<bool>(type: "tinyint(1)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Readed", x => x.Id);
+                    table.PrimaryKey("PK_Waited", x => x.path_raw);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
         }
@@ -36,7 +34,7 @@ namespace PictureSpider.Migrations.DatabaseMigrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Readed");
+                name: "Waited");
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -15,11 +16,23 @@ namespace PictureSpider.LocalSingleFile
     [Table("Waited")]
     public class Illust
     {
+        //用byte存储路径，是为了防止bytes/string转换及存入数据库时自动把非法字符替换为0xfffd,导致无法根据路径找到正确的本地文件,see Util::String2Bytes
         [Key]
-        [StringLength(600)]
-        public string path { get; set; }
-        [StringLength(600)]
-        public string sub_path { get; set; }
+        public byte[] path_raw { get; set; }
+        [NotMapped]
+        public String path
+        {
+            get { return Util.Bytes2String(path_raw); }
+            set { path_raw = Util.String2Bytes(value); }
+        }
+        public byte[] sub_path_raw { get; set; }
+        [NotMapped]
+        public String sub_path
+        {
+            get { return Util.Bytes2String(sub_path_raw); }
+            set { sub_path_raw = Util.String2Bytes(value); }
+        }
+
         public DateTime date { get; set; }
         //数据库内的文件要么fav要么readed，其它状态的不会进入数据库，因此fav和readed共用一个变量存储
         public bool fav { get; set; }
