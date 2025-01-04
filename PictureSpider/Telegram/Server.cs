@@ -98,19 +98,17 @@ namespace PictureSpider.Telegram
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             localHttpClient = new HttpClient(handler);
         }
+#pragma warning disable CS0162 // 检测到无法访问的代码
         public override async Task Init() {
 #if DEBUG
             return;
 #endif
             try
             {
-                //Log("1");
                 var ok =await tgClient.SetTdlibParametersAsync(apiId:apiId,apiHash:apiHash, systemLanguageCode: "zh-hans", deviceModel:"Desktop",applicationVersion:"5.6.2",
                                 useChatInfoDatabase:true,useFileDatabase:true,useMessageDatabase:true,useSecretChats:true);
-                //Log("2");
+                //似乎只有重新登录的时候需要设置代理？其它时候不需要？
                 //var proxy = await tgClient.AddProxyAsync("127.0.0.1", 1195, true, new TdApi.ProxyType.ProxyTypeSocks5());
-                //Log("3");
-                //似乎不需要设置代理？？
                 if (!await Login())
                 {
                     LogError("Stop Init because login failed");
@@ -128,6 +126,7 @@ namespace PictureSpider.Telegram
 #pragma warning restore CS4014 
             //Task.Run(RunSchedule);
         }
+#pragma warning restore CS0162
         public async Task<bool> Login()
         {
             var loginState = await tgClient.GetAuthorizationStateAsync();
@@ -307,7 +306,7 @@ namespace PictureSpider.Telegram
                                     Log($"Drop Message {message.id} for not found");
                                     continue;
                                 }
-                                throw e;
+                                throw;
                             }
                             if (messageInfo.Content == null) continue;
                             if (channel.download_telegraph)

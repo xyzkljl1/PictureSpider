@@ -20,11 +20,9 @@ namespace PictureSpider
     class ListenerServer
     {
         private string proxy;
-        Pixiv.Server pixivServer =null;
         List<BaseServer> baseServers = null;
-        public ListenerServer(Pixiv.Server _pServer, List<BaseServer> _baseServers, string _proxy)
+        public ListenerServer(List<BaseServer> _baseServers, string _proxy)
         {
-            pixivServer = _pServer;
             baseServers = new List<BaseServer> (_baseServers);
             proxy = _proxy;
             Task.Run(Run).Wait();
@@ -60,7 +58,9 @@ namespace PictureSpider
                                 if (data.Length > 0)
                                 {
                                     Console.WriteLine("Receive Pixiv Cookie");
-                                    await pixivServer.ListenerUtil_SetCookie(data);
+                                    foreach (var server in baseServers)
+                                        if(server is Pixiv.Server)
+                                            await server.ListenerUtil_SetCookie(data);
                                 }
                                 reader.Close();
                                 success = true;

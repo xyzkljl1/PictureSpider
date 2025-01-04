@@ -104,6 +104,7 @@ namespace PictureSpider.Twitter
                 httpClient_myapi.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse($"Bearer {config.TwitterBearerToken}");//My api，develop portal中申请的token
             }
         }
+#pragma warning disable CS0162
         public override async Task Init() {
             //https://developer.twitter.com/en/portal/products/free
             //由于免费api变得无法搜索用户，无法使用，fuck Elon Mask
@@ -122,6 +123,7 @@ namespace PictureSpider.Twitter
 #pragma warning restore CS4014 
             //Task.Run(RunSchedule);
         }
+#pragma warning restore CS01662 
         public override void SetReaded(ExplorerFileBase file)
         {
             var media = (file as ExplorerFile).media;

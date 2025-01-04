@@ -34,6 +34,8 @@ namespace PictureSpider
         public int TelegramApiID = 0;
         public string TelegramApiHash = "";
         public string TelegramConnectStr = "";
+        public string KemonoConnectStr = "";
+        public string KemonoDownloadDir = "./";
         public string MyDownloadServerAddress = "";
     }
 }

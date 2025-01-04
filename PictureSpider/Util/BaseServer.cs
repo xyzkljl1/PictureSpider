@@ -70,8 +70,10 @@ namespace PictureSpider
         }
         //以下是给listenerServer调用的部分
         public virtual bool ListenerUtil_IsValidUrl(string url) { return false; }
+#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public async virtual Task<bool> ListenerUtil_FollowUser(string url) { return false; }
         public virtual async Task ListenerUtil_SetCookie(string cookie) { }
+#pragma warning restore CS1998
 
         //File操作，因为需要Log，放到baseserver里
         public int DeleteFile(string path)

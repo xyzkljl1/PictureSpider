@@ -113,7 +113,9 @@ namespace PictureSpider.LocalSingleFile
             }
             Log($"Weekly Task Done:Move {mv_ct}/Del {del_ct}.");
         }
+#pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
         public async override Task<List<ExplorerQueue>> GetExplorerQueues()
+#pragma warning restore CS1998
         {
             var ret = new List<ExplorerQueue>();
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "LSF-Fav"));
@@ -121,7 +123,9 @@ namespace PictureSpider.LocalSingleFile
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, dir,$"LSF-{Path.GetFileName(dir)}"));
             return ret;
         }
+#pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
         public async override Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
+#pragma warning restore CS1998
         {
             var result = new List<ExplorerFileBase>();
             if (queue.type == ExplorerQueue.QueueType.Fav)

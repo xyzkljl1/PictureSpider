@@ -72,18 +72,20 @@ namespace PictureSpider.Hitomi
             httpClient.Dispose();
             database.Dispose();
         }
+#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
+#pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
+#pragma warning disable CS0162 // 检测到无法访问的代码
         public override async Task Init()
         {
 #if DEBUG
-            //return;
+            return;
 #endif
-#pragma warning disable CS0162 // 检测到无法访问的代码
             PrepareJS();
-#pragma warning restore CS0162
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
-#pragma warning restore CS4014
         }
+#pragma warning restore CS0162
+#pragma warning restore CS4014
+#pragma warning restore CS1998
         private async Task RunSchedule()
         {
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
@@ -101,7 +103,7 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
-                await Task.Delay(new TimeSpan(0, 3, 0));
+                await Task.Delay(new TimeSpan(0, 30, 0));
             }
             while (true);
         }
@@ -147,7 +149,7 @@ namespace PictureSpider.Hitomi
             {
                 LogError("Can't Transform webp:" + path);
                 LogError(e.Message);
-                throw e;
+                throw;
             }
         }
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
@@ -351,7 +353,10 @@ namespace PictureSpider.Hitomi
             }
             database.SaveChanges();
         }
-        public async override Task<List<ExplorerQueue>> GetExplorerQueues() {
+#pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
+        public async override Task<List<ExplorerQueue>> GetExplorerQueues()
+#pragma warning restore CS0162
+        {
             var ret=new List<ExplorerQueue>();
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Hitomi-Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Hitomi-Main"));

@@ -56,7 +56,7 @@ namespace PictureSpider
             queueComboBox.QueueChanged+=new EventHandler<QueueChangeEventArgs>(OnQueueComboBoxChanged);
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
-            InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
+            //InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
             SystemTrayIcon.DoubleClick += (object sender, EventArgs e) => this.Visible = !this.Visible;
             ExitAction.Click += (object sender, EventArgs e) => { FormClosing -= OnClose; this.Close(); };//退出时先移除阻止关闭的handle
             //绑定属性
@@ -72,7 +72,9 @@ namespace PictureSpider
 
             //onListCheckBoxClick(null,null);
 #if !DEBUG
-            listenerServer = new ListenerServer(_pixiv_server, servers, config.Proxy);
+            listenerServer = new ListenerServer(servers, config.Proxy);
+#else
+            listenerServer = new ListenerServer(servers, config.Proxy);
 #endif
         }
         private void OnClose(object sender, FormClosingEventArgs e)

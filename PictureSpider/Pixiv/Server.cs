@@ -146,29 +146,38 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
             }
         }
+#pragma warning disable CS0162 // 检测到无法访问的代码
+#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
+#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public override async Task Init()
         {
             banned_keyword = await database.GetBannedKeyword();
 #if DEBUG
+            await Test();
             return;
 #endif
             //设置cookie和csrftoken
             await UpdateHttpClientByDatabaseCookie();
-#pragma warning disable CS0162 // 检测到无法访问的代码
             //会修改属性引发UI更新，需要从主线程调用或使用invoke
             await CheckHomePage();
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
             RunSchedule();
-#pragma warning restore CS4014
-#pragma warning restore CS0162
-        }
-        public void Dispose()
-        {
-            httpClient.Dispose();
         }
         public async Task<string> Test()
         {
+            //var x = await RequestIllustAsync(74802304);
+            //await UpdateHttpClientByDatabaseCookie();
+            //var list=await RequestAllByUserId(20446187);
+            //await AddToIllustFetchQueue(list.ToHashSet(), new Dictionary<int, int>());
+            //await ProcessIllustFetchQueue(100);
+            //var res = await RequestIllustAsync(125036771);
             return "";
+        }
+#pragma warning restore CS4014
+#pragma warning restore CS0162
+#pragma warning restore CS1998
+        public void Dispose()
+        {
+            httpClient.Dispose();
         }
 
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
@@ -264,7 +273,7 @@ namespace PictureSpider.Pixiv
 
         private async Task RunSchedule()
         {
-            int last_daily_task = DateTime.Now.Day;
+            int last_daily_task = DateTime.Now.Day-1;
             int process_speed = 50;
             var day_of_week = DateTime.Now.DayOfWeek;
             await DownloadIllustsInExplorerQueue();
@@ -829,8 +838,9 @@ namespace PictureSpider.Pixiv
         {
             int tmp = illust_fetch_queue.Count;
             var illustList = new List<Illust>();
-            if (false)
+            /*
             {
+
                 var queue = new TaskQueue<Illust>(15);
                 foreach (var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
                     await queue.Add(RequestIllustAsync(id));
@@ -842,7 +852,7 @@ namespace PictureSpider.Pixiv
                         illustList.Add(task.Result);
                 });
             }
-            else
+            */
             {//似乎p站对频繁illust请求的容忍度大幅降低了？被迫改为非并发
                 foreach (var id in illust_fetch_queue.ToList().Take(Math.Min(count, illust_fetch_queue.Count)))
                 {

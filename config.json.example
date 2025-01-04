@@ -17,6 +17,7 @@
   "TelegramPhoneNumber": "",
   "TelegramDownloadDir": "C:\\123",
   "TelegramConnectStr": "",
-  "MyDownloadServerAddress": "http://127.0.0.1:4000"
-
+  "MyDownloadServerAddress": "http://127.0.0.1:4000",
+  "KemonoDownloadDir": "C:/Kemono/",
+  "KemonoConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=kemono;"
 }
