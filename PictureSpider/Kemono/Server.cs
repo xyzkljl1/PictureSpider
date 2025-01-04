@@ -76,10 +76,10 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            //return;
+            return;
 #endif
             //await FetchUser("7349257","fanbox");
-            await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
+            //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
             //await FetchUser("3659577", "patreon");
             //await FetchIllustGroupListByUser(database.Users.Where(x=>x.id== "3659577").ToList().FirstOrDefault());
             //await FetchIllustGroup(database.WorkGroups.Where(x=>x.id== "117461502").ToList().First());
