@@ -98,6 +98,8 @@ namespace PictureSpider
             {
                 if (File.Exists(src))
                 {
+                    if(!Directory.Exists(Path.GetDirectoryName(dest)))
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
                     File.Copy(src, dest, true);
                     return 1;
                 }

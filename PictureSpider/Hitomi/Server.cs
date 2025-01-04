@@ -77,7 +77,7 @@ namespace PictureSpider.Hitomi
 #pragma warning disable CS0162 // 检测到无法访问的代码
         public override async Task Init()
         {
-#if DEBUG
+#if DEBUG           
             return;
 #endif
             PrepareJS();
@@ -192,7 +192,7 @@ namespace PictureSpider.Hitomi
             //整理Fav文件夹
             {
                 //.ToList()以释放数据库连接
-                var existedFiles =Directory.GetFiles(download_dir_fav).Select(x=> Path.GetFileName(x)).ToHashSet<string>();
+                var existedFiles =Directory.GetFiles(download_dir_fav,"*",new EnumerationOptions { RecurseSubdirectories=true}).Select(x=> Path.GetFullPath(x)).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
@@ -202,19 +202,20 @@ namespace PictureSpider.Hitomi
                     foreach (var illust in illustGroup.illusts)
                     {
                         var file_name = $"{illust.fileName}{illust.ext}";
-                        var tmp_path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
-                        var fav_path = $"{download_dir_fav}/{illust.fileName}{illust.ext}";
+                        var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.fileName}{illust.ext}");
+                        var fav_path = Path.GetFullPath($"{download_dir_fav}/{illustGroup.user.displayText}/{illust.fileName}{illust.ext}");//按作者分目录
                         if (!illust.excluded)
                         {
-                            if (existedFiles.Contains(file_name))//从existedFiles中移除
-                                existedFiles.Remove(file_name);
+                            if (existedFiles.Contains(fav_path))//从existedFiles中移除
+                                existedFiles.Remove(fav_path);
                             else
                                 CopyFile(tmp_path, fav_path);
                         }
                     }
                 }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
-                    DeleteFile($"{download_dir_fav}/{file}");
+                    DeleteFile(file);
+                Util.ClearEmptyFolders(download_dir_fav);
             }
             //清理tmp文件夹
             {

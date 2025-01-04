@@ -42,5 +42,20 @@ namespace PictureSpider
                 ret[i/2] += BitConverter.ToChar(bytes, i);
             return new string(ret);
         }
+        public static void ClearEmptyFolders(string dir)
+        {
+            int ct = 0;
+            do
+            {
+                ct = 0;
+                foreach (var subdir in Directory.EnumerateDirectories(dir,"*",new EnumerationOptions { RecurseSubdirectories = true, ReturnSpecialDirectories=false }).ToList())
+                    if (Directory.GetFileSystemEntries(subdir).Length == 0)
+                    {
+                        Directory.Delete(subdir);
+                        ct++;
+                    }
+            }
+            while (ct > 0);
+        }
     }
 }

@@ -493,7 +493,7 @@ namespace PictureSpider.Kemono
             //整理Fav文件夹
             {
                 //.ToList()以释放数据库连接
-                var existedFiles = Directory.GetFiles(download_dir_fav).Select(x => Path.GetFileName(x)).ToHashSet<string>();
+                var existedFiles = Directory.GetFiles(download_dir_fav,"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
@@ -502,24 +502,20 @@ namespace PictureSpider.Kemono
                     database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.works)
                     {
-                        var file_name = $"{illust.name}";
                         var tmp_path = $"{download_dir_tmp}/{illust.subPath}";
-                        var fav_path = $"{download_dir_fav}/{illust.subPath}";
+                        var fav_path = $"{download_dir_fav}/{illust.favSubPath}";
                         if (!illust.excluded)
                         {
-                            if (existedFiles.Contains(file_name))//从existedFiles中移除
-                                existedFiles.Remove(file_name);
+                            if (existedFiles.Contains(fav_path))
+                                existedFiles.Remove(fav_path);
                             else
-                            {
-                                if (!Directory.Exists(Path.GetDirectoryName(fav_path)))
-                                    Directory.CreateDirectory(Path.GetDirectoryName(fav_path));
                                 CopyFile(tmp_path, fav_path);
-                            }
                         }
                     }
                 }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
-                    DeleteFile($"{download_dir_fav}/{file}");
+                    DeleteFile(file);
+                Util.ClearEmptyFolders(download_dir_fav);
             }
             //清理tmp文件夹
             {

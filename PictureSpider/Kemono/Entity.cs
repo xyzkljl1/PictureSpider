@@ -37,6 +37,19 @@ namespace PictureSpider.Kemono
             }
         }
         [NotMapped]
+        public string favSubPath
+        {
+            get
+            {
+                if (workGroup is not null)
+                    return $"{workGroup.user.displayText}/{service}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
+                if (coverGroup is not null)
+                    return $"{workGroup.user.displayText}/{service}/{coverGroup.id}/{index}_{Path.GetFileName(name)}";
+                return $"{service}/{urlPath}";
+            }
+        }
+
+        [NotMapped]
         public string url
         {
             get
