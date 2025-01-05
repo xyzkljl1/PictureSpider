@@ -11,10 +11,11 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using static PictureSpider.Downloader;
 
 namespace PictureSpider
 {
-    internal class Aria2DownloadQueue
+    internal class Aria2DownloadQueue:BaseDownloadQueue
     {
         private HttpClient httpClient;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private string aria2_rpc_secret="";
@@ -23,23 +24,20 @@ namespace PictureSpider
         private string process_name = "";
         private Process process=null;
         private string referer = "";
-        public enum Downloader//为了不同的DownloadQueue不互相干扰，把aria2c.exe复制多份，Downloader表示使用哪个exe
-        {
-            Twitter=0,
-            Pixiv=1,
-            Hitomi = 2,
-            Telegram = 3,
-            Kemono = 4,
-        }
-        public Aria2DownloadQueue(Downloader downloader,string _proxy,string _referer)
+        public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer)
         {
             aria2_rpc_secret=Guid.NewGuid().ToString();
-            process_name = $"aria2c_{downloader.ToString()}";
+            process_name = $"aria2c_{postfix.ToString()}";
             proxy = _proxy;
             referer = _referer;
             httpClient = new HttpClient();
         }
-        public async Task<bool> Add(string url, string dir, string file_name)
+        public void ClearTmpFiles(string dir)
+        {
+            foreach (var file in Directory.GetFiles(dir, "*.aria2"))//下载临时文件
+                File.Delete(file);
+        }
+        public async override Task<bool> Add(string url, string dir, string file_name)
         {
             try
             {
@@ -68,9 +66,9 @@ namespace PictureSpider
             }
             return true;
         }
-        public async Task WaitForAll()
+        public async override Task WaitForAll()
         {
-            while (!await CheckIfDownloadDone()) await Task.Delay(new TimeSpan(0, 1, 0));
+            while (!await CheckIfDownloadDone()) await Task.Delay(new TimeSpan(0, 10, 0));
         }
         private void CheckIfProcessRunning()
         {

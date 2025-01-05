@@ -80,6 +80,7 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="MegaApiClient" Version="1.10.4" />
     <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.5" />
     <PackageReference Include="Microsoft.ClearScript" Version="7.4.5" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />

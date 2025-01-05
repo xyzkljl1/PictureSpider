@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace PictureSpider
 {
-    public class Util
+    public static class Util
     {
         //返回扩展名
         public static string GetExtFromURL(string url)
@@ -56,6 +56,50 @@ namespace PictureSpider
                     }
             }
             while (ct > 0);
+        }
+        public static void ReplaceInvalidCharInFilename(ref string filename)
+        {
+            //注意和GetInvalidPathChars的区别
+            foreach (var c in Path.GetInvalidFileNameChars())
+                filename = filename.Replace(c, '_');
+            filename.Trim(' ');
+        }
+        public static void ReplaceInvalidCharInFilename(this string filename)
+        {
+            //注意和GetInvalidPathChars的区别
+            foreach (var c in Path.GetInvalidFileNameChars())
+                filename = filename.Replace(c, '_');
+            filename.Trim(' ');
+        }
+        public static void TouchDir(params string[] dirs)
+        {
+            foreach (var dir in dirs)
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+        }
+
+        public static HashSet<string> imageExtensions = new HashSet<string>{
+                ".jpeg", ".jpg", ".png", ".gif",".webp",".bmp"
+            };
+        public static bool IsImage(this string ext)
+        {
+            return imageExtensions.Contains(ext.ToLower());
+        }
+
+        public static HashSet<string> videoExtensions = new HashSet<string>{
+                ".avi", ".mp4", ".divx", ".wmv",".rmvb",".mkv"
+            };
+        public static bool IsVideo(this string ext)
+        {
+            return videoExtensions.Contains(ext.ToLower());
+        }
+
+        public static HashSet<string> zipExtensions = new HashSet<string>{
+                ".zip", ".rar", ".gz", ".7z",".tar"
+            };
+        public static bool IsZip(this string ext)
+        {
+            return zipExtensions.Contains(ext.ToLower());
         }
     }
 }

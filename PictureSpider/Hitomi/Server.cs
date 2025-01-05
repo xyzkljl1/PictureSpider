@@ -61,7 +61,7 @@ namespace PictureSpider.Hitomi
             download_dir_root = config.HitomiDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Hitomi, config.ProxySNI, "https://hitomi.la");
+            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hitomi, config.ProxySNI, "https://hitomi.la");
             foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
@@ -92,14 +92,14 @@ namespace PictureSpider.Hitomi
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
-            SyncLocalFile();
+            await SyncLocalFile();
             do
             {
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;
                     await FetchUserAndIllustGroups();
-                    SyncLocalFile();
+                    await SyncLocalFile();
                 }
                 //同时下载太多503
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
@@ -107,7 +107,7 @@ namespace PictureSpider.Hitomi
             }
             while (true);
         }
-        private void WEBP2JPGorGIF(Illust illust)
+        private async Task WEBP2JPGorGIF(Illust illust)
         {
             //自带Image读取webp会直接报out of memeory,浏览时再转换格式又会卡，所以提前把webp都转成其它格式
             var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
@@ -136,7 +136,7 @@ namespace PictureSpider.Hitomi
                     if (!File.Exists(new_path))
                         throw new Exception("Can't Transform webp/unkown issue.");
                     File.Delete(path);
-                    database.SaveChanges();
+                    await database.SaveChangesAsync();
                 }
             }
             catch (ImageFormatException)
@@ -153,7 +153,7 @@ namespace PictureSpider.Hitomi
             }
         }
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
-        private void SyncLocalFile()
+        private async Task SyncLocalFile()
         {
             //下载
             {
@@ -187,7 +187,7 @@ namespace PictureSpider.Hitomi
                 var tmp = downloadQueue.Count;
                 foreach (var illust in illusts)//如果收藏或未读的作品
                     if (File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}"))
-                        WEBP2JPGorGIF(illust);
+                        await WEBP2JPGorGIF(illust);
             }
             //整理Fav文件夹
             {
@@ -238,8 +238,7 @@ namespace PictureSpider.Hitomi
             try
             {
                 //移除临时文件
-                foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
-                    File.Delete(file);
+                downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<Illust>();
                 int download_ct = 0;
                 foreach (var illust in illustList)
@@ -248,7 +247,7 @@ namespace PictureSpider.Hitomi
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
                     illust.ResetEXTByURL();//下载前重新获取ext，因为本地文件会被转换格式，如果下载后又丢失文件，ext就和url不符
-                    database.SaveChanges();
+                    await database.SaveChangesAsync();
                     await downloader.Add(illust.url, download_dir_tmp, $"{illust.fileName}{illust.ext}");
                     download_ct++;
                     download_illusts.Add(illust);
@@ -278,7 +277,7 @@ namespace PictureSpider.Hitomi
                             illustList.Remove(illust);
                             //转换格式
                             if (illust.ext ==".webp")//一定是小写，不需要.ToLower()
-                                WEBP2JPGorGIF(illust);
+                                await WEBP2JPGorGIF(illust);
                         }
                     }
                     //下载失败可能是由于gg.js过期，此时该illustGroup的其它图片可能还在下载队列前端，重新获取一遍url以避免过多的下载失败
@@ -352,7 +351,7 @@ namespace PictureSpider.Hitomi
                     illust.url = urls[i] as string;
                 }
             }
-            database.SaveChanges();
+            await database.SaveChangesAsync();
         }
 #pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
         public async override Task<List<ExplorerQueue>> GetExplorerQueues()
@@ -437,10 +436,10 @@ namespace PictureSpider.Hitomi
                 }
             }
             illustGroup.fetched = true;
-            database.SaveChanges();
+            await database.SaveChangesAsync();
             Log($"Fetch IllustGroup Done:{illustGroup.Id} {illustGroup.title}");
         }
-        //FetchUse
+        //FetchUser
         private async Task<List<string>> FetchUserIDsByIllustGroupID(int id)
         {
             var ret=new List<string>();
@@ -521,7 +520,7 @@ namespace PictureSpider.Hitomi
                     illustGroup.user=user;
                 }
             }
-            database.SaveChanges();
+            await database.SaveChangesAsync();
         }
         public override BaseUser GetUserById(string id)
         {
@@ -623,7 +622,7 @@ namespace PictureSpider.Hitomi
                     var users = await FetchUserIDsByIllustGroupID(id);
                     if (users.Count > 0)
                     {
-                        users.ForEach(u => AddQueuedUser(u));
+                        users.ForEach(async (u)=> await AddQueuedUser(u));
                         return true;
                     }
                 }
@@ -638,7 +637,7 @@ namespace PictureSpider.Hitomi
                     var users=await FetchUserIDsByIllustGroupID(id);
                     if(users.Count>0)
                     {
-                        users.ForEach(u => AddQueuedUser(u));
+                        users.ForEach(async(u) => await AddQueuedUser(u));
                         return true;
                     }
                 }
@@ -650,12 +649,12 @@ namespace PictureSpider.Hitomi
                 if (results.Count > 1)
                 {
                     var id = results[1].Value;
-                    return AddQueuedUser(id);
+                    return await AddQueuedUser(id);
                 }
             }
             return false;
         }
-        public bool AddQueuedUser(string id)
+        public async Task<bool> AddQueuedUser(string id)
         {
             User user=null;
             if (database.Users.Count(x => x.name == id) > 0)
@@ -664,12 +663,13 @@ namespace PictureSpider.Hitomi
             {
                 user = new User(id);
                 user.displayText = user.displayId = id;
+                user.displayText.ReplaceInvalidCharInFilename();
                 database.Users.Add(user);
             }
             if (user.followed || user.queued)
                 return true;
             user.queued = true;
-            database.SaveChanges();
+            await database.SaveChangesAsync();
             return true;
         }
     }

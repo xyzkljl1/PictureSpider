@@ -240,13 +240,6 @@ namespace PictureSpider.Telegram
                 Log($"Fetch {ct} Messages from {channel.title}");
             }
         }
-        public void ReplaceInvalidCharInFilename(ref string filename)
-        {
-            //注意和GetInvalidPathChars的区别
-            foreach (var c in Path.GetInvalidFileNameChars())
-                filename = filename.Replace(c, '_');
-            filename.Trim(' ');
-        }
         public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30)
         {
             //一组图中只有一个有captain文本
@@ -264,7 +257,7 @@ namespace PictureSpider.Telegram
                         var ret=captionText.Text;
                         if(ret.Length>length_limit)
                             ret=ret.Substring(0, length_limit);
-                        ReplaceInvalidCharInFilename(ref ret);
+                        Util.ReplaceInvalidCharInFilename(ref ret);
                         ret = ret.Trim(' ');//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？
                         ret = ret.Trim('#');//去掉tag的#
                         ret=ret.Replace("[", "").Replace("]","");
@@ -391,7 +384,7 @@ namespace PictureSpider.Telegram
                                         if (downloadedFile.Local.IsDownloadingCompleted)
                                         {
                                             var filename = $"{filename_prefix}_{Path.GetFileName(downloadedFile.Local.Path)}";
-                                            ReplaceInvalidCharInFilename(ref filename);
+                                            Util.ReplaceInvalidCharInFilename(ref filename);
                                             var target_path = Path.Combine(parent_dir, filename);
                                             if (System.IO.File.Exists(target_path))//覆盖旧的
                                                 System.IO.File.Delete(target_path);

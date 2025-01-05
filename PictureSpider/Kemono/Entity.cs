@@ -8,6 +8,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -18,39 +19,41 @@ namespace PictureSpider.Kemono
     //attachment没有id，用path+service确定
     [PrimaryKey(nameof(urlPath), nameof(service))]
     [Table("Works")]
-    public class Work
+    public class Work:BaseWork
     {
         public string name { get; set; }//注意name可能是个文件名也可能是个带文件名的网址
         public string service { get; set; }//不确定service来自于coverGroup还是workGroup,需要存储一份
         public string urlPath { get; set; }
         public string urlHost { get; set; }
         [NotMapped]
-        public string subPath
+        public WorkGroup GetGroup
+        {
+            get=> workGroup??coverGroup;
+        }
+        [NotMapped]
+        public override string Ext { get => Path.GetExtension(name).ToLower(); }//改成从name获取防止循环引用
+
+        [NotMapped]
+        public override string TmpSubPath
         {
             get
             {
-                if (workGroup is not null)
-                    return $"{service}/{workGroup.user.id}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
-                if (coverGroup is not null)
-                    return $"{service}/{coverGroup.user.id}/{coverGroup.id}/{index}_{Path.GetFileName(name)}";
-                return $"{service}/{urlPath}";
+                if(Ext.IsVideo())
+                    return $"{GetGroup.user.id}/{service}_{GetGroup.id}_{index}_{Path.GetFileName(name)}";
+                return $"{service}/{GetGroup.user.id}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
             }
         }
         [NotMapped]
-        public string favSubPath
+        public override string FavSubPath
         {
             get
             {
-                if (workGroup is not null)
-                    return $"{workGroup.user.displayText}/{service}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
-                if (coverGroup is not null)
-                    return $"{workGroup.user.displayText}/{service}/{coverGroup.id}/{index}_{Path.GetFileName(name)}";
-                return $"{service}/{urlPath}";
+                return $"{GetGroup.user.displayText}/{service}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
             }
         }
 
         [NotMapped]
-        public string url
+        public override string DownloadURL
         {
             get
             {
@@ -62,8 +65,6 @@ namespace PictureSpider.Kemono
         }
         //页号
         public int index { get; set; } = -1;
-        //排除，只有对于fav的IllustGroup的Illust，这一项才有效
-        public bool excluded { get; set; }=false;
         //由于Work通过cover和works分别关联到WorkGroup，需要手动指定哪个外键对应哪个关联关系
         [ForeignKey("workGroupid,workGroupuserservice")]
         public virtual WorkGroup workGroup { get; set; }
@@ -74,22 +75,50 @@ namespace PictureSpider.Kemono
     }
     //desc中附带的外链
     //尚未实现
-    [PrimaryKey(nameof(id), "workGroupuserservice")]
+    [PrimaryKey(nameof(id), nameof(type))]
     [Table("ExternalWorks")]
-    public class ExternalWork
+    public class ExternalWork: BaseWork
     {
-        //自增id
-        public int id { get; set; }
+        public enum ExternalWorkType
+        {
+            Mega=0,
+        }
+        public string id { get; set; }
         public string name { get; set; }
         [NotMapped]
         public string service { get { return workGroup.service; } }
-        public string urlPath { get; set; }
-        public string urlHost { get; set; }
+        public string url { get; set; }
+        public ExternalWorkType type { get; set; }
 
+        [NotMapped]
+        public override string Ext { get => Path.GetExtension(name).ToLower(); }//改成从name获取防止循环引用
+
+        [NotMapped]
+        public override string TmpSubPath
+        {
+            get
+            {
+                if(Ext.IsVideo())//目前客户端不能浏览视频，所以尽量放在同一级目录以便使用外部目录浏览
+                    return $"{workGroup.user.id}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
+                return $"{service}/{workGroup.user.id}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
+            }
+        }
+        [NotMapped]
+        public override string FavSubPath
+        {
+            get
+            {
+                if(Ext.IsVideo())
+                    return $"{workGroup.user.displayText}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
+                return $"{workGroup.user.displayText}/{service}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
+            }
+        }
+        [NotMapped]
+        public override string DownloadURL => url;
+        [NotMapped]
+        public override Downloader.DownloaderType GetDownloader => Downloader.DownloaderType.MegaDownloadQueue;
         //页号
         public int index { get; set; } = -1;
-        //排除，只有对于fav的IllustGroup的Illust，这一项才有效
-        public bool excluded { get; set; } = false;
         public virtual WorkGroup workGroup { get; set; }
     }
     [PrimaryKey(nameof(id), "userservice")]//userservice是自动生成的对user的外键
@@ -153,7 +182,7 @@ namespace PictureSpider.Kemono
         }
         public override string FilePath(int page)
         {
-            return Path.Combine(download_dir_tmp, sortedIllusts[page].subPath);
+            return Path.Combine(download_dir_tmp, sortedIllusts[page].TmpSubPath);
         }
 
         public override int pageCount() { return illustGroup.works.Count; }

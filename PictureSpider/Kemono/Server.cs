@@ -18,6 +18,8 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Text.RegularExpressions;
+using CG.Web.MegaApiClient;
+using HtmlAgilityPack;
 
 namespace PictureSpider.Kemono
 {
@@ -32,9 +34,9 @@ namespace PictureSpider.Kemono
         private string download_dir_root = "";
         private string download_dir_tmp = "";
         private string download_dir_fav = "";
-        Aria2DownloadQueue downloader;
-        private List<Work> downloadQueue = new List<Work>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
-        private List<ExternalWork> externalDownloadQueue = new List<ExternalWork>();
+        Downloader downloader;
+        MegaApiClient mega;//从downloader借的mega client，用于访问
+        private List<BaseWork> downloadQueue = new List<BaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
         public Server(Config config)
         {
             logPrefix = "K";
@@ -59,11 +61,11 @@ namespace PictureSpider.Kemono
             download_dir_root = config.KemonoDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Kemono, config.Proxy, baseUrl);
-            foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
-                if (!Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
+            var megaDownloader = new MegaDownloadQueue(config.ProxySNI, config.Proxy);
+            mega = megaDownloader.MegaClient;
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Kemono, config.Proxy, baseUrl),megaDownloader);
 
+            Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
         public void Dispose()
         {
@@ -76,22 +78,109 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            //return;
 #endif
             //await FetchUser("7349257","fanbox");
             //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
             //await FetchUser("3659577", "patreon");
             //await FetchIllustGroupListByUser(database.Users.Where(x=>x.id== "3659577").ToList().FirstOrDefault());
             //await FetchIllustGroup(database.WorkGroups.Where(x=>x.id== "117461502").ToList().First());
+            //foreach (var user in database.Users.ToList())//更新作者
+            //    await FetchUser(user.id, user.service);
             //await FetchUserAndIllustGroups();
             //await AddQueuedUser("115314", "fantia");
+            //foreach(var g in database.WorkGroups.ToList())
+            //    await ParseGroupContent(g);
             //SyncLocalFile();
+            //await ProcessIllustDownloadQueue(downloadQueue,10);
             RunSchedule();
-            //await ProcessIllustDownloadQueue(downloadQueue);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
 #pragma warning restore CS1998
+        private async Task ParseGroupContent(WorkGroup workGroup)
+        {
+            var doc = new HtmlDocument();
+            doc.LoadHtml(workGroup.desc);
+            var index = 1;
+            try
+            {
+                var anodes = doc.DocumentNode.SelectNodes("//a");
+                if (anodes is null)
+                    return;
+                foreach (var anode in anodes)
+                    //https://kemono.su/patreon/user/3659577/post/117461502/revision/9878902
+                    if (anode.Attributes["href"] is not null)
+                    {
+                        //包含一个mega文件夹
+                        //https://kemono.su/patreon/user/3659577/post/117461502/revision/9878902
+                        //<p><img src=\"/05/68/0568e59bd4bfdea28e3b3183046b81668dc841dfd5bcdc847612248a161138f2.webp\"></p><p>Hi guys!</p><p><a href=\"https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ\" rel=\"noopener noreferrer\">DOWNLOAD</a>&nbsp;(Watermark-free)</p>
+                        if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/folder/"))//Mega folder
+                        {
+                            var rootUri = new Uri(anode.Attributes["href"].Value);
+                            foreach (var meganode in await mega.GetNodesFromLinkAsync(rootUri))//GetNodesFromLinkAsync是递归的
+                                if (meganode.Type == NodeType.File)
+                                {
+                                    var ext = Path.GetExtension(meganode.Name);
+                                    if (ext.IsVideo())//暂时只处理video
+                                    {
+                                        var work = new ExternalWork
+                                        {
+                                            url = GetMegaLink(meganode, rootUri).AbsoluteUri,
+                                            id = meganode.Id,
+                                            type = ExternalWork.ExternalWorkType.Mega,
+                                            name = meganode.Name,
+                                            index = index++
+                                        };
+                                        if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
+                                            continue;
+                                        work.workGroup = workGroup;
+                                        database.ExternalWorks.Add(work);
+                                        await database.SaveChangesAsync();
+                                    }
+                                }
+                        }
+                        //单个mega文件 https://kemono.su/patreon/user/8693043/post/75248472
+                        //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
+                        else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
+                        {
+                            var node = await mega.GetNodeFromLinkAsync(new Uri(anode.Attributes["href"].Value));
+                            if (node is not null)
+                            {
+                                var ext = Path.GetExtension(node.Name);
+                                if (ext.IsVideo())//暂时只处理video
+                                {
+                                    var work = new ExternalWork
+                                    {
+                                        url = anode.Attributes["href"].Value,
+                                        id = node.Id,
+                                        type = ExternalWork.ExternalWorkType.Mega,
+                                        name = node.Name,
+                                        index = index++
+                                    };
+                                    if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
+                                        continue;
+                                    work.workGroup = workGroup;
+                                    database.ExternalWorks.Add(work);
+                                    await database.SaveChangesAsync();
+                                }
+                            }
+                        }
+                    }
+            }
+            catch (Exception e)
+            {
+                LogError($"Fail ParseGroupContent {workGroup.id}:{e.Message}");
+            }
+        }
+        private Uri GetMegaLink(INode node,Uri root)
+        {
+            if (node.Type == NodeType.File)
+                return new Uri($"{root.AbsoluteUri}/file/{node.Id}");
+            if (node.Type == NodeType.Directory)
+                return new Uri($"{root.AbsoluteUri}/folder/{node.Id}");
+            return null;
+        }
         //获取作者信息
         private async Task FetchUser(string id,string service)
         {
@@ -123,7 +212,12 @@ namespace PictureSpider.Kemono
             }
             user.displayId = doc.Value<string>("name");
             user.displayText = doc.Value<string>("public_id");
-            database.SaveChanges();
+            if (user.displayText is null)
+                user.displayText = user.displayId;
+            if (user.displayText is null)
+                user.displayText = user.id;
+            user.displayText.ReplaceInvalidCharInFilename();//还用做目录名
+            await database.SaveChangesAsync();
         }
         //获取该user的作品id并插入数据库
         public async Task FetchWorkGroupListByUser(User user)
@@ -437,7 +531,9 @@ namespace PictureSpider.Kemono
             if (doc["post"]["embed"].ToObject<JObject>().ContainsKey("url"))
                 illustGroup.embedUrl = doc["post"]["embed"].Value<string>("url");
             await database.SaveChangesAsync();
-            Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
+            if(illustGroup.user.dowloadExternalWorks)
+                await ParseGroupContent(illustGroup);
+            //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
         public override void SetUserFollowOrQueue(BaseUser user)
         {
@@ -462,7 +558,7 @@ namespace PictureSpider.Kemono
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         private void SyncLocalFile()
         {
-            //下载
+            //查找tmp目录，将所有应下载的文件加入队列
             {
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fetched == true
@@ -470,22 +566,22 @@ namespace PictureSpider.Kemono
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                     select illustGroup).ToList();
                 var tmp = downloadQueue.Count;
-                foreach (var illustGroup in illustGroups)//如果收藏或未读的作品
+                foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
-                    database.LoadFK(illustGroup);
-                    if(illustGroup.user.dowloadWorks)
-                        foreach (var illust in illustGroup.works)
-                        {
-                            database.LoadFK(illust);
-                            if (illustGroup.fav == false || illust.excluded == false)//没有排除
-                                if (!downloadQueue.Contains(illust)) //不在下载队列
-                                    if (!File.Exists($"{download_dir_tmp}/{illust.subPath}")) //不在本地
-                                        downloadQueue.Add(illust);
-                        } 
-                    else if(illustGroup.user.dowloadExternalWorks)
+                    database.LoadFK(workGroup);
+                    var works = new List<BaseWork>();
+                    if (workGroup.user.dowloadWorks)
+                        works.AddRange(workGroup.works);
+                    if (workGroup.user.dowloadExternalWorks)
+                        works.AddRange(workGroup.externalWorks);
+                    foreach (var work in works)
                     {
-                        //TODO
-                    }
+                        database.LoadFK(work);
+                        if (workGroup.fav == false || work.excluded == false)//没有排除
+                            if (!downloadQueue.Contains(work)) //不在下载队列
+                                if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}")) //不在本地
+                                    downloadQueue.Add(work);
+                    } 
                 }
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
@@ -493,7 +589,8 @@ namespace PictureSpider.Kemono
             //整理Fav文件夹
             {
                 //.ToList()以释放数据库连接
-                var existedFiles = Directory.GetFiles(download_dir_fav,"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
+                //GetFullPath以统一斜杠格式
+                var existedFiles = Directory.GetFiles(Path.GetFullPath(download_dir_fav),"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
@@ -502,8 +599,8 @@ namespace PictureSpider.Kemono
                     database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.works)
                     {
-                        var tmp_path = $"{download_dir_tmp}/{illust.subPath}";
-                        var fav_path = $"{download_dir_fav}/{illust.favSubPath}";
+                        var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
+                        var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
                         if (!illust.excluded)
                         {
                             if (existedFiles.Contains(fav_path))
@@ -527,7 +624,7 @@ namespace PictureSpider.Kemono
                 {
                     database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.works)
-                        ct += DeleteFile($"{download_dir_tmp}/{illust.subPath}");
+                        ct += DeleteFile($"{download_dir_tmp}/{illust.TmpSubPath}");
                 }
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
@@ -588,7 +685,7 @@ namespace PictureSpider.Kemono
                     database.LoadFK(illustGroup);
                     if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
                         result.Add(new ExplorerFile(illustGroup, download_dir_tmp));
-                    else if (illustGroup.user.dowloadExternalWorks&&illustGroup.externalWorks.Count>0)
+                    else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
                         result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
                 }
             }
@@ -665,49 +762,38 @@ namespace PictureSpider.Kemono
             }
             return false;
         }
-        private async Task ProcessIllustDownloadQueue(List<Work> workList, int limit = -1)
+        private async Task ProcessIllustDownloadQueue(List<BaseWork> workList, int limit = -1)
         {
             try
             {
                 //移除临时文件
                 foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
                     File.Delete(file);
-                var download_illusts = new List<Work>();
-                var ignore_illusts = new List<Work>();
+                var download_illusts = new List<BaseWork>();
+                var ignore_illusts = new List<BaseWork>();
                 int download_ct = 0;
-                foreach (var illust in workList)
+                foreach (var work in workList)
                 {
-                    var path = Path.Combine(download_dir_tmp, illust.subPath);
+                    var path = Path.Combine(download_dir_tmp, work.TmpSubPath);
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
-                    var ext = Path.GetExtension(filename).ToLower();
-                    if(IsImage(ext))
+                    var ext = work.Ext;
+                    if(ext.IsImage()&&work is Work)
+                        await downloader.Add(work,download_dir_tmp);
+                    else if(ext.IsVideo()&&work is ExternalWork)
+                        await downloader.Add(work, download_dir_tmp);
+                    else if (ext.IsZip())
                     {
-                        if (!Directory.Exists(dir))
-                        {
-                            try
-                            {
-                                Directory.CreateDirectory(dir);
-                            }
-                            catch(Exception e)
-                            {
-                                Console.WriteLine(e.Message);
-                            }
-
-                        }
-                        await downloader.Add(illust.url, dir, filename);
-                    }
-                    else if (IsZip(ext))
-                    {
-                        ignore_illusts.Add(illust);//暂定：直接忽略压缩包
+                        ignore_illusts.Add(work);//暂定：直接忽略压缩包
+                        continue;
                     }
                     else
                     {
-                        ignore_illusts.Add(illust);
+                        ignore_illusts.Add(work);
+                        continue;
                     }
-                    
                     download_ct++;
-                    download_illusts.Add(illust);
+                    download_illusts.Add(work);
                     if (limit >= 0 && download_ct >= limit)
                         break;
                 }
@@ -723,7 +809,7 @@ namespace PictureSpider.Kemono
                     //var fail_illustGroup=new HashSet<WorkGroup>();
                     foreach (var illust in download_illusts)
                     {
-                        var path = $"{download_dir_tmp}/{illust.subPath}";
+                        var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
 //                            Log($"Download Fail: {illust.url}");
@@ -747,18 +833,6 @@ namespace PictureSpider.Kemono
                 LogError(e.Message);
                 throw;
             }
-        }
-        private bool IsImage(string ext)
-        {
-            return ext == ".jpeg" || ext == ".jpg" || ext == ".png" || ext == ".gif" || ext == ".webp";
-        }
-        private bool IsZip(string ext)
-        {
-            return ext == ".zip" || ext == ".rar" || ext == ".7z" ;
-        }
-        private async Task ProcessExternalIllustDownloadQueue(List<ExternalWork> illustList, int limit = -1)
-        {
-            return ;
         }
 
     }

@@ -91,7 +91,7 @@ namespace PictureSpider.Pixiv
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
             Log("Use SNI Proxy:"+request_proxy);
-            downloader = new Aria2DownloadQueue(Aria2DownloadQueue.Downloader.Pixiv, request_proxy, "https://www.pixiv.net/");
+            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pixiv, request_proxy, "https://www.pixiv.net/");
             //初始化httpClient
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -474,8 +474,7 @@ namespace PictureSpider.Pixiv
             try
             {
                 //移除临时文件
-                foreach (var file in Directory.GetFiles(download_dir_main, "*.aria2"))//下载临时文件
-                    File.Delete(file);
+                downloader.ClearTmpFiles(download_dir_main);
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
                 //创建下载任务，打乱顺序以防止反复下载尚未fetch成功的illust
