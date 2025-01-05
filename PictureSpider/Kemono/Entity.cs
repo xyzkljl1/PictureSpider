@@ -60,7 +60,7 @@ namespace PictureSpider.Kemono
                 if (urlHost is not null&&urlHost!= "")
                     return $"{urlHost}/data{urlPath}";
                 //没有server时随便用n1~n4中的一个
-                return $"https://n4.kemono.su/data/{urlPath}";
+                return $"https://n4.kemono.su/data{urlPath}";
             }
         }
         //页号

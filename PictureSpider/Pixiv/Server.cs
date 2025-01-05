@@ -94,14 +94,14 @@ namespace PictureSpider.Pixiv
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pixiv, request_proxy, "https://www.pixiv.net/");
             //初始化httpClient
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            var handler = new HttpClientHandler()
             {
-                MaxConnectionsPerServer = 256,
-                UseCookies = false,
-                Proxy = new WebProxy(request_proxy, false)
-            };
-            handler.ServerCertificateCustomValidationCallback = delegate { return true; };
-            {
+                var handler = new HttpClientHandler()
+                {
+                    MaxConnectionsPerServer = 256,
+                    UseCookies = false,
+                    Proxy = new WebProxy(request_proxy, false)
+                };
+                handler.ServerCertificateCustomValidationCallback = delegate { return true; };
                 httpClient = new HttpClient(handler);
                 //超时必须设短一些，因为有的时候某个请求就是会得不到回应，需要让它尽快超时重来
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
@@ -117,6 +117,13 @@ namespace PictureSpider.Pixiv
                 // httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
             }
             {
+                var handler = new HttpClientHandler()
+                {
+                    MaxConnectionsPerServer = 256,
+                    UseCookies = false,
+                    Proxy = new WebProxy(request_proxy, false)
+                };
+                handler.ServerCertificateCustomValidationCallback = delegate { return true; };
                 httpClient_anonymous = new HttpClient(handler);
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
@@ -154,7 +161,7 @@ namespace PictureSpider.Pixiv
             banned_keyword = await database.GetBannedKeyword();
 #if DEBUG
             await Test();
-            return;
+            //return;
 #endif
             //设置cookie和csrftoken
             await UpdateHttpClientByDatabaseCookie();

@@ -72,13 +72,13 @@ namespace PictureSpider.Pixiv
                         throw new ArgumentException("Not SSL");
                     httpClient.DefaultRequestHeaders.Referrer = referer;
                     using (var content= new StringContent(data, Encoding.UTF8, "application/json"))
-                    using (HttpResponseMessage response = await httpClient.PostAsync(url, content))
-                    {
-                        var ret = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine(response.StatusCode.ToString() + ":" + ret);
-                        CheckStatusCode(response);
-                        return ret;
-                    }
+                        using (HttpResponseMessage response = await httpClient.PostAsync(url, content))
+                        {
+                            var ret = await response.Content.ReadAsStringAsync();
+                            Console.WriteLine(response.StatusCode.ToString() + ":" + ret);
+                            CheckStatusCode(response);
+                            return ret;
+                        }
                 }
                 catch (Exception e)
                 {

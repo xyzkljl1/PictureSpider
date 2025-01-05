@@ -39,12 +39,15 @@ namespace PictureSpider
         }
         public async override Task<bool> Add(string url, string dir, string file_name)
         {
+            //用/以避免转义
+            dir = dir.Replace('\\', '/');
+            file_name = file_name.Replace('\\', '/');
             try
             {
                 if (string.IsNullOrEmpty(url))
                     throw new ArgumentNullException("url");
                 CheckIfProcessRunning();
-                string path = dir + "/" + file_name;
+                string path = $"{dir}/{file_name}";
                 if (File.Exists(path))
                     File.Delete(path);
                 /*id必须有，值可以随便填
