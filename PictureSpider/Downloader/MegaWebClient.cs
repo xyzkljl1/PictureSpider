@@ -24,8 +24,10 @@ namespace PictureSpider
 
         public MegaWebClient(WebProxy proxy, WebProxy proxy_download)
         {
+            //CG.Web.MegaApiClient.WebClient
             _httpClient = CreateHttpClient(-1, GenerateUserAgent(), proxy);
-            _httpClientDownload = CreateHttpClient(-1, GenerateUserAgent(), proxy_download);
+            _httpClientDownload = _httpClient;
+            //_httpClientDownload = CreateHttpClient(-1, GenerateUserAgent(), proxy_download);
         }
         public bool isDownloadURL(Uri url)
         {
@@ -53,34 +55,39 @@ namespace PictureSpider
         public Stream GetRequestRaw(Uri url)
         {
             if (isDownloadURL(url))
-            {
                 return _httpClientDownload.GetStreamAsync(url).Result;
-
-            }
             else
                 return _httpClient.GetStreamAsync(url).Result;
         }
 
         private Stream PostRequest(Uri url, Stream dataStream, string contentType)
         {
-            using StreamContent streamContent = new StreamContent(dataStream, BufferSize);
-            streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url)
+            try
             {
-                Content = streamContent
-            };
-            HttpResponseMessage result;
-            if (isDownloadURL(url))
-                result = _httpClientDownload.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).Result;
-            else
-                result = _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).Result;
-            if (!result.IsSuccessStatusCode && result.StatusCode == HttpStatusCode.InternalServerError && result.ReasonPhrase == "Server Too Busy")
-            {
-                return new MemoryStream(Encoding.UTF8.GetBytes((-3L).ToString()));
-            }
+                using StreamContent streamContent = new StreamContent(dataStream, BufferSize);
+                streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = streamContent
+                };
+                HttpResponseMessage result;
+                if (isDownloadURL(url))
+                    result = _httpClientDownload.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).Result;
+                else
+                    result = _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).Result;
+                if (!result.IsSuccessStatusCode && result.StatusCode == HttpStatusCode.InternalServerError && result.ReasonPhrase == "Server Too Busy")
+                {
+                    return new MemoryStream(Encoding.UTF8.GetBytes((-3L).ToString()));
+                }
 
-            result.EnsureSuccessStatusCode();
-            return result.Content.ReadAsStreamAsync().Result;
+                result.EnsureSuccessStatusCode();
+                return result.Content.ReadAsStreamAsync().Result;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                throw;
+            }
         }
 
         private string StreamToString(Stream stream)

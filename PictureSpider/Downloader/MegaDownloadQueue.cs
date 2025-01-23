@@ -7,6 +7,7 @@ using System.Net;
 using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
+using static Microsoft.ClearScript.V8.V8CpuProfile;
 using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace PictureSpider
@@ -70,7 +71,8 @@ namespace PictureSpider
             try
             {
                 if (uri.AbsolutePath.StartsWith("/file/"))//单个文件
-                    await mega.DownloadFileAsync(new Uri(url), Path.Combine(dir, file_name));
+                    mega.DownloadFile(new Uri(url), Path.Combine(dir, file_name));
+                    //await mega.DownloadFileAsync(new Uri(url), Path.Combine(dir, file_name));
                 else if (uri.AbsolutePath.StartsWith("/folder/") && uri.Fragment.Contains("/file/"))
                 {
                     //形如https://mega.nz/folder/2NhyhAKQ#M-r20w5Zlo8UaFp2BBVcQg/file/DIQmGT7Z
@@ -79,7 +81,8 @@ namespace PictureSpider
                     foreach (var node in await mega.GetNodesFromLinkAsync(new Uri(url)))
                         if (node.Id == fileId)
                         {
-                            await mega.DownloadFileAsync(node, Path.Combine(dir, file_name));
+                            //await mega.DownloadFileAsync(node, Path.Combine(dir, file_name));
+                            mega.DownloadFile(node, Path.Combine(dir, file_name));
                             break;
                         }
                 }
@@ -93,10 +96,12 @@ namespace PictureSpider
 
             throw new TopLevelException($"Can't Resolve Downloaad Link:{url}");
         }
-        public override async Task<bool> Add(string url, string dir, string file_name) 
+#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
+        public override async Task<bool> Add(string url, string dir, string file_name)
         {
             downloading.Add(DownloadTask(url, dir, file_name));
             return true;
         }
+#pragma warning restore CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
     }
 }

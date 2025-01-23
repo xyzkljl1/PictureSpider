@@ -47,7 +47,7 @@ namespace PictureSpider.Kemono
             {
                 MaxConnectionsPerServer = 256,
                 UseCookies = true,
-                Proxy = new WebProxy(config.Proxy, false)
+                Proxy = new WebProxy(config.ProxyGo, false)
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
@@ -685,8 +685,9 @@ namespace PictureSpider.Kemono
                     database.LoadFK(illustGroup);
                     if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
                         result.Add(new ExplorerFile(illustGroup, download_dir_tmp));
-                    else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
-                        result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
+                    //目前从外链下载的都是视频，不在此浏览
+                    //else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
+                    //    result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
                 }
             }
             result.Sort((l, r) => (l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));

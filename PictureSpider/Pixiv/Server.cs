@@ -92,7 +92,55 @@ namespace PictureSpider.Pixiv
             user_name = config.PixivUserName;
             Log("Use SNI Proxy:"+request_proxy);
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pixiv, request_proxy, "https://www.pixiv.net/");
-            //初始化httpClient
+        }
+#pragma warning disable CS0162 // 检测到无法访问的代码
+#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
+#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
+        public override async Task Init()
+        {
+            banned_keyword = await database.GetBannedKeyword();
+#if DEBUG
+            await Test();
+            return;
+#endif
+            await ResetHttpClient();
+            //设置cookie和csrftoken
+            //await UpdateHttpClientByDatabaseCookie();
+            //会修改属性引发UI更新，需要从主线程调用或使用invoke
+            await CheckHomePage();
+            RunSchedule();
+        }
+        public async Task<string> Test()
+        {
+            //var x = await RequestIllustAsync(74802304);
+            //await UpdateHttpClientByDatabaseCookie();
+            //var list=await RequestAllByUserId(20446187);
+            //await AddToIllustFetchQueue(list.ToHashSet(), new Dictionary<int, int>());
+            //await ProcessIllustFetchQueue(100);
+            //var res = await RequestIllustAsync(125036771);
+            return "";
+        }
+#pragma warning restore CS4014
+#pragma warning restore CS0162
+#pragma warning restore CS1998
+        public void Dispose()
+        {
+            httpClient.Dispose();
+            httpClientCSRF.Dispose();
+            httpClient_anonymous.Dispose();
+        }
+        //初始化httpClient
+        public async Task ResetHttpClient()
+        {
+            if(httpClient is not null)
+            {
+                httpClient.Dispose();
+                httpClientCSRF.Dispose();
+                httpClient_anonymous.Dispose();
+                httpClient = null;
+                httpClientCSRF = null;
+                httpClient_anonymous = null;
+            }
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             {
                 var handler = new HttpClientHandler()
@@ -152,41 +200,8 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-site", "none");
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
             }
-        }
-#pragma warning disable CS0162 // 检测到无法访问的代码
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
-#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
-        public override async Task Init()
-        {
-            banned_keyword = await database.GetBannedKeyword();
-#if DEBUG
-            await Test();
-            //return;
-#endif
-            //设置cookie和csrftoken
             await UpdateHttpClientByDatabaseCookie();
-            //会修改属性引发UI更新，需要从主线程调用或使用invoke
-            await CheckHomePage();
-            RunSchedule();
         }
-        public async Task<string> Test()
-        {
-            //var x = await RequestIllustAsync(74802304);
-            //await UpdateHttpClientByDatabaseCookie();
-            //var list=await RequestAllByUserId(20446187);
-            //await AddToIllustFetchQueue(list.ToHashSet(), new Dictionary<int, int>());
-            //await ProcessIllustFetchQueue(100);
-            //var res = await RequestIllustAsync(125036771);
-            return "";
-        }
-#pragma warning restore CS4014
-#pragma warning restore CS0162
-#pragma warning restore CS1998
-        public void Dispose()
-        {
-            httpClient.Dispose();
-        }
-
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
             var ret = new List<ExplorerQueue>();
@@ -280,7 +295,7 @@ namespace PictureSpider.Pixiv
 
         private async Task RunSchedule()
         {
-            int last_daily_task = DateTime.Now.Day-1;
+            int last_daily_task = DateTime.Now.Day;
             int process_speed = 50;
             var day_of_week = DateTime.Now.DayOfWeek;
             await DownloadIllustsInExplorerQueue();
@@ -290,6 +305,7 @@ namespace PictureSpider.Pixiv
             {
                 if(DateTime.Now.Day!=last_daily_task)
                 {
+                    await ResetHttpClient();//由于不明原因，过数日后会一直请求失败，试试直接重置http client
                     last_daily_task = DateTime.Now.Day;
                     await DailyTask(day_of_week);
                 }
