@@ -26,8 +26,8 @@ namespace PictureSpider
         {
             //CG.Web.MegaApiClient.WebClient
             _httpClient = CreateHttpClient(-1, GenerateUserAgent(), proxy);
-            _httpClientDownload = _httpClient;
-            //_httpClientDownload = CreateHttpClient(-1, GenerateUserAgent(), proxy_download);
+            //_httpClientDownload = _httpClient;
+            _httpClientDownload = CreateHttpClient(-1, GenerateUserAgent(), proxy_download);
         }
         public bool isDownloadURL(Uri url)
         {

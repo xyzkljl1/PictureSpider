@@ -61,9 +61,9 @@ namespace PictureSpider.Kemono
             download_dir_root = config.KemonoDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            var megaDownloader = new MegaDownloadQueue(config.ProxySNI, config.Proxy);
+            var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Kemono, config.Proxy, baseUrl),megaDownloader);
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Kemono, config.ProxyGo, baseUrl),megaDownloader);
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
