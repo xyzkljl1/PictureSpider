@@ -78,7 +78,7 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            //return;
+            return;
 #endif
             //await FetchUser("7349257","fanbox");
             //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
