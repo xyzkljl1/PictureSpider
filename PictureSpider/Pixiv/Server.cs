@@ -520,7 +520,7 @@ namespace PictureSpider.Pixiv
                             download_ct++;
                             downloaded = true;
                         }
-                        //我硬盘贼大，没有必要删除多余的图片
+                        //TODO 删除多余的图片
                     }
                     if (downloaded)
                         download_illusts.Add(illust);
