@@ -155,7 +155,7 @@ namespace PictureSpider.Pixiv
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
                 httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -176,7 +176,7 @@ namespace PictureSpider.Pixiv
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -193,7 +193,7 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.Timeout = new TimeSpan(0, 0, 35);
                 httpClientCSRF.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClientCSRF.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36");
+                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
                 httpClientCSRF.DefaultRequestHeaders.Host = "www.pixiv.net";
                 //httpClientCSRF.DefaultRequestHeaders.Add("Cookie", this.cookie);
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
@@ -1012,18 +1012,22 @@ namespace PictureSpider.Pixiv
                 var doc = await RequestHtmlAsync(base_url, referer);
                 if (doc != null)
                 {
-                    HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
+                    HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//script[@id='__NEXT_DATA__']");
                     if (headNode != null)
                     {
-                        var json_object = (JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
-                        if (json_object != null && json_object.Value<JObject>("userData") != null)
+                        var json_object = (JObject)JsonConvert.DeserializeObject(headNode.InnerText);
+                        try
                         {
-                            var name = json_object.Value<JObject>("userData").Value<String>("name");
-                            if (name == this.user_name)
+                            var id = json_object.Value<JObject>("props").Value<JObject>("pageProps").Value<JObject>("gaUserData").Value<string>("userId");
+                            if (id == $"{this.user_id}")
                             {
                                 VerifyState = "Login Success";
                                 return;
                             }
+                        }
+                        catch (Exception e)
+                        {
+                            LogError($"Fail to get user id: {e.Message}");
                         }
                     }
                 }
@@ -1055,10 +1059,11 @@ namespace PictureSpider.Pixiv
                         var ret = await response.Content.ReadAsStringAsync();
                         var doc = new HtmlDocument();
                         doc.LoadHtml(ret);
-                        HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//input[@name='tt']");
-                        if (headNode != null)
+                        HtmlNode headNode = doc.DocumentNode.SelectSingleNode("//meta[@id='meta-global-data']");
+                        var json_object=(JObject)JsonConvert.DeserializeObject(headNode.Attributes["content"].Value);
+                        if (!String.IsNullOrEmpty(json_object.Value<String>("token")))
                         {
-                            csrf_token = headNode.Attributes["value"].Value;
+                            csrf_token = json_object.Value<String>("token");
                             break;
                         }
                     }
