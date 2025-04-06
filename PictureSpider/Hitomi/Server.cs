@@ -29,6 +29,7 @@ namespace PictureSpider.Hitomi
         //private string base_host_ltn = "ltn.hitomi.la";
         //private string baseUrl = "https://hitomi.la";
         private string baseUrlLtn = "https://ltn.hitomi.la";
+        private string tmpUrlLtn = "https://ltn.gold-usergeneratedcontent.net";
         private string commonjs = "";
         private string myjs = "";
 
@@ -80,7 +81,7 @@ namespace PictureSpider.Hitomi
 #if DEBUG           
             return;
 #endif
-            PrepareJS();
+            PrepareJS();            
             RunSchedule();
         }
 #pragma warning restore CS0162
@@ -316,7 +317,7 @@ namespace PictureSpider.Hitomi
                         var myartists=[];
                         var mytitle=galleryinfo.japanese_title || galleryinfo.title;
                         for(let file of galleryinfo.files){
-                            var src=url_from_url_from_hash(galleryinfo.id,file,'webp',undefined,'a');
+                            var src=url_from_url_from_hash(galleryinfo.id,file,'webp');
                             myurl.push(src);
                             myhash.push(file.hash);
                         }
@@ -332,8 +333,8 @@ namespace PictureSpider.Hitomi
             //借用common.js/gg.js，加上一段自己的js计算出图片路径
             //其中gg.js内容会随时间变化，导致图片地址变化
             database.LoadFK(illustGroup);
-            var galleryInfoJS = await HttpGet($"{baseUrlLtn}/galleries/{illustGroup.Id}.js");
-            var ggJS = await HttpGet($"{baseUrlLtn}/gg.js");
+            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroup.Id}.js");
+            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
             using (var engine = new V8ScriptEngine())
             {
                 //注意顺序。要用\n隔开
@@ -412,8 +413,8 @@ namespace PictureSpider.Hitomi
         private async Task FetchIllustGroupById(IllustGroup illustGroup)
         {            
             database.LoadFK(illustGroup);
-            var galleryInfoJS = await HttpGet($"{baseUrlLtn}/galleries/{illustGroup.Id}.js");
-            var ggJS = await HttpGet($"{baseUrlLtn}/gg.js");
+            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroup.Id}.js");
+            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
             using (var engine=new V8ScriptEngine())
             {
                 //注意顺序。要用\n隔开
@@ -443,8 +444,8 @@ namespace PictureSpider.Hitomi
         private async Task<List<string>> FetchUserIDsByIllustGroupID(int id)
         {
             var ret=new List<string>();
-            var galleryInfoJS = await HttpGet($"{baseUrlLtn}/galleries/{id}.js");
-            var ggJS = await HttpGet($"{baseUrlLtn}/gg.js");
+            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{id}.js");
+            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
 
             using (var engine = new V8ScriptEngine())
             {
