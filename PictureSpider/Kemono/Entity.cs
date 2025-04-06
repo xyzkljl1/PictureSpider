@@ -26,6 +26,8 @@ namespace PictureSpider.Kemono
         public string urlPath { get; set; }
         public string urlHost { get; set; }
         [NotMapped]
+        public string tmpHost;
+        [NotMapped]
         public WorkGroup GetGroup
         {
             get=> workGroup??coverGroup;
@@ -57,10 +59,13 @@ namespace PictureSpider.Kemono
         {
             get
             {
-                if (urlHost is not null&&urlHost!= "")
-                    return $"{urlHost}/data{urlPath}";
-                //没有server时随便用n1~n4中的一个
-                return $"https://n4.kemono.su/data{urlPath}";
+                if (!string.IsNullOrEmpty(urlHost))
+                    return combineDownloadURL(urlHost,urlPath);
+                if(!string.IsNullOrEmpty(tmpHost))
+                    return combineDownloadURL(tmpHost, urlPath);
+
+                //没有server时随便用n1~n4中的一个（不能保证都有效)
+                return combineDownloadURL("https://n4.kemono.su", urlPath);
             }
         }
         //页号
@@ -72,6 +77,10 @@ namespace PictureSpider.Kemono
         [AllowNull]
         public virtual WorkGroup coverGroup { get; set; }
         public Work() { }
+        public static string combineDownloadURL(string urlHost, string urlPath)
+        {
+            return $"{urlHost}/data{urlPath}";
+        }
     }
     //desc中附带的外链
     //尚未实现

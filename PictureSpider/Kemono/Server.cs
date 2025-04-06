@@ -20,6 +20,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Text.RegularExpressions;
 using CG.Web.MegaApiClient;
 using HtmlAgilityPack;
+using Mysqlx.Notice;
 
 namespace PictureSpider.Kemono
 {
@@ -84,7 +85,7 @@ namespace PictureSpider.Kemono
             //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
             //await FetchUser("3659577", "patreon");
             //await FetchIllustGroupListByUser(database.Users.Where(x=>x.id== "3659577").ToList().FirstOrDefault());
-            //await FetchIllustGroup(database.WorkGroups.Where(x=>x.id== "117461502").ToList().First());
+            //await FetchWorkGroup(database.WorkGroups.Where(x=>x.id== "116225295").ToList().First());
             //foreach (var user in database.Users.ToList())//更新作者
             //    await FetchUser(user.id, user.service);
             //await FetchUserAndIllustGroups();
@@ -92,6 +93,9 @@ namespace PictureSpider.Kemono
             //foreach(var g in database.WorkGroups.ToList())
             //    await ParseGroupContent(g);
             //SyncLocalFile();
+            //var wg = database.WorkGroups.Where(x => x.id == "116225295").ToList().First();
+            //database.LoadFK(wg);
+            //downloadQueue.Add(wg.works.First());
             //await ProcessIllustDownloadQueue(downloadQueue,10);
             RunSchedule();
         }
@@ -763,6 +767,53 @@ namespace PictureSpider.Kemono
             }
             return false;
         }
+        private async Task<bool> CheckURL(string url)
+        {
+            if (url == "" || url is null)
+                return false;
+            try
+            {
+                using (var request = new HttpRequestMessage(HttpMethod.Head, url))
+                using (var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
+                    if (response.IsSuccessStatusCode)
+                    {
+                        if (response.Content.Headers.Contains("Content-Length"))
+                        {
+                            //单位:byte，排除小于200KB的音频，以避免坑爹的情况，如RJ066580
+                            var len = Int64.Parse(response.Content.Headers.GetValues("Content-Length").First());
+                            return len > 0;
+                        }
+                        else//有的content类型不带length
+                            return true;
+                    }
+            }
+            catch (Exception ex)
+            {
+                //请求失败什么都不做
+            }
+            return false;
+        }
+        //对于attachments中没有提供server的，从n1~n4挨个尝试，计入tmpHost
+        private async Task<bool> ElectWorkURLHost(Work work)
+        {
+            if (!string.IsNullOrEmpty(work.urlHost))
+                return true;
+            if (!string.IsNullOrEmpty(work.tmpHost))
+                return true;
+            for (int i=1;i<=4;++i)
+            {
+                var host = $"https://n{i}.kemono.su";
+                var url=Work.combineDownloadURL(host, work.urlPath);
+                if (await CheckURL(url))
+                {
+                    work.tmpHost = host;
+                    return true;
+                }
+
+            }
+            return false;
+        }
+
         private async Task ProcessIllustDownloadQueue(List<BaseWork> workList, int limit = -1)
         {
             try
@@ -780,7 +831,11 @@ namespace PictureSpider.Kemono
                     var filename = Path.GetFileName(path);
                     var ext = work.Ext;
                     if(ext.IsImage()&&work is Work)
-                        await downloader.Add(work,download_dir_tmp);
+                    {
+                        if(!await ElectWorkURLHost(work as Work))
+                            LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
+                        await downloader.Add(work, download_dir_tmp);
+                    }
                     else if(ext.IsVideo()&&work is ExternalWork)
                         await downloader.Add(work, download_dir_tmp);
                     else if (ext.IsZip())
