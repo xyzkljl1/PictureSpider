@@ -194,7 +194,7 @@ namespace PictureSpider.Kemono
             return Path.Combine(download_dir_tmp, sortedIllusts[page].TmpSubPath);
         }
 
-        public override int pageCount() { return illustGroup.works.Count; }
+        public override int pageCount() { return sortedIllusts.Count; }
 
         public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 
@@ -230,7 +230,7 @@ namespace PictureSpider.Kemono
             return Path.Combine(download_dir_tmp, sortedIllusts[page].name);
         }
 
-        public override int pageCount() { return illustGroup.works.Count; }
+        public override int pageCount() { return sortedIllusts.Count; }
 
         public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 

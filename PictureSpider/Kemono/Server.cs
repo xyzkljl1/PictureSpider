@@ -660,7 +660,8 @@ namespace PictureSpider.Kemono
                 {
                     database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
-                    result.Add(exploreFile);
+                    if(exploreFile.validPageCount()>0)
+                        result.Add(exploreFile);
                 }
             }
             else if (queue.type == ExplorerQueue.QueueType.Fav)
@@ -672,7 +673,8 @@ namespace PictureSpider.Kemono
                 {
                     database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
-                    result.Add(exploreFile);
+                    if (exploreFile.validPageCount() > 0)
+                        result.Add(exploreFile);
                 }
             }
             else
@@ -688,7 +690,11 @@ namespace PictureSpider.Kemono
                 {
                     database.LoadFK(illustGroup);
                     if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
-                        result.Add(new ExplorerFile(illustGroup, download_dir_tmp));
+                    {
+                        var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
+                        if (exploreFile.validPageCount() > 0)
+                            result.Add(exploreFile);
+                    }
                     //目前从外链下载的都是视频，不在此浏览
                     //else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
                     //    result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
