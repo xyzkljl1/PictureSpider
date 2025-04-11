@@ -186,7 +186,7 @@ namespace PictureSpider.Kemono
             userId = $"{illustGroup.user.id}";
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
-            sortedIllusts = illustGroup.works.ToList();
+            sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
         }
         public override string FilePath(int page)
@@ -198,7 +198,7 @@ namespace PictureSpider.Kemono
 
         public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 
-        public override int validPageCount() { return illustGroup.works.Count(x => !x.excluded); }
+        public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 
         public override bool isPageValid(int page) { return !sortedIllusts[page].excluded; }
         public override void switchPageValid(int page)
@@ -221,7 +221,7 @@ namespace PictureSpider.Kemono
             userId = $"{illustGroup.user.id}";
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
-            sortedIllusts = illustGroup.externalWorks.ToList();
+            sortedIllusts = illustGroup.externalWorks.Where(x => x.Ext.IsImage()).ToList();
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
         }
         public override string FilePath(int page)
@@ -234,7 +234,7 @@ namespace PictureSpider.Kemono
 
         public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 
-        public override int validPageCount() { return illustGroup.works.Count(x => !x.excluded); }
+        public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 
         public override bool isPageValid(int page) { return !sortedIllusts[page].excluded; }
         public override void switchPageValid(int page)
