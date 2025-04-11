@@ -62,7 +62,7 @@ namespace PictureSpider.Hitomi
             download_dir_root = config.HitomiDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hitomi, config.Proxy, "https://hitomi.la");
+            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hitomi, config.Proxy, "https://hitomi.la",1);
             foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
@@ -81,8 +81,14 @@ namespace PictureSpider.Hitomi
 #if DEBUG           
             return;
 #endif
-            PrepareJS();            
-            RunSchedule();
+            PrepareJS();
+            //await downloader.Add("https://w1.gold-usergeneratedcontent.net/1744372802/1422/6b877ce71b6aea13b7603720bbb623a4deb730c7bfaddcef2fb5030591ada8e5.webp", "E:\\", $"1.avif");
+            //await downloader.WaitForAll();
+            /*
+            var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
+            database.LoadFK(list[0]);
+            await ProcessIllustDownloadQueue(list,-1);*/
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -102,8 +108,8 @@ namespace PictureSpider.Hitomi
                     await FetchUserAndIllustGroups();
                     await SyncLocalFile();
                 }
-                //同时下载太多503
-                await ProcessIllustDownloadQueue(downloadQueue, 25);
+                //同时下载太多503，aria2c多线程下载时也会产生很多503
+                await ProcessIllustDownloadQueue(downloadQueue, 40);
                 await Task.Delay(new TimeSpan(0, 30, 0));
             }
             while (true);
@@ -316,14 +322,14 @@ namespace PictureSpider.Hitomi
                         var myhash=[];
                         var myartists=[];
                         var mytitle=galleryinfo.japanese_title || galleryinfo.title;
-                        for(let file of galleryinfo.files){
-                            var src=url_from_url_from_hash(galleryinfo.id,file,'webp');
+                        for(let file of galleryinfo.files){{
+                            var src=url_from_url_from_hash(galleryinfo.id,file,'{0}');
                             myurl.push(src);
                             myhash.push(file.hash);
-                        }
-                        for(let artInfo of galleryinfo.artists){
+                        }}
+                        for(let artInfo of galleryinfo.artists){{
                             myartists.push(artInfo.artist);
-                        }
+                        }}
                         ";
         }
         public async Task CalcIllustURL(IllustGroup illustGroup)
@@ -333,15 +339,14 @@ namespace PictureSpider.Hitomi
             //借用common.js/gg.js，加上一段自己的js计算出图片路径
             //其中gg.js内容会随时间变化，导致图片地址变化
             database.LoadFK(illustGroup);
-            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroup.Id}.js");
-            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
+            var groupJS = await FetchJSByIllustGroupId(illustGroup.Id,"webp");
+            if (string.IsNullOrEmpty(groupJS))
+                return;
             using (var engine = new V8ScriptEngine())
             {
                 //注意顺序。要用\n隔开
-                var script = galleryInfoJS + "\n" + commonjs + "\n" + ggJS + "\n" + myjs;
-                engine.Execute(script);
+                engine.Execute(groupJS);
                 var urls = engine.Script.myurl;
-                var hashs = engine.Script.myhash;
                 var illusts = illustGroup.illusts.ToList();
                 //同一个illustGroup里也可能有相同hash的图片,此处不能用hash查找要用index
                 illusts.Sort((l, r) =>l.index.CompareTo(r.index));
@@ -409,22 +414,32 @@ namespace PictureSpider.Hitomi
             result.Sort((l, r) =>(l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;
         }
+        //type只影响illust的下载地址，不取下载地址时可以用任意type
+        //参考reader.js
+        private async Task<string> FetchJSByIllustGroupId(int illustGroupId,string type="webp")
+        {
+            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroupId}.js");
+            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
+            if (string.IsNullOrEmpty(galleryInfoJS) || string.IsNullOrEmpty(ggJS))
+            {
+                LogError($"Fetch IllustGroup Failed:{illustGroupId}");
+                return "";
+            }
+            //注意顺序。要用\n隔开
+            //有些图有avif格式的缩略图，如果hasavif为真，会优先使用type=avif的地址，在页面上按w切换原图和avif格式
+            //如无意外直接使用webp
+            return galleryInfoJS + "\n" + commonjs + "\n" + ggJS + "\n" + string.Format(myjs, type);
+        }
         //获取illustGroup详细信息
         private async Task FetchIllustGroupById(IllustGroup illustGroup)
         {            
             database.LoadFK(illustGroup);
-            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroup.Id}.js");
-            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
-            if (string.IsNullOrEmpty(galleryInfoJS) || string.IsNullOrEmpty(ggJS))
-            {
-                LogError($"Fetch IllustGroup Failed:{illustGroup.Id}");
+            var groupJS = await FetchJSByIllustGroupId(illustGroup.Id);
+            if (string.IsNullOrEmpty(groupJS))
                 return;
-            }
             using (var engine=new V8ScriptEngine())
             {
-                //注意顺序。要用\n隔开
-                var script = galleryInfoJS+"\n"+commonjs+"\n"+ggJS+"\n"+myjs;
-                engine.Execute(script);
+                engine.Execute(groupJS);
                 //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
                 var hashs = engine.Script.myhash;
                 illustGroup.title = engine.Script.mytitle;                
@@ -448,14 +463,13 @@ namespace PictureSpider.Hitomi
         //FetchUser
         private async Task<List<string>> FetchUserIDsByIllustGroupID(int id)
         {
-            var ret=new List<string>();
-            var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{id}.js");
-            var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
-
+            var ret=new List<string>(); 
+            var groupJS = await FetchJSByIllustGroupId(id);
+            if (string.IsNullOrEmpty(groupJS))
+                return ret;
             using (var engine = new V8ScriptEngine())
             {
-                var script = galleryInfoJS + "\n" + commonjs + "\n" + ggJS + "\n" + myjs;
-                engine.Execute(script);
+                engine.Execute(groupJS);
                 var users = engine.Script.myartists;
                 for (var i = 0; i < users.length; ++i)
                     ret.Add(users[i] as string);
