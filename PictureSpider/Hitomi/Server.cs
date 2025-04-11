@@ -415,6 +415,11 @@ namespace PictureSpider.Hitomi
             database.LoadFK(illustGroup);
             var galleryInfoJS = await HttpGet($"{tmpUrlLtn}/galleries/{illustGroup.Id}.js");
             var ggJS = await HttpGet($"{tmpUrlLtn}/gg.js");
+            if (string.IsNullOrEmpty(galleryInfoJS) || string.IsNullOrEmpty(ggJS))
+            {
+                LogError($"Fetch IllustGroup Failed:{illustGroup.Id}");
+                return;
+            }
             using (var engine=new V8ScriptEngine())
             {
                 //注意顺序。要用\n隔开

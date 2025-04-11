@@ -79,7 +79,7 @@ namespace PictureSpider
         }
 
         public static HashSet<string> imageExtensions = new HashSet<string>{
-                ".jpeg", ".jpg", ".png", ".gif",".webp",".bmp",".jfif"
+                ".jpeg", ".jpg", ".png", ".gif",".webp",".bmp",".jfif",".jpe"
             };
         public static bool IsImage(this string ext)
         {

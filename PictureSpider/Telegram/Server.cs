@@ -411,7 +411,7 @@ namespace PictureSpider.Telegram
                         }
                         catch (Exception ex)
                         {
-                            Log($"Fail to process Message {message.id}:{ex.Message}");
+                            Log($"Fail to process Message {message.id}:{ex.Message} from {channel.username}({channel.id})");
                         }
                     }
                 database.SaveChanges();
