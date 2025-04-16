@@ -88,7 +88,9 @@ namespace PictureSpider.Hitomi
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
             database.LoadFK(list[0]);
             await ProcessIllustDownloadQueue(list,-1);*/
-            Task.Run(RunSchedule);
+            // DbContext不是线程安全的，也不能同时有两个连接 https://stackoverflow.com/questions/44063832/what-is-the-best-practice-in-ef-core-for-using-parallel-async-calls-with-an-inje
+            // RunSchedule和UI响应函数中都会用到数据库,不能Task.Run
+            RunSchedule();
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
