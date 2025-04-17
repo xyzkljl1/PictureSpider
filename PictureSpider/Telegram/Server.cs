@@ -258,9 +258,8 @@ namespace PictureSpider.Telegram
                         if(ret.Length>length_limit)
                             ret=ret.Substring(0, length_limit);
                         Util.ReplaceInvalidCharInFilename(ref ret);
-                        ret = ret.Trim(' ');//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？
-                        ret = ret.Trim('#');//去掉tag的#
-                        ret=ret.Replace("[", "").Replace("]","");
+                        ret = ret.Replace("[", "").Replace("]", "");
+                        ret = ret.Trim(new char[]{ ' ','#'});//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？ 并去掉tag的#
                         return ret;
                     }
                 }
