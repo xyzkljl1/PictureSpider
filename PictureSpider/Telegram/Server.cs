@@ -244,24 +244,31 @@ namespace PictureSpider.Telegram
         {
             //一组图中只有一个有captain文本
             //升序排列，一般文本在id最小的message上
-            foreach (var _m in database.Messages.Where(ele => ele.albumid == messageInfo.MediaAlbumId).OrderBy(x=>x.id).ToList())
+            foreach (var _m in database.Messages.Where(ele => ele.albumid == messageInfo.MediaAlbumId&&ele.chat==messageInfo.ChatId).OrderBy(x=>x.id).ToList())
             {
-                var info = await tgClient.GetMessageAsync(_m.chat, _m.id);
-                var content = info.Content;
-                var fieldInfo = content.GetType().GetProperty("Caption", System.Reflection.BindingFlags.Public| System.Reflection.BindingFlags.Instance);
-                if(fieldInfo!=null)
+                try
                 {
-                    var captionText=fieldInfo.GetValue(content) as FormattedText;
-                    if (captionText != null&&captionText.Text!=null&&captionText.Text!="")
+                    var info = await tgClient.GetMessageAsync(_m.chat, _m.id);
+                    var content = info.Content;
+                    var fieldInfo = content.GetType().GetProperty("Caption", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (fieldInfo != null)
                     {
-                        var ret=captionText.Text;
-                        if(ret.Length>length_limit)
-                            ret=ret.Substring(0, length_limit);
-                        Util.ReplaceInvalidCharInFilename(ref ret);
-                        ret = ret.Replace("[", "").Replace("]", "");
-                        ret = ret.Trim(new char[]{ ' ','#'});//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？ 并去掉tag的#
-                        return ret;
+                        var captionText = fieldInfo.GetValue(content) as FormattedText;
+                        if (captionText != null && captionText.Text != null && captionText.Text != "")
+                        {
+                            var ret = captionText.Text;
+                            if (ret.Length > length_limit)
+                                ret = ret.Substring(0, length_limit);
+                            Util.ReplaceInvalidCharInFilename(ref ret);
+                            ret = ret.Replace("[", "").Replace("]", "");
+                            ret = ret.Trim(new char[] { ' ', '#' });//目录名末尾有空格似乎会令Directory.CreateDir创建的目录不正确？？ 并去掉tag的#
+                            return ret;
+                        }
                     }
+                }
+                catch (Exception)
+                {
+                    continue;
                 }
             }
             return "";
