@@ -525,7 +525,12 @@ namespace PictureSpider.Hitomi
             var illustGroupIds =new HashSet<int>();
             if(user.illustGroups is not null)
                 illustGroupIds=user.illustGroups.Select(x => x.Id).ToHashSet();
-            var list_binary = await HttpGetBinary($"{baseUrlLtn}/artist/{user.name}-all.nozomi");
+            var list_binary = await HttpGetBinary($"{tmpUrlLtn}/artist/{user.name}-all.nozomi");
+            if (list_binary is null)
+            {
+                LogError($"Fail to fetch user {user.name}");
+                return;
+            }
             list_binary = list_binary.Reverse().ToArray();
             for (int i = 0; i < list_binary.Length; i += 4)
             {

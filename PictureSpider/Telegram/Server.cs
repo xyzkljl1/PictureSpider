@@ -99,6 +99,7 @@ namespace PictureSpider.Telegram
             localHttpClient = new HttpClient(handler);
         }
 #pragma warning disable CS0162 // 检测到无法访问的代码
+        // 注意以comments形式下载的，应该只设置在其chat上，而不设置channel
         public override async Task Init() {
 #if DEBUG
             return;
