@@ -29,7 +29,7 @@ namespace PictureSpider.LocalSingleFile
         public Server(Config config)
         {
             logPrefix = "L";
-            database = new Database(config.LSFConnectStr);
+            database = new Database { ConnStr = config.LSFConnectStr };
             FavDir = config.LSFFavDir;
             TmpDirs = config.LSFTmpDirs;
             if(!Directory.Exists(FavDir))
