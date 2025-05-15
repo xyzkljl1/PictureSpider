@@ -41,7 +41,7 @@ namespace PictureSpider.Hitomi
         public Server(Config config)
         {
             logPrefix = "H";
-            database = new Database(config.HitomiConnectStr);
+            database = new Database { ConnStr=config.HitomiConnectStr };
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -79,14 +79,13 @@ namespace PictureSpider.Hitomi
         public override async Task Init()
         {
 #if DEBUG           
-            return;
+            //return;
 #endif
             PrepareJS();
             //await downloader.Add("https://w1.gold-usergeneratedcontent.net/1744372802/1422/6b877ce71b6aea13b7603720bbb623a4deb730c7bfaddcef2fb5030591ada8e5.webp", "E:\\", $"1.avif");
             //await downloader.WaitForAll();
             /*
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
-            database.LoadFK(list[0]);
             await ProcessIllustDownloadQueue(list,-1);*/
             // DbContext不是线程安全的，也不能同时有两个连接 https://stackoverflow.com/questions/44063832/what-is-the-best-practice-in-ef-core-for-using-parallel-async-calls-with-an-inje
             // RunSchedule和UI响应函数中都会用到数据库,不能Task.Run
@@ -101,6 +100,7 @@ namespace PictureSpider.Hitomi
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
+            
             await SyncLocalFile();
             do
             {
@@ -166,6 +166,7 @@ namespace PictureSpider.Hitomi
         {
             //下载
             {
+                
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fetched == true
                                            && (illustGroup.fav || !illustGroup.readed)
@@ -174,10 +175,8 @@ namespace PictureSpider.Hitomi
                 var tmp = downloadQueue.Count;
                 foreach (var illustGroup in illustGroups)//如果收藏或未读的作品
                 {
-                    database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.illusts)
                     {
-                        database.LoadFK(illust);
                         if (illustGroup.fav==false || illust.excluded==false)//没有排除
                             if (!downloadQueue.Contains(illust)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
@@ -207,7 +206,6 @@ namespace PictureSpider.Hitomi
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.illusts)
                     {
                         var file_name = $"{illust.fileName}{illust.ext}";
@@ -234,7 +232,6 @@ namespace PictureSpider.Hitomi
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.illusts)
                         ct+=DeleteFile($"{download_dir_tmp}/{illust.fileName}{illust.ext}");
                 }
@@ -340,7 +337,6 @@ namespace PictureSpider.Hitomi
             //图片路径形如https://[子域名].hitomi.la/webp/[常数]/[根据hash计算]/[hash].[扩展名]
             //借用common.js/gg.js，加上一段自己的js计算出图片路径
             //其中gg.js内容会随时间变化，导致图片地址变化
-            database.LoadFK(illustGroup);
             var groupJS = await FetchJSByIllustGroupId(illustGroup.Id,"webp");
             if (string.IsNullOrEmpty(groupJS))
                 return;
@@ -383,7 +379,6 @@ namespace PictureSpider.Hitomi
                                  select illustGroup).ToList();
                 foreach(var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     result.Add(exploreFile);
                 }
@@ -395,7 +390,6 @@ namespace PictureSpider.Hitomi
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     result.Add(exploreFile);
                 }
@@ -408,7 +402,6 @@ namespace PictureSpider.Hitomi
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     result.Add(exploreFile);
                 }
@@ -434,8 +427,7 @@ namespace PictureSpider.Hitomi
         }
         //获取illustGroup详细信息
         private async Task FetchIllustGroupById(IllustGroup illustGroup)
-        {            
-            database.LoadFK(illustGroup);
+        {
             var groupJS = await FetchJSByIllustGroupId(illustGroup.Id);
             if (string.IsNullOrEmpty(groupJS))
                 return;
@@ -521,7 +513,6 @@ namespace PictureSpider.Hitomi
             一次性返回所有作品的id，每4个字节是一个整型ID(注意大小头,需要reverse)，没有多余数据
             Content-Range:bytes 200-299/840表示一共有840字节(即210个作品)，当前页显示第200-299字节代表的作品，但是全部840字节都在Response中
              */
-            database.LoadFK(user);
             var illustGroupIds =new HashSet<int>();
             if(user.illustGroups is not null)
                 illustGroupIds=user.illustGroups.Select(x => x.Id).ToHashSet();

@@ -41,7 +41,7 @@ namespace PictureSpider.Kemono
         public Server(Config config)
         {
             logPrefix = "K";
-            database = new Database(config.KemonoConnectStr);
+            database = new Database { ConnStr = config.KemonoConnectStr };
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -94,7 +94,6 @@ namespace PictureSpider.Kemono
             //    await ParseGroupContent(g);
             //SyncLocalFile();
             //var wg = database.WorkGroups.Where(x => x.id == "116225295").ToList().First();
-            //database.LoadFK(wg);
             //downloadQueue.Add(wg.works.First());
             //await ProcessIllustDownloadQueue(downloadQueue,10);
             RunSchedule();
@@ -332,7 +331,6 @@ namespace PictureSpider.Kemono
             }
              */
             //默认是按时间倒序
-            database.LoadFK(user);
             var existedWorkGroupIds = new HashSet<string>();
             if (user.workGroups is not null)//减少查询次数
                 existedWorkGroupIds = user.workGroups.Select(x => x.id).ToHashSet();
@@ -523,7 +521,6 @@ namespace PictureSpider.Kemono
                 "flagged": 0,
             }
         }*/
-            database.LoadFK(illustGroup);
             var doc = await HttpGetJson($"{baseAPIUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}");
             if (doc is null || !doc.ContainsKey("post"))
             {
@@ -572,7 +569,6 @@ namespace PictureSpider.Kemono
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
-                    database.LoadFK(workGroup);
                     var works = new List<BaseWork>();
                     if (workGroup.user.dowloadWorks)
                         works.AddRange(workGroup.works);
@@ -580,7 +576,6 @@ namespace PictureSpider.Kemono
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
                     {
-                        database.LoadFK(work);
                         if (workGroup.fav == false || work.excluded == false)//没有排除
                             if (!downloadQueue.Contains(work)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}")) //不在本地
@@ -600,7 +595,6 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.works)
                     {
                         var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
@@ -626,7 +620,6 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     foreach (var illust in illustGroup.works)
                         ct += DeleteFile($"{download_dir_tmp}/{illust.TmpSubPath}");
                 }
@@ -658,7 +651,6 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if(exploreFile.validPageCount()>0)
                         result.Add(exploreFile);
@@ -671,7 +663,6 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if (exploreFile.validPageCount() > 0)
                         result.Add(exploreFile);
@@ -688,7 +679,6 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    database.LoadFK(illustGroup);
                     if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);

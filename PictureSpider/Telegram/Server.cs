@@ -88,7 +88,7 @@ namespace PictureSpider.Telegram
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-            database = new Database(config.TelegramConnectStr);
+            database = new Database { ConnStr = config.TelegramConnectStr };
 
             var handler = new HttpClientHandler()
             {

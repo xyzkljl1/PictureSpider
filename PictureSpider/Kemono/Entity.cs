@@ -147,7 +147,7 @@ namespace PictureSpider.Kemono
 
         [ForeignKey("userid,userservice")]
         public virtual User user { get; set; }
-        public Work cover { get; set; }
+        public virtual Work cover { get; set; }
         public virtual ICollection<Work> works { get; set; }
         public virtual ICollection<ExternalWork> externalWorks { get; set; }
     }
