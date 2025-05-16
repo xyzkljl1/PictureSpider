@@ -51,7 +51,7 @@ namespace PictureSpider.Telegram
     using HttpResponseMessage = System.Net.Http.HttpResponseMessage;
     using HttpStatusCode = System.Net.HttpStatusCode;
 
-    public partial class Server : BaseServer, IDisposable
+    public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
         [DllImport("kernel32.dll")]
         private static extern bool AllocConsole();
@@ -65,10 +65,9 @@ namespace PictureSpider.Telegram
         private string apiHash = "";
         private string myDownloadServerAddr = "";
         private TdClient tgClient;
-        private Database database;
         private HttpClient localHttpClient;
         //private static readonly ManualResetEventSlim ReadyToAuthenticate = new();
-        public Server(Config config)
+        public Server(Config config):base(config.TelegramConnectStr)
         {
             base.logPrefix = "G";
             tgClient = new TdClient();
@@ -87,8 +86,6 @@ namespace PictureSpider.Telegram
             foreach (var dir in new List<string> { download_dir_root, download_dir_organized, download_dir_tmp, download_dir_other })
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-
-            database = new Database { ConnStr = config.TelegramConnectStr };
 
             var handler = new HttpClientHandler()
             {
@@ -123,9 +120,8 @@ namespace PictureSpider.Telegram
             }
             Log("Init Done.Start Schedule");
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
-            RunSchedule();
+            Task.Run(RunSchedule);
 #pragma warning restore CS4014 
-            //Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
         public async Task<bool> Login()
@@ -452,6 +448,7 @@ namespace PictureSpider.Telegram
             await FetchChatList();//需要最开始调用一次GetChatsAsync,否则后面获取不到chat具体信息
             do
             {
+                ReloadScheduleDb();
                 if (weekly_interval.TotalDays >= 7)//weekly task
                 {
                     await FetchChatList();

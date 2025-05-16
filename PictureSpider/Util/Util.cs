@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Org.BouncyCastle.Bcpg.OpenPgp;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,6 +10,18 @@ namespace PictureSpider
 {
     public static class Util
     {
+        public static int MainThreadId = -1;
+        public static void SetMainThreadId()
+        {
+            // 主线程似乎总是1？
+            MainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+        }
+        // 注意同一个context不代表同一个线程，只有主线程可以固定用threadId判断
+        public static bool IsMainThread()
+        {
+            return System.Threading.Thread.CurrentThread.ManagedThreadId == MainThreadId;
+        }
+
         //返回扩展名
         public static string GetExtFromURL(string url)
         {

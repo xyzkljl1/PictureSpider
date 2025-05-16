@@ -37,6 +37,7 @@ namespace PictureSpider
                     AllocConsole();
 #endif
                     var config = LoadConfig();
+                    Util.SetMainThreadId();
                     using (var kemonoServer = new Kemono.Server(config))
                     using (var hitomiServer = new Hitomi.Server(config))
                         using (var pixivServer = new Pixiv.Server(config))

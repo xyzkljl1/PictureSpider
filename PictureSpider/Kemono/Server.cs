@@ -24,9 +24,8 @@ using Mysqlx.Notice;
 
 namespace PictureSpider.Kemono
 {
-    public partial class Server : BaseServer, IDisposable
+    public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
-        private Database database;
         private HttpClient httpClient;
         //https://kemono.su/api/v1/fanbox/user/7349257/posts-legacy
         private string baseUrl = "https://kemono.su";
@@ -38,10 +37,9 @@ namespace PictureSpider.Kemono
         Downloader downloader;
         MegaApiClient mega;//从downloader借的mega client，用于访问
         private List<BaseWork> downloadQueue = new List<BaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
-        public Server(Config config)
+        public Server(Config config):base(config.KemonoConnectStr)
         {
             logPrefix = "K";
-            database = new Database { ConnStr = config.KemonoConnectStr };
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
@@ -71,7 +69,6 @@ namespace PictureSpider.Kemono
         public void Dispose()
         {
             httpClient.Dispose();
-            database.Dispose();
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
@@ -96,7 +93,7 @@ namespace PictureSpider.Kemono
             //var wg = database.WorkGroups.Where(x => x.id == "116225295").ToList().First();
             //downloadQueue.Add(wg.works.First());
             //await ProcessIllustDownloadQueue(downloadQueue,10);
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -733,6 +730,7 @@ namespace PictureSpider.Kemono
             SyncLocalFile();
             do
             {
+                ReloadScheduleDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;

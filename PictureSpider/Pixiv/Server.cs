@@ -125,9 +125,12 @@ namespace PictureSpider.Pixiv
 #pragma warning restore CS1998
         public void Dispose()
         {
-            httpClient.Dispose();
-            httpClientCSRF.Dispose();
-            httpClient_anonymous.Dispose();
+            if(httpClient is not null)
+            {
+                httpClient.Dispose();
+                httpClientCSRF.Dispose();
+                httpClient_anonymous.Dispose();
+            }
         }
         //初始化httpClient
         public async Task ResetHttpClient()

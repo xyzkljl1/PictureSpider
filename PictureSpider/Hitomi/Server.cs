@@ -18,12 +18,12 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace PictureSpider.Hitomi
 {
-    public partial class Server : BaseServer, IDisposable
+    public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
-        private Database database;
         private HttpClient httpClient;
         //private string base_host = "hitomi.la";
         //private string base_host_ltn = "ltn.hitomi.la";
@@ -38,11 +38,9 @@ namespace PictureSpider.Hitomi
         private string download_dir_fav = "";
         Aria2DownloadQueue downloader;
         private List<Illust> downloadQueue = new List<Illust>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
-        public Server(Config config)
+        public Server(Config config): base(config.HitomiConnectStr)
         {
             logPrefix = "H";
-            database = new Database { ConnStr=config.HitomiConnectStr };
-
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var handler = new HttpClientHandler()
             {
@@ -66,12 +64,10 @@ namespace PictureSpider.Hitomi
             foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-
         }
         public void Dispose()
         {
-            httpClient.Dispose();
-            database.Dispose();
+            httpClient.Dispose();            
         }
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
 #pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
@@ -79,7 +75,7 @@ namespace PictureSpider.Hitomi
         public override async Task Init()
         {
 #if DEBUG           
-            //return;
+            return;
 #endif
             PrepareJS();
             //await downloader.Add("https://w1.gold-usergeneratedcontent.net/1744372802/1422/6b877ce71b6aea13b7603720bbb623a4deb730c7bfaddcef2fb5030591ada8e5.webp", "E:\\", $"1.avif");
@@ -87,9 +83,7 @@ namespace PictureSpider.Hitomi
             /*
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
             await ProcessIllustDownloadQueue(list,-1);*/
-            // DbContext不是线程安全的，也不能同时有两个连接 https://stackoverflow.com/questions/44063832/what-is-the-best-practice-in-ef-core-for-using-parallel-async-calls-with-an-inje
-            // RunSchedule和UI响应函数中都会用到数据库,不能Task.Run
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -100,10 +94,11 @@ namespace PictureSpider.Hitomi
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
-            
+
             await SyncLocalFile();
             do
             {
+                ReloadScheduleDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;

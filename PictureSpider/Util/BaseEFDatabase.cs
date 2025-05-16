@@ -33,6 +33,11 @@ namespace PictureSpider
         public string ConnStr = "";
         // 构造: new BaseEFDatabase{ ConnStr = ""}; 不用public BaseEFDatabase(str _connStr)是为了避免在每个子类中都要重复定义一个一样的构造函数
         public BaseEFDatabase() { }
+        // Always Dispose on destructor 
+        ~BaseEFDatabase() { base.Dispose(); }
+        public override void Dispose() {
+            throw new NotImplementedException();
+        }
         private BaseEFDatabase(String _connStr) { throw new NotImplementedException(); }
         protected override void OnConfiguring(DbContextOptionsBuilder builder)
         {

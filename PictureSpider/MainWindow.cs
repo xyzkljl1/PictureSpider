@@ -9,13 +9,14 @@ using System.IO;
 
 namespace PictureSpider
 {
+    public delegate Task AsyncEventHandler(object sender, EventArgs e);
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public partial class MainWindow : Form
     {
         private List<BaseServer> servers = new List<BaseServer>();
         private ListenerServer listenerServer = null;
         //生成64位程序会导致无法用设计器编辑
-        public MainWindow(Config config,Pixiv.Server _pixiv_server,List<BaseServer> other_servers)
+        public MainWindow(Config config, Pixiv.Server _pixiv_server, List<BaseServer> other_servers)
         {
             //由于蜜汁原因，在x64下频繁绘制足够大的GIF时，其它控件不会根据databinding自动刷新，所以需要让BindHandle手动调用MainWindow.Update()
             //不确定是否会产生额外的刷新
@@ -44,7 +45,7 @@ namespace PictureSpider
             SwitchBookmarkButton.Parent = this.MainExplorer;
             SwitchBookmarkButton.Location = new System.Drawing.Point(SwitchBookmarkButton.Location.X - MainExplorer.Location.X, SwitchBookmarkButton.Location.Y - MainExplorer.Location.Y);
             BookmarkPageLabel.Parent = SwitchBookmarkButton;
-            BookmarkPageLabel.Location = new System.Drawing.Point(0,0);
+            BookmarkPageLabel.Location = new System.Drawing.Point(0, 0);
             //设置事件
             FormClosing += OnClose;//关闭按钮不关闭，而是最小化
             KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
@@ -53,7 +54,7 @@ namespace PictureSpider
             idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
             OpenLocalLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInLocal);
             SwitchBookmarkButton.MouseClick += new MouseEventHandler(MainExplorer.SwitchBookmarkStatus);
-            queueComboBox.QueueChanged+=new EventHandler<QueueChangeEventArgs>(OnQueueComboBoxChanged);
+            queueComboBox.QueueChanged += async (s, e) => { await OnQueueComboBoxChangedAsync(s, e); };
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             //InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
@@ -90,14 +91,11 @@ namespace PictureSpider
                 return true;
             return false;
         }
-        private void OnQueueComboBoxChanged(object sender, QueueChangeEventArgs e)
+        private async Task OnQueueComboBoxChangedAsync(object sender, QueueChangeEventArgs e)
         {
-            using (BlockSyncContext.Enter())
-            {
-                var server=servers[e.ServerIndex];
-                AuthorBox.SetClient(server);
-                MainExplorer.SetList(servers[e.ServerIndex], servers[e.ServerIndex].GetExplorerQueueItems(e.Item).Result);
-            }
+            var server = servers[e.ServerIndex];
+            AuthorBox.SetClient(server);
+            MainExplorer.SetList(servers[e.ServerIndex], await servers[e.ServerIndex].GetExplorerQueueItems(e.Item).ConfigureAwait(true));
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:验证平台兼容性", Justification = "<挂起>")]

@@ -20,16 +20,14 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace PictureSpider.LocalSingleFile
 {
-    public partial class Server : BaseServer, IDisposable
+    public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
-        private Database database;
         private string FavDir;
         private List<string> TmpDirs;
         public static HashSet<string> valid_exts = new HashSet<string>{".jpg",".png",".webp",".gif" };
-        public Server(Config config)
+        public Server(Config config):base(config.LSFConnectStr)
         {
             logPrefix = "L";
-            database = new Database { ConnStr = config.LSFConnectStr };
             FavDir = config.LSFFavDir;
             TmpDirs = config.LSFTmpDirs;
             if(!Directory.Exists(FavDir))
@@ -37,7 +35,6 @@ namespace PictureSpider.LocalSingleFile
         }
         public void Dispose()
         {
-            database.Dispose();
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
 #pragma warning disable CS0162 // 检测到无法访问的代码
@@ -47,7 +44,7 @@ namespace PictureSpider.LocalSingleFile
 #if DEBUG
             return;
 #endif
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS4014
 #pragma warning restore CS0162
@@ -56,6 +53,7 @@ namespace PictureSpider.LocalSingleFile
         {
             do
             {
+                ReloadScheduleDb();
                 ProcessWaited();
                 await Task.Delay(new TimeSpan(24*7, 0, 0));
             }
