@@ -101,14 +101,14 @@ namespace PictureSpider.Pixiv
             banned_keyword = await database.GetBannedKeyword();
 #if DEBUG
             await Test();
-            return;
+            //return;
 #endif
             await ResetHttpClient();
             //设置cookie和csrftoken
             //await UpdateHttpClientByDatabaseCookie();
             //会修改属性引发UI更新，需要从主线程调用或使用invoke
             await CheckHomePage();
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
         public async Task<string> Test()
         {
