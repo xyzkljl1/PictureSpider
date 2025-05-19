@@ -448,7 +448,7 @@ namespace PictureSpider.Telegram
             await FetchChatList();//需要最开始调用一次GetChatsAsync,否则后面获取不到chat具体信息
             do
             {
-                ReloadScheduleDb();
+                await ReloadDb();
                 if (weekly_interval.TotalDays >= 7)//weekly task
                 {
                     await FetchChatList();

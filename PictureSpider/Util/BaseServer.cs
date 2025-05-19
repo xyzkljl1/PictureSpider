@@ -19,7 +19,10 @@ namespace PictureSpider
             set
             {
                 if (usedLogPrefix.Contains(value))
+                {
+                    LogError("Log Prefix is already Used!");
                     throw new InvalidOperationException("Log Prefix is used");
+                }
                 usedLogPrefix.Remove(_logPrefix);
                 _logPrefix = value;
                 usedLogPrefix.Add(_logPrefix);

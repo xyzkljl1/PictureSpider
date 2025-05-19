@@ -53,7 +53,7 @@ namespace PictureSpider.LocalSingleFile
         {
             do
             {
-                ReloadScheduleDb();
+                await ReloadDb();
                 ProcessWaited();
                 await Task.Delay(new TimeSpan(24*7, 0, 0));
             }

@@ -98,7 +98,7 @@ namespace PictureSpider.Hitomi
             await SyncLocalFile();
             do
             {
-                ReloadScheduleDb();
+                await ReloadDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;

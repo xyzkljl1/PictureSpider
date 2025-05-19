@@ -34,13 +34,15 @@ namespace PictureSpider
                 var name = this.GetType().Namespace;
                 name = name.Split(".").Last();
                 base.ResetDb(config.TypicalConnectStr + name);
-                logPrefix = name.ToUpper();
-                for(int i=1;i<logPrefix.Length;++i)
-                    if(i == logPrefix.Length-1 || !usedLogPrefix.Contains(logPrefix.Substring(0,i)))
+                var prefix = name.ToUpper();
+                for(int i=1;i< prefix.Length;++i)
+                    if(!usedLogPrefix.Contains(prefix.Substring(0,i)))
                     {
-                        usedLogPrefix.Contains(logPrefix.Substring(0, i));
+                        prefix = prefix.Substring(0, i);
                         break;
                     }
+                usedLogPrefix.Add(prefix);
+
                 download_dir_root = Path.Combine(config.TypicalDownloadDir, name);
                 download_dir_fav = Path.Combine(download_dir_root, "fav");
                 download_dir_tmp = Path.Combine(download_dir_root, "tmp");
@@ -108,7 +110,7 @@ namespace PictureSpider
                         if (!work.excluded) //没有排除
                             if (!downloadQueue.Contains(work)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{work.fileName}{work.ext}")) //不在本地
-                                    downloadQueue.Add(work as WorkType);
+                                    downloadQueue.Add(work);
             if (downloadQueue.Count > tmp)
                 Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
         }
@@ -119,7 +121,7 @@ namespace PictureSpider
             await UpdateDownloadQueue();
             do
             {
-                ReloadScheduleDb();
+                await ReloadDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;
@@ -160,12 +162,12 @@ namespace PictureSpider
                             Log($"Download Fail: {work.url}");
                             illustList.Remove(work);//移到队末并重置url
                             illustList.Add(work);
-                            work.downloaded = true;
                         }
                         else
                         {
                             success_ct++;
                             illustList.Remove(work);
+                            work.downloaded = true;
                         }
                     }
                     await database.SaveChangesAsync();
