@@ -6,13 +6,26 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Windows.Web.AtomPub;
 
 namespace PictureSpider
 {
     public abstract class BaseServer
     {
         public bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
-        public string logPrefix = "";
+        public string logPrefix
+        {
+            get { return _logPrefix; }
+            set
+            {
+                if (usedLogPrefix.Contains(value))
+                    throw new InvalidOperationException("Log Prefix is used");
+                usedLogPrefix.Remove(_logPrefix);
+                _logPrefix = value;
+                usedLogPrefix.Add(_logPrefix);
+            }
+        }
+        private string _logPrefix;
         //Init应当在构建之后，使用之前，在主线程(UI线程)中调用并等待完成
         public virtual Task Init() { return Task.CompletedTask; }
         //获得所有浏览队列的列表
@@ -21,6 +34,7 @@ namespace PictureSpider
                               //获得一个队列中的所有文件
         public async virtual Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue) { return new List<ExplorerFileBase>(); }
 #pragma warning restore CS1998
+        static protected HashSet<string> usedLogPrefix = new HashSet<string>();
         //默认切到下一组
         public virtual void ExplorerQueueSwitchVertical(List<ExplorerFileBase> file_list,bool manually,int offset,
                                                         int cur_index,int cur_sub_index,bool to_end ,

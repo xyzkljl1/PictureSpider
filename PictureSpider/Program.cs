@@ -21,7 +21,7 @@ namespace PictureSpider
         /// </summary>
         [STAThread]
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-        static void Main()
+        static void Main(string[] args)
         {
             // don't dispatch exceptions to Application.ThreadException 
             Application.EnableVisualStyles();
@@ -37,14 +37,17 @@ namespace PictureSpider
                     AllocConsole();
 #endif
                     var config = LoadConfig();
+                    //if(args.Length>0)
+                    //    return;
                     Util.SetMainThreadId();
                     using (var kemonoServer = new Kemono.Server(config))
+                    using (var hentaivosServer = new Hentaivox.Server(config))
                     using (var hitomiServer = new Hitomi.Server(config))
                         using (var pixivServer = new Pixiv.Server(config))
                             using (var lsfServer = new LocalSingleFile.Server(config))
                                 using (var tgServer = new Telegram.Server(config))
                                 {
-                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer };
+                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaivosServer };
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)

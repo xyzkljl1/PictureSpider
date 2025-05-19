@@ -12,7 +12,7 @@ using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace PictureSpider
 {
-    public class MegaDownloadQueue:BaseDownloadQueue
+    public class MegaDownloadQueue: BaseDownloadQueue
     {
         public MegaApiClient MegaClient=>mega;
         private MegaApiClient mega;

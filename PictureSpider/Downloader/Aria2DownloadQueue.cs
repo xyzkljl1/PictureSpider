@@ -15,7 +15,7 @@ using static PictureSpider.Downloader;
 
 namespace PictureSpider
 {
-    internal class Aria2DownloadQueue:BaseDownloadQueue
+    public class Aria2DownloadQueue:BaseDownloadQueue
     {
         private HttpClient httpClient;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private string aria2_rpc_secret="";

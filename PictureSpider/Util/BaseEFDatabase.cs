@@ -24,6 +24,7 @@ using System.Threading.Tasks;
    Update-Database -Context PictureSpider.Hitomi.Database -Args "A ConnStr=server=127.0.0.1;port=4321;UID=root;pwd=pixivAss;database=hitomi;"
 
  * 如果migration实在对不上，先手动统一数据库表结构，add-migration一次，删掉migration文件
+ * 或者删掉Migrations\DatabaseMigrations\DatabaseModelSnapshot.cs
  * 
  */
 namespace PictureSpider
@@ -36,7 +37,8 @@ namespace PictureSpider
         // Always Dispose on destructor 
         ~BaseEFDatabase() { base.Dispose(); }
         public override void Dispose() {
-            throw new NotImplementedException();
+            // 不应该调用该函数
+            // 但是命令行迁移数据库时会掉，不能throw new NotImplementedException();
         }
         private BaseEFDatabase(String _connStr) { throw new NotImplementedException(); }
         protected override void OnConfiguring(DbContextOptionsBuilder builder)

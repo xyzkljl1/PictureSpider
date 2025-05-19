@@ -22,6 +22,7 @@ namespace PictureSpider
             Hitomi = 2,
             Telegram = 3,
             Kemono = 4,
+            Hentaivox = 5,
         }
         public enum DownloaderType
         {

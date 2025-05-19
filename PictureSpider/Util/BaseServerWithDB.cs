@@ -22,21 +22,25 @@ namespace PictureSpider
         {
             get { return Util.IsMainThread() ? databaseUI : databaseSchedule; }
         }
-        protected BaseServerWithDB(String connStr)
+        protected BaseServerWithDB(String connStr="")
+        {
+            ResetDb(connStr);
+        }
+        protected void ResetDb(String connStr)
         {
             ConnStr = connStr;
             databaseSchedule = new DatabaseType { ConnStr = ConnStr };
             databaseUI = new DatabaseType { ConnStr = ConnStr };
         }
         // 重新加载databaseSchedule，以确保其它实例修改的内容会被Reload
-        public void ReloadScheduleDb()
+        public virtual void ReloadScheduleDb()
         {
             databaseSchedule = new DatabaseType { ConnStr = ConnStr };
         }
 
         // Not used yet
         // 创建一个临时的DB，用于UI上的查询
-        public DatabaseType TmpDbContext()
+        public virtual DatabaseType TmpDbContext()
         {
             return new DatabaseType { ConnStr=ConnStr};
         }

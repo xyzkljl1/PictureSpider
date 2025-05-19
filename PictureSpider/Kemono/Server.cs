@@ -781,7 +781,7 @@ namespace PictureSpider.Kemono
                             return true;
                     }
             }
-            catch (Exception ex)
+            catch (Exception )
             {
                 //请求失败什么都不做
             }

@@ -20,6 +20,8 @@ namespace PictureSpider
         public string LSFConnectStr = "";
         public string LSFFavDir = "./";
         public List<String> LSFTmpDirs = new List<String>();
+        public string TypicalConnectStr = "";
+        public string TypicalDownloadDir = "./";
         public string HitomiConnectStr = "";
         public string HitomiDownloadDir = "./";
         //public string TwitterAPIKey = "";
