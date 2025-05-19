@@ -93,7 +93,7 @@ namespace PictureSpider.Kemono
             //var wg = database.WorkGroups.Where(x => x.id == "116225295").ToList().First();
             //downloadQueue.Add(wg.works.First());
             //await ProcessIllustDownloadQueue(downloadQueue,10);
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -730,7 +730,7 @@ namespace PictureSpider.Kemono
             SyncLocalFile();
             do
             {
-                await ReloadDb();
+                //await ReloadDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;

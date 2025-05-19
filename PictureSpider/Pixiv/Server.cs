@@ -108,7 +108,7 @@ namespace PictureSpider.Pixiv
             //await UpdateHttpClientByDatabaseCookie();
             //会修改属性引发UI更新，需要从主线程调用或使用invoke
             await CheckHomePage();
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
         public async Task<string> Test()
         {

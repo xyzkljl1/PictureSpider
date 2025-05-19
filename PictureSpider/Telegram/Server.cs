@@ -120,7 +120,7 @@ namespace PictureSpider.Telegram
             }
             Log("Init Done.Start Schedule");
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
-            Task.Run(RunSchedule);
+            RunSchedule();
 #pragma warning restore CS4014 
         }
 #pragma warning restore CS0162
@@ -448,7 +448,7 @@ namespace PictureSpider.Telegram
             await FetchChatList();//需要最开始调用一次GetChatsAsync,否则后面获取不到chat具体信息
             do
             {
-                await ReloadDb();
+               // await ReloadDb();
                 if (weekly_interval.TotalDays >= 7)//weekly task
                 {
                     await FetchChatList();

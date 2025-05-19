@@ -41,9 +41,7 @@ namespace PictureSpider.Hentaivox
 #if DEBUG
             return;
 #endif
-            //await FetchworkGroupListByUser(database.Users.First());
-            //await FetchWorkGroup(database.WorkGroups.First());
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014

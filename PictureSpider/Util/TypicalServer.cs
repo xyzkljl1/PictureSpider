@@ -115,13 +115,12 @@ namespace PictureSpider
                 Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
         }
         protected virtual async Task RunSchedule()
-        {
+        {           
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
             await UpdateDownloadQueue();
             do
             {
-                await ReloadDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;

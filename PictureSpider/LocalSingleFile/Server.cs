@@ -44,7 +44,7 @@ namespace PictureSpider.LocalSingleFile
 #if DEBUG
             return;
 #endif
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
 #pragma warning restore CS4014
 #pragma warning restore CS0162
@@ -53,7 +53,7 @@ namespace PictureSpider.LocalSingleFile
         {
             do
             {
-                await ReloadDb();
+                //await ReloadDb();
                 ProcessWaited();
                 await Task.Delay(new TimeSpan(24*7, 0, 0));
             }

@@ -83,7 +83,7 @@ namespace PictureSpider.Hitomi
             /*
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
             await ProcessIllustDownloadQueue(list,-1);*/
-            Task.Run(RunSchedule);
+            RunSchedule();
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -98,7 +98,7 @@ namespace PictureSpider.Hitomi
             await SyncLocalFile();
             do
             {
-                await ReloadDb();
+                //await ReloadDb();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;
