@@ -120,7 +120,7 @@ namespace PictureSpider.Telegram
             }
             Log("Init Done.Start Schedule");
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
-            RunSchedule();
+            Task.Run(RunSchedule); // 仅后台,没有线程安全问题
 #pragma warning restore CS4014 
         }
 #pragma warning restore CS0162

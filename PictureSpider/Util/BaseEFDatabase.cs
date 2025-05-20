@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 /*
@@ -32,6 +33,7 @@ namespace PictureSpider
     public class BaseEFDatabase : DbContext
     {
         public string ConnStr = "";
+        public bool ReadOnly = false;
         // 构造: new BaseEFDatabase{ ConnStr = ""}; 不用public BaseEFDatabase(str _connStr)是为了避免在每个子类中都要重复定义一个一样的构造函数
         public BaseEFDatabase() { }
         // Always Dispose on destructor 
@@ -64,6 +66,18 @@ namespace PictureSpider
             modelBuilder.Entity<IllustGroup>().Navigation(e => e.illusts).AutoInclude();
             modelBuilder.Entity<User>().Navigation(e => e.illustGroups).AutoInclude();
             modelBuilder.Entity<Illust>().Navigation(e => e.illustGroup).AutoInclude();*/
+        }
+        public override int SaveChanges()
+        {
+            if (ReadOnly)
+                throw new NotImplementedException("ReadOnly DB!");
+            return base.SaveChanges();
+        }
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (ReadOnly)
+                throw new NotImplementedException("ReadOnly DB!");
+            return await base.SaveChangesAsync(cancellationToken);
         }
     }
 }

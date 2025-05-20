@@ -14,6 +14,7 @@ using static Org.BouncyCastle.Math.EC.ECCurve;
 namespace PictureSpider
 {
     // 一个简单的通用爬虫模板，使用预设有Work/WorkGroup/User的EF数据库，Aria2下载，无浏览队列，借用LSF浏览
+    // 注意此server为仅后台server，不会被ui调用数据库相关，没有数据库线程安全问题，所以RunSchedule可以跑在其它线程
     public abstract class TypicalServer<DatabaseType,WorkType,WorkGroupType,UserType>: BaseServerWithDB<DatabaseType> 
         where DatabaseType: TypicalDatabase<WorkType, WorkGroupType, UserType>, new()
         where WorkType : TypicalWork<WorkGroupType>
@@ -28,6 +29,12 @@ namespace PictureSpider
         //downloader 目前需要派生类自己初始化
         public Aria2DownloadQueue downloader;
         protected List<WorkType> downloadQueue = new List<WorkType>();
+        override protected DatabaseType database
+        {
+            // 仅后台,使用一个数据库就够了
+            get => databaseSchedule;
+        }
+
         protected TypicalServer(String proxy,Config config): base()
         {
             {
@@ -228,31 +235,6 @@ namespace PictureSpider
             }
             return null;
         }
-        /*
-        public override BaseUser GetUserById(string id)
-        {
-            return database.Users.Where(x => x.name == id).FirstOrDefault();
-        }
-        public override void SetUserFollowOrQueue(BaseUser user)
-        {
-            // 对user的修改在ui中完成，此处只需要save
-            database.SaveChanges();
-        }
-        public override void SetBookmarkEach(ExplorerFileBase file)
-        {
-            throw new NotImplementedException();
-        }
-        public override void SetReaded(ExplorerFileBase file)
-        {
-            (file as TypicalExplorerFile<WorkType, WorkGroupType, UserType>).workGroup.readed = file.readed;
-            database.SaveChanges();
-        }
-        public override void SetBookmarked(ExplorerFileBase file)
-        {
-            (file as TypicalExplorerFile<WorkType, WorkGroupType, UserType>).workGroup.fav = file.bookmarked;
-            database.SaveChanges();
-        }*/
-
         public async virtual Task<bool> AddQueuedUser(string name)
         {
             UserType user = null;

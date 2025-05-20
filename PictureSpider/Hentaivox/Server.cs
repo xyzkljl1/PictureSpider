@@ -39,9 +39,9 @@ namespace PictureSpider.Hentaivox
         public override async Task Init()
         {
 #if DEBUG
-            //return;
+            return;
 #endif
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
