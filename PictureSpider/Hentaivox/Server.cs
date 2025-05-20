@@ -39,7 +39,7 @@ namespace PictureSpider.Hentaivox
         public override async Task Init()
         {
 #if DEBUG
-            return;
+            //return;
 #endif
             RunSchedule();
         }
@@ -165,6 +165,7 @@ namespace PictureSpider.Hentaivox
             for (int i = 1; i <= pages; i++)
             {
                 var work = new Work();
+                database.Works.Add(work);
                 work.workGroup = workGroup;
                 work.index = i;
                 work.title = $"{i}";
@@ -174,6 +175,7 @@ namespace PictureSpider.Hentaivox
                 work.ext = ".jpg";
                 workGroup.works.Add(work);
             }
+            workGroup.fetched = true;
             await database.SaveChangesAsync();
         }
 
