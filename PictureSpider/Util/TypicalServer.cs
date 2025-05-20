@@ -42,7 +42,6 @@ namespace PictureSpider
                             prefix = prefix.Substring(0, i);
                             break;
                         }
-                    usedLogPrefix.Add(prefix);
                     logPrefix = prefix;
                 }
 
