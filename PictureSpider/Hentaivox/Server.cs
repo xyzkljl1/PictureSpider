@@ -165,6 +165,7 @@ namespace PictureSpider.Hentaivox
             for (int i = 1; i <= pages; i++)
             {
                 var work = new Work();
+                database.Works.Add(work);
                 work.workGroup = workGroup;
                 work.index = i;
                 work.title = $"{i}";
