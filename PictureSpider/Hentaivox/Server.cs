@@ -93,7 +93,7 @@ namespace PictureSpider.Hentaivox
                         Util.ReplaceInvalidCharInFilename(title);
                         workGroup.title = title;
                         workGroup.Id = id;
-                        workGroup.fetched = true;
+                        workGroup.fetched = false;
                         workGroup.user = user;
                         database.WorkGroups.Add(workGroup);
                         ct++;
