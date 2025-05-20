@@ -34,14 +34,17 @@ namespace PictureSpider
                 var name = this.GetType().Namespace;
                 name = name.Split(".").Last();
                 base.ResetDb(config.TypicalConnectStr + name);
-                var prefix = name.ToUpper();
-                for(int i=1;i< prefix.Length;++i)
-                    if(!usedLogPrefix.Contains(prefix.Substring(0,i)))
-                    {
-                        prefix = prefix.Substring(0, i);
-                        break;
-                    }
-                usedLogPrefix.Add(prefix);
+                {
+                    var prefix = name.ToUpper();
+                    for (int i = 1; i < prefix.Length; ++i)
+                        if (!usedLogPrefix.Contains(prefix.Substring(0, i)))
+                        {
+                            prefix = prefix.Substring(0, i);
+                            break;
+                        }
+                    usedLogPrefix.Add(prefix);
+                    logPrefix = prefix;
+                }
 
                 download_dir_root = Path.Combine(config.TypicalDownloadDir, name);
                 download_dir_fav = Path.Combine(download_dir_root, "fav");
