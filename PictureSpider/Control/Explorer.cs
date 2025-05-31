@@ -269,6 +269,8 @@ namespace PictureSpider
         //manually:是被SlideHorizon失败触发的还是被手动按上下键触发的
         private bool SlideVertical(int offset,bool toEnd=false,bool manually=false)
         {
+            if (index < 0 || index >= file_list.Count)
+                return false;
             server.ExplorerQueueSwitchVertical(file_list,manually,offset,index,sub_index,toEnd,out var new_index,out var new_sub_index);
             if (new_index < 0 || new_sub_index < 0) return false;
             //将当前index和目标index之间的所有illust(不包括目标index)标记为已读
