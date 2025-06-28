@@ -20,6 +20,8 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Text.RegularExpressions;
 using System.Threading;
 using PictureSpider.Kemono;
+using System.Security.Policy;
+using Microsoft.AspNetCore.SignalR;
 
 namespace PictureSpider.Hentaivox
 {
@@ -39,6 +41,7 @@ namespace PictureSpider.Hentaivox
         public override async Task Init()
         {
 #if DEBUG
+            await FetchWorkGroup(database.WorkGroups.Where(x=>x.Id== 456356).First());
             return;
 #endif
             Task.Run(RunSchedule);
@@ -161,6 +164,16 @@ namespace PictureSpider.Hentaivox
                     break;
                 }
             }
+            //         <div id="gallery-pages" class="container-xl">
+            var thumb_parent = doc.DocumentNode.SelectSingleNode("//div[@id='gallery-pages']");
+            if (thumb_parent is null)
+            {
+                LogError($"Fail to get thumb nodes {workGroup.Id}");
+                return;
+            }
+            // <img class="lazy small-bg-load" data-src="https://a2.hentaivox.com/i/images/986203-2t.jpg" width="200" height="135" />
+            var thumb_nodes = thumb_parent.SelectNodes(".//img[@class='lazy small-bg-load']");
+
             for (int i = 1; i <= pages; i++)
             {
                 var work = new Work();
@@ -168,8 +181,11 @@ namespace PictureSpider.Hentaivox
                 work.workGroup = workGroup;
                 work.index = i;
                 work.title = $"{i}";
-                //是否都是a2?是否都是jpg?
-                work.url = $"https://a2.hentaivox.com/i/images/{internalId}-{i}.jpg";
+                // 假设thumb的ext和原图一样
+                var thumb_url=thumb_nodes[i].Attributes["data-src"].Value;
+                work.ext = Path.GetExtension(thumb_url);
+                //是否都是a2?
+                work.url = $"https://a2.hentaivox.com/i/images/{internalId}-{i}{work.ext}";
                 work.fileName = $"{workGroup.Id}_{i:d3}";
                 work.ext = ".jpg";
                 workGroup.works.Add(work);
