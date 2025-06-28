@@ -17,12 +17,23 @@ namespace PictureSpider
         public MegaApiClient MegaClient=>mega;
         private MegaApiClient mega;
         private List<Task> downloading = new List<Task>();
+        private bool loginSuccessed = false;
         public MegaDownloadQueue(string proxy_access,string proxy_download)
         {
             //SNI可以访问网页，获得节点，但是无法下载(http://gfs262n333.userstorage.mega.co.nz/dl/*)
             //Go无法访问网页，在chrome上时不时可以下载，但是用curl及MegaApiClient无法下载
             mega = new MegaApiClient(new MegaWebClient(new WebProxy(proxy_access, false), new WebProxy(proxy_download, false)));
-            mega.LoginAnonymous();
+            Task.Run(()=>{
+                try
+                {
+                    mega.LoginAnonymous();
+                    loginSuccessed = true;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"[Mega] login fail {e.Message}");
+                }
+            });
             //https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ/file/GcpDQIST
             //Uri fileLink = new Uri("https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ");
             //var nodes = (await mega.GetNodesFromLinkAsync(fileLink)).ToList();
@@ -99,6 +110,11 @@ namespace PictureSpider
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public override async Task<bool> Add(string url, string dir, string file_name)
         {
+            if (!loginSuccessed)
+            {
+                Console.WriteLine($"[Mega] login fail,can't download");
+                return false;
+            }
             downloading.Add(DownloadTask(url, dir, file_name));
             return true;
         }
