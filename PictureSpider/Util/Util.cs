@@ -75,14 +75,13 @@ namespace PictureSpider
             //注意和GetInvalidPathChars的区别
             foreach (var c in Path.GetInvalidFileNameChars())
                 filename = filename.Replace(c, '_');
-            filename.Trim(' ');
+            filename = filename.Trim(' ');
         }
-        public static void ReplaceInvalidCharInFilename(this string filename)
+        // 不会修改this的值！！
+        public static string ReplaceInvalidCharInFilenameWithReturnValue(this string filename)
         {
-            //注意和GetInvalidPathChars的区别
-            foreach (var c in Path.GetInvalidFileNameChars())
-                filename = filename.Replace(c, '_');
-            filename.Trim(' ');
+            ReplaceInvalidCharInFilename(ref filename);
+            return filename;
         }
         public static void TouchDir(params string[] dirs)
         {

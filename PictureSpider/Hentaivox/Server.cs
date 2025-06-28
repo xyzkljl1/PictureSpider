@@ -90,8 +90,7 @@ namespace PictureSpider.Hentaivox
                             continue;
                         var workGroup = new WorkGroup();
                         var title = name_node.SelectSingleNode(".//a").InnerText.Trim();
-                        Util.ReplaceInvalidCharInFilename(title);
-                        workGroup.title = title;
+                        workGroup.title = title.ReplaceInvalidCharInFilenameWithReturnValue();
                         workGroup.Id = id;
                         workGroup.fetched = false;
                         workGroup.user = user;

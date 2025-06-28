@@ -151,6 +151,11 @@ namespace PictureSpider
                 int download_ct = 0;
                 foreach (var work in illustList)
                 {
+                    if(work.TmpSubPath!= work.TmpSubPath.ReplaceInvalidCharInFilenameWithReturnValue())
+                    {
+                        LogError($"Invalid TmpSubPath: {work.TmpSubPath} for {work.url}");
+                        continue;
+                    }
                     await downloader.Add(work.url, download_dir_tmp, work.TmpSubPath);
                     download_ct++;
                     download_illusts.Add(work);

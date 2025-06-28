@@ -216,7 +216,7 @@ namespace PictureSpider.Kemono
                 user.displayText = user.displayId;
             if (user.displayText is null)
                 user.displayText = user.id;
-            user.displayText.ReplaceInvalidCharInFilename();//还用做目录名
+            user.displayText = user.displayText.ReplaceInvalidCharInFilenameWithReturnValue();//还用做目录名
             await database.SaveChangesAsync();
         }
         //获取该user的作品id并插入数据库

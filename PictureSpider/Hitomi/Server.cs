@@ -676,7 +676,7 @@ namespace PictureSpider.Hitomi
             {
                 user = new User(id);
                 user.displayText = user.displayId = id;
-                user.displayText.ReplaceInvalidCharInFilename();
+                user.displayText = user.displayText.ReplaceInvalidCharInFilenameWithReturnValue();
                 database.Users.Add(user);
             }
             if (user.followed || user.queued)
