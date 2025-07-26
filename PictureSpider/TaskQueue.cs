@@ -75,6 +75,8 @@ namespace PictureSpider
         }
         public async Task Add(Task<T> t)
         {
+            if (t is null) // null会导致whenany抛异常
+                return;
             running_task_list.Add(t);
             await WaitUntil(queue_size,storage_size);
         }
