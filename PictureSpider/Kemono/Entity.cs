@@ -65,7 +65,7 @@ namespace PictureSpider.Kemono
                     return combineDownloadURL(tmpHost, urlPath);
 
                 //没有server时随便用n1~n4中的一个（不能保证都有效)
-                return combineDownloadURL("https://n4.kemono.su", urlPath);
+                return combineDownloadURL($"https://n4.{Server.baseHost}", urlPath);
             }
         }
         //页号
@@ -139,7 +139,7 @@ namespace PictureSpider.Kemono
         [NotMapped]
         public string service { get { return user.service; }}
         public string desc { get; set; }
-        public string embedUrl { get; set; }//例:https://kemono.su/patreon/user/3659577/post/55491373
+        public string embedUrl { get; set; }//例:patreon/user/3659577/post/55491373
         public bool readed { get; set; } = false;
         public bool fav { get; set; } = false;
         //已经fetch过
@@ -196,7 +196,7 @@ namespace PictureSpider.Kemono
 
         public override int pageCount() { return sortedIllusts.Count; }
 
-        public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
+        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 
         public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 
@@ -232,7 +232,7 @@ namespace PictureSpider.Kemono
 
         public override int pageCount() { return sortedIllusts.Count; }
 
-        public override string WebsiteURL(int page) { return $"https://kemono.su/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
+        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
 
         public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 

@@ -27,9 +27,10 @@ namespace PictureSpider.Kemono
     public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
         private HttpClient httpClient;
-        //https://kemono.su/api/v1/fanbox/user/7349257/posts-legacy
-        private string baseUrl = "https://kemono.su";
-        private string baseAPIUrl = "https://kemono.su/api/v1";
+        //api/v1/fanbox/user/7349257/posts-legacy
+        public static string baseUrl = "https://kemono.cr";
+        public static string baseHost = "kemono.cr";
+        private string baseAPIUrl = "https://kemono.cr/api/v1";
 
         private string download_dir_root = "";
         private string download_dir_tmp = "";
@@ -55,7 +56,7 @@ namespace PictureSpider.Kemono
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
-            //httpClient.DefaultRequestHeaders.Referrer=new Uri("https://kemono.su/fanbox/user/7349257");
+            //httpClient.DefaultRequestHeaders.Referrer=new Uri($"{baseUrl}/fanbox/user/7349257");
 
             download_dir_root = config.KemonoDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
@@ -109,11 +110,11 @@ namespace PictureSpider.Kemono
                 if (anodes is null)
                     return;
                 foreach (var anode in anodes)
-                    //https://kemono.su/patreon/user/3659577/post/117461502/revision/9878902
+                    //patreon/user/3659577/post/117461502/revision/9878902
                     if (anode.Attributes["href"] is not null)
                     {
                         //包含一个mega文件夹
-                        //https://kemono.su/patreon/user/3659577/post/117461502/revision/9878902
+                        //patreon/user/3659577/post/117461502/revision/9878902
                         //<p><img src=\"/05/68/0568e59bd4bfdea28e3b3183046b81668dc841dfd5bcdc847612248a161138f2.webp\"></p><p>Hi guys!</p><p><a href=\"https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ\" rel=\"noopener noreferrer\">DOWNLOAD</a>&nbsp;(Watermark-free)</p>
                         if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/folder/"))//Mega folder
                         {
@@ -140,7 +141,7 @@ namespace PictureSpider.Kemono
                                     }
                                 }
                         }
-                        //单个mega文件 https://kemono.su/patreon/user/8693043/post/75248472
+                        //单个mega文件 patreon/user/8693043/post/75248472
                         //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
                         else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
                         {
@@ -295,7 +296,7 @@ namespace PictureSpider.Kemono
                     [
                         {
                             "type": "thumbnail",
-                            "server": "https://n2.kemono.su",
+                            "server": "https://n2.kemono.cr",
                             "name": "DH057ezDhsJktxnJgm0fjQRN.jpeg",
                             "path": "/82/80/8280dffe6057e14100d2a302cbff7b76428cbc124cdafd9afc6c903c89960538.jpg"
                         },
@@ -303,7 +304,7 @@ namespace PictureSpider.Kemono
                             "type": "thumbnail",
                             "name": "qytY0nn7ubMkRgIdAtPX0SGt.jpeg",
                             "path": "/62/8d/628d86bd6cde8148943a81e5230825f0b9f339d42541a48371efbc58cc5787c5.jpg",
-                            "server": "https://n4.kemono.su"
+                            "server": "https://n4.kemono.cr"
                         }
                     ]
                 ],
@@ -315,7 +316,7 @@ namespace PictureSpider.Kemono
                         {
                             "path": "/20/5f/205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475.zip",
                             "name": "01-12-22玩弄赤炼-致幻香料.zip",
-                            "server": "https://n2.kemono.su"
+                            "server": "https://n2.kemono.cr"
                         }
                     ],
                 ],
@@ -361,7 +362,7 @@ namespace PictureSpider.Kemono
                         if (obj["file"].ToObject<JObject>().ContainsKey("path"))
                             workGroup.cover =await TryAddWork(obj["file"], service);
                         int index = 1;
-                        //work可能重复，例 https://kemono.su/patreon/user/3659577/post/109256192包含了两张一样的图片
+                        //work可能重复，例 patreon/user/3659577/post/109256192包含了两张一样的图片
                         foreach (var attachment in obj["attachments"])
                         {
                             var work = await TryAddWork(attachment, service);//如果work已在别的group或该group之前的附件中存在，则忽略
@@ -497,7 +498,7 @@ namespace PictureSpider.Kemono
             },
             "attachments": [
                 {
-                    "server": "https://n2.kemono.su",
+                    "server": "https://n2.kemono.cr",
                     "name": "01-12-22玩弄赤炼-致幻香料.zip",
                     "extension": ".zip",
                     "name_extension": ".zip",
@@ -508,7 +509,7 @@ namespace PictureSpider.Kemono
             "previews": [
                 {
                     "type": "thumbnail",
-                    "server": "https://n4.kemono.su",
+                    "server": "https://n4.kemono.cr",
                     "name": "xGPJ39yPVV4CCt1lwkVVJVKN.jpeg",
                     "path": "/2d/a7/2da78096621e89e17fd27c70945cde7ff9a73d4d0c3175c1a35c3a9940739622.jpg"
                 }
@@ -543,7 +544,7 @@ namespace PictureSpider.Kemono
         }
         public override bool ListenerUtil_IsValidUrl(string url)
         {
-            if (url.StartsWith("https://kemono.su"))
+            if (url.StartsWith(baseUrl))
                 return true;
             return false;
         }
@@ -750,7 +751,7 @@ namespace PictureSpider.Kemono
         }
         public override async Task<bool> ListenerUtil_FollowUser(string url)
         {
-            var regex = new Regex("https://kemono.su/([a-z]+)/user/([^/]+)(/.*)?$");
+            var regex = new Regex(baseUrl + "/([a-z]+)/user/([^/]+)(/.*)?$");
             var results = regex.Match(url).Groups;
             if (results.Count > 1)
             {
@@ -796,7 +797,7 @@ namespace PictureSpider.Kemono
                 return true;
             for (int i=1;i<=4;++i)
             {
-                var host = $"https://n{i}.kemono.su";
+                var host = $"https://n{i}.{baseHost}";
                 var url=Work.combineDownloadURL(host, work.urlPath);
                 if (await CheckURL(url))
                 {
