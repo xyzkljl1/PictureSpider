@@ -338,7 +338,7 @@ namespace PictureSpider.Kemono
             DateTime latest= DateTime.MinValue;
             do
             {
-                var doc = await HttpGetJson($"{baseAPIUrl}/{user.service}/user/{user.id}/posts-legacy?o={offset}");
+                var doc = await HttpGetJson($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}");
                 if(doc is null||(!doc.ContainsKey("props"))||(!doc.ContainsKey("results")))
                 {
                     LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
