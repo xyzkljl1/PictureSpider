@@ -47,12 +47,14 @@ namespace PictureSpider.Kemono
             {
                 MaxConnectionsPerServer = 256,
                 UseCookies = true,
-                Proxy = new WebProxy(config.ProxyGo, false)
+                Proxy = new WebProxy(config.ProxyGo, false),
+                AutomaticDecompression = DecompressionMethods.All
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
             httpClient.Timeout = new TimeSpan(0, 0, 35);
-            httpClient.DefaultRequestHeaders.Accept.ParseAdd("*/*");
+            // user/posts request 必须text/css在前才能正确接收到响应
+            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/css, */*");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
@@ -82,7 +84,6 @@ namespace PictureSpider.Kemono
             //await FetchUser("7349257","fanbox");
             //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
             //await FetchUser("3659577", "patreon");
-            //await FetchIllustGroupListByUser(database.Users.Where(x=>x.id== "3659577").ToList().FirstOrDefault());
             //await FetchWorkGroup(database.WorkGroups.Where(x=>x.id== "116225295").ToList().First());
             //foreach (var user in database.Users.ToList())//更新作者
             //    await FetchUser(user.id, user.service);
