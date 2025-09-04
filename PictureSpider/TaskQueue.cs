@@ -87,7 +87,7 @@ namespace PictureSpider
         private async Task WaitUntil(int queue_target,int storage_size)//等待直到队列小于指定size
         {
             //由于外部已经限制了速率，队列改为全速
-            while(running_task_list.Count>queue_target)
+            while(running_task_list.Count > queue_target)
             {
                 var task=await Task.WhenAny(running_task_list);
                 done_task_list.Add(task);

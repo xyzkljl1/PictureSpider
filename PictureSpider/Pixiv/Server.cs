@@ -99,11 +99,11 @@ namespace PictureSpider.Pixiv
         public override async Task Init()
         {
             banned_keyword = await database.GetBannedKeyword();
+            await ResetHttpClient();
 #if DEBUG
             await Test();
             return;
 #endif
-            await ResetHttpClient();
             //设置cookie和csrftoken
             //await UpdateHttpClientByDatabaseCookie();
             //会修改属性引发UI更新，需要从主线程调用或使用invoke
@@ -300,7 +300,7 @@ namespace PictureSpider.Pixiv
         {
             int last_daily_task = DateTime.Now.Day;
             int process_speed = 50;
-            var day_of_week = DateTime.Now.DayOfWeek;
+            var startup_day_of_week = DateTime.Now.DayOfWeek.Next(); // 启动至少一天后触发第一次weektask
             await DownloadIllustsInExplorerQueue();
             foreach (var id in await database.GetAllIllustId("where readed=0"))
                 illust_download_queue.Add(id);
@@ -310,7 +310,7 @@ namespace PictureSpider.Pixiv
                 {
                     await ResetHttpClient();//由于不明原因，过数日后会一直请求失败，试试直接重置http client
                     last_daily_task = DateTime.Now.Day;
-                    await DailyTask(day_of_week);
+                    await DailyTask(startup_day_of_week);
                 }
                 //每小时处理下载和更新队列
                 await ProcessIllustFetchQueue(process_speed);
