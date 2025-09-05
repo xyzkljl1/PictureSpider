@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PictureSpider
@@ -65,6 +66,7 @@ namespace PictureSpider
         public List<Task<T>> running_task_list=new List<Task<T>>();
         public List<Task<T>> done_task_list = new List<Task<T>>();
         private Action<List<Task<T>>> processor=null;
+        private static Mutex task_list_lock = new Mutex();
         private int queue_size = 0;//并发限制，即running_task_list大小限制
         private int storage_size = 0;//存储限制，即done_task_list大小限制，仅当processor不为空时有效
         public TaskQueue(int _size,int _psize=0, Action<List<Task<T>>> _processor =null)
@@ -87,9 +89,16 @@ namespace PictureSpider
         private async Task WaitUntil(int queue_target,int storage_size)//等待直到队列小于指定size
         {
             //由于外部已经限制了速率，队列改为全速
-            while(running_task_list.Count > queue_target)
+            var tmp_list = new List<Task<T>>(running_task_list);
+            while (tmp_list.Count > queue_target)
             {
-                var task=await Task.WhenAny(running_task_list);
+                if (tmp_list.Any(t => t is null))
+                {
+                    // why???
+                    Console.Error.WriteLine($"ERROR running_task_list null\n");
+                    tmp_list.RemoveAll(t => t is null);
+                }
+                var task=await Task.WhenAny(tmp_list);
                 done_task_list.Add(task);
                 running_task_list.Remove(task);
                 if (!(processor is null))
