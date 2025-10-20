@@ -100,7 +100,7 @@ namespace PictureSpider
                 }
                 var task=await Task.WhenAny(tmp_list);
                 done_task_list.Add(task);
-                running_task_list.Remove(task);
+                tmp_list.Remove(task);
                 if (!(processor is null))
                     if (done_task_list.Count > storage_size)
                     {
@@ -108,6 +108,7 @@ namespace PictureSpider
                         done_task_list.Clear();
                     }
             }
+            running_task_list = tmp_list;
         }
         public async Task<HashSet<int>> GetResultSet()
         {//暂时想不到更好的写法
