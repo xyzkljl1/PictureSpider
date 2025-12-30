@@ -74,7 +74,7 @@ namespace PictureSpider.Hitomi
 #pragma warning disable CS0162 // 检测到无法访问的代码
         public override async Task Init()
         {
-#if DEBUG           
+#if DEBUG
             return;
 #endif
             PrepareJS();
@@ -426,15 +426,21 @@ namespace PictureSpider.Hitomi
             var groupJS = await FetchJSByIllustGroupId(illustGroup.Id);
             if (string.IsNullOrEmpty(groupJS))
                 return;
+            if (illustGroup.illusts is null)
+            {
+                //why?
+                LogError($"illustGroup.illusts{illustGroup.Id} is null.");
+                return;
+            }
             using (var engine=new V8ScriptEngine())
             {
                 engine.Execute(groupJS);
                 //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
                 var hashs = engine.Script.myhash;
-                illustGroup.title = engine.Script.mytitle;                
+                illustGroup.title = engine.Script.mytitle;
                 foreach(var illust in illustGroup.illusts)
                     database.Illusts.Remove(illust);
-                illustGroup.illusts.Clear();//注意Clear并不会删除illust行
+               illustGroup.illusts.Clear();//注意Clear并不会删除illust行
                 for (var i = 0; i < hashs.length; ++i)
                 {
                     var illust = new Illust();
