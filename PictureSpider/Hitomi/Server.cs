@@ -310,7 +310,8 @@ namespace PictureSpider.Hitomi
             //gg.js随时间变动
             //var ggJS = await HttpGet($"{baseUrlLtn}/gg.js");
             //common在前，因为common.js中定义了gg对象，gg.js中只有赋值
-             myjs = @"
+            // 出于某种原因，某些illustgroup作者为空但是关联到作者了，可能是后面编辑过 eg.https://hitomi.la/imageset/painter%E5%85%AD%E5%8F%B7-82887646--%7C-2025-01-14-%E6%97%A5%E6%9C%AC%E8%AA%9E-3195302.html#1
+            myjs = @"
                         var gid=galleryinfo.id;
                         var myurl=[];
                         var myhash=[];
@@ -321,9 +322,10 @@ namespace PictureSpider.Hitomi
                             myurl.push(src);
                             myhash.push(file.hash);
                         }}
-                        for(let artInfo of galleryinfo.artists){{
-                            myartists.push(artInfo.artist);
-                        }}
+                        if (galleryinfo.artists)
+                            for(let artInfo of galleryinfo.artists){{
+                                myartists.push(artInfo.artist);
+                            }}
                         ";
         }
         public async Task CalcIllustURL(IllustGroup illustGroup)
@@ -434,24 +436,24 @@ namespace PictureSpider.Hitomi
             }
             using (var engine=new V8ScriptEngine())
             {
-                engine.Execute(groupJS);
-                //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
-                var hashs = engine.Script.myhash;
-                illustGroup.title = engine.Script.mytitle;
+                    engine.Execute(groupJS);
+                    //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
+                    var hashs = engine.Script.myhash;
+                    illustGroup.title = engine.Script.mytitle;
                 foreach(var illust in illustGroup.illusts)
-                    database.Illusts.Remove(illust);
-               illustGroup.illusts.Clear();//注意Clear并不会删除illust行
-                for (var i = 0; i < hashs.length; ++i)
-                {
-                    var illust = new Illust();
-                    //url随时间变化，下载时再计算
-                    illust.hash = hashs[i] as string;
-                    illust.index=i;//有序
-                    illust.fileName = $"{illustGroup.Id}_{i:000}";
-                    illustGroup.illusts.Add(illust);
+                        database.Illusts.Remove(illust);
+                    illustGroup.illusts.Clear();//注意Clear并不会删除illust行
+                    for (var i = 0; i < hashs.length; ++i)
+                    {
+                        var illust = new Illust();
+                        //url随时间变化，下载时再计算
+                        illust.hash = hashs[i] as string;
+                        illust.index = i;//有序
+                        illust.fileName = $"{illustGroup.Id}_{i:000}";
+                        illustGroup.illusts.Add(illust);
+                    }
                 }
-            }
-            illustGroup.fetched = true;
+                illustGroup.fetched = true;
             await database.SaveChangesAsync();
             Log($"Fetch IllustGroup Done:{illustGroup.Id} {illustGroup.title}");
         }
