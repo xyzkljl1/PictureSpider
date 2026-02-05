@@ -41,7 +41,6 @@ namespace PictureSpider.Hentaivox
         public override async Task Init()
         {
 #if DEBUG
-            await FetchWorkGroup(database.WorkGroups.Where(x=>x.Id== 456356).First());
             return;
 #endif
             Task.Run(RunSchedule);
@@ -182,7 +181,7 @@ namespace PictureSpider.Hentaivox
                 work.index = i;
                 work.title = $"{i}";
                 // 假设thumb的ext和原图一样
-                var thumb_url=thumb_nodes[i].Attributes["data-src"].Value;
+                var thumb_url=thumb_nodes[i - 1].Attributes["data-src"].Value;
                 work.ext = Path.GetExtension(thumb_url);
                 //是否都是a2?
                 work.url = $"https://a2.hentaivox.com/i/images/{internalId}-{i}{work.ext}";

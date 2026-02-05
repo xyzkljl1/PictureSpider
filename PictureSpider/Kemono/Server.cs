@@ -832,7 +832,12 @@ namespace PictureSpider.Kemono
                             LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
                         await downloader.Add(work, download_dir_tmp);
                     }
-                    else if(ext.IsVideo()&&work is ExternalWork)
+                    /*
+                    else if (ext.IsVideo() && work is Work)
+                    {
+                        //?
+                    }*/
+                    else if (ext.IsVideo()&&work is ExternalWork)
                         await downloader.Add(work, download_dir_tmp);
                     else if (ext.IsZip())
                     {
