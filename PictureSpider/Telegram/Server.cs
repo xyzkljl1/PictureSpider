@@ -64,6 +64,7 @@ namespace PictureSpider.Telegram
         private int apiId = 0;
         private string apiHash = "";
         private string myDownloadServerAddr = "";
+        private string loginProxy = ""; // http proxy like "host:port",see Login()
         private TdClient tgClient;
         private HttpClient localHttpClient;
         //private static readonly ManualResetEventSlim ReadyToAuthenticate = new();
@@ -75,7 +76,8 @@ namespace PictureSpider.Telegram
             //但是执行完之前还会输出一段日志到error，怎么解决？
             tgClient.Execute(new TdApi.SetLogVerbosityLevel { NewVerbosityLevel = 0 });
 
-            myDownloadServerAddr=config.MyDownloadServerAddress;
+            loginProxy = config.Proxy;
+            myDownloadServerAddr =config.MyDownloadServerAddress;
             apiId = config.TelegramApiID;
             apiHash = config.TelegramApiHash;
             phone_number = config.TelegramPhoneNumber;
@@ -105,8 +107,6 @@ namespace PictureSpider.Telegram
             {
                 var ok =await tgClient.SetTdlibParametersAsync(apiId:apiId,apiHash:apiHash, systemLanguageCode: "zh-hans", deviceModel:"Desktop",applicationVersion:"5.6.2",
                                 useChatInfoDatabase:true,useFileDatabase:true,useMessageDatabase:true,useSecretChats:true);
-                //似乎只有重新登录的时候需要设置代理？其它时候不需要？
-                //var proxy = await tgClient.AddProxyAsync("127.0.0.1", 1195, true, new TdApi.ProxyType.ProxyTypeSocks5());
                 if (!await Login())
                 {
                     LogError("Stop Init because login failed");
@@ -130,16 +130,18 @@ namespace PictureSpider.Telegram
             //登录过一次后会自动记住，下次启动无需登录
             if(loginState.DataType!= "authorizationStateReady")
             {
+                // 似乎只有重新登录的时候需要设置代理？其它时候不需要？
+                var proxy = await tgClient.AddProxyAsync(loginProxy.Split(':')[0], Int32.Parse(loginProxy.Split(':')[1]), true, new TdApi.ProxyType.ProxyTypeHttp());
                 //login,似乎不需要密码或验证码？
                 await tgClient.SetAuthenticationPhoneNumberAsync(phone_number);
                 loginState = await tgClient.GetAuthorizationStateAsync();
                 if(loginState.DataType== "authorizationStateWaitCode")
                 {
                     AllocConsole();
-                    var code=Console.ReadLine();
+                    LogError("Need Input Auth Code In Console  Manually");
+                    var code =Console.ReadLine();
                     await tgClient.CheckAuthenticationCodeAsync(code);
                     //await tgClient.CheckAuthenticationCodeAsync("78164");
-                    LogError("Need Input Auth Code Manually");
                     loginState = await tgClient.GetAuthorizationStateAsync();
                     if (loginState.DataType != "authorizationStateReady")
                         LogError($"Login With Code Fail: {loginState.DataType}");
@@ -153,6 +155,7 @@ namespace PictureSpider.Telegram
                 }
                 else
                     Log("Login with phone number");
+                await tgClient.RemoveProxyAsync(proxy.Id);
             }
             return true;
         }
@@ -165,6 +168,11 @@ namespace PictureSpider.Telegram
             //所有chat必须先通过GetChatsAsync获取chat列表后，才能获取相应信息，否则会返回chat not found
             //user则需要GetUserAsync
             //！！！！暂不考虑chat数量超过1000的情况
+            {
+                // 将chat从main移动到archive后，需要更新才能通过GetChats获取到
+                var __ = await tgClient.LoadChatsAsync(new ChatListMain(), 1000);
+                __ = await tgClient.LoadChatsAsync(new ChatListArchive(), 1000);
+            }
             var chatListMain = await tgClient.GetChatsAsync(new ChatListMain(), 1000);
             var chatListArchive = await tgClient.GetChatsAsync(new ChatListArchive(), 1000);
             int ct = 0;
