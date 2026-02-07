@@ -80,6 +80,13 @@ namespace PictureSpider
             }
             while (ct > 0);
         }
+        private static void ReplaceInvalidCharInPath(ref string filename)
+        {
+            //注意和GetInvalidPathChars的区别
+            foreach (var c in Path.GetInvalidPathChars())
+                filename = filename.Replace(c, '_');
+            filename = filename.Trim(' ');
+        }
         public static void ReplaceInvalidCharInFilename(ref string filename)
         {
             //注意和GetInvalidPathChars的区别
@@ -91,6 +98,12 @@ namespace PictureSpider
         public static string ReplaceInvalidCharInFilenameWithReturnValue(this string filename)
         {
             ReplaceInvalidCharInFilename(ref filename);
+            return filename;
+        }
+        // 不会修改this的值！！
+        public static string ReplaceInvalidCharInPathWithReturnValue(this string filename)
+        {
+            ReplaceInvalidCharInPath(ref filename);
             return filename;
         }
         public static void TouchDir(params string[] dirs)

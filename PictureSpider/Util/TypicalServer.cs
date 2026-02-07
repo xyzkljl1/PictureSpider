@@ -151,12 +151,13 @@ namespace PictureSpider
                 int download_ct = 0;
                 foreach (var work in illustList)
                 {
-                    if(work.TmpSubPath!= work.TmpSubPath.ReplaceInvalidCharInFilenameWithReturnValue())
+                    string path = Path.Join(download_dir_tmp, work.TmpSubPath);
+                    if(path != path.ReplaceInvalidCharInPathWithReturnValue())
                     {
-                        LogError($"Invalid TmpSubPath: {work.TmpSubPath} for {work.url}");
+                        LogError($"Invalid Path: {path} for {work.url}");
                         continue;
                     }
-                    await downloader.Add(work.url, download_dir_tmp, work.TmpSubPath);
+                    await downloader.Add(work.url, Path.GetDirectoryName(path), Path.GetFileName(path));
                     download_ct++;
                     download_illusts.Add(work);
                     if (limit >= 0 && download_ct >= limit)
@@ -169,7 +170,7 @@ namespace PictureSpider
                     int success_ct = 0;
                     foreach (var work in download_illusts)
                     {
-                        var path = $"{download_dir_tmp}/{work.TmpSubPath}";
+                        var path = Path.Join(download_dir_tmp, work.TmpSubPath);
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
                             Log($"Download Fail: {work.url}");

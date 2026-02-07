@@ -32,7 +32,6 @@ namespace PictureSpider.Hentaivox
        
         public Server(Config config): base(config.Proxy,config)
         {
-
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hentaivox, config.Proxy, "https://hentaivox.com",1);
         }
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
@@ -183,8 +182,9 @@ namespace PictureSpider.Hentaivox
                 // 假设thumb的ext和原图一样
                 var thumb_url=thumb_nodes[i - 1].Attributes["data-src"].Value;
                 work.ext = Path.GetExtension(thumb_url);
-                //是否都是a2?
-                work.url = $"https://a2.hentaivox.com/i/images/{internalId}-{i}{work.ext}";
+                var host = (new Uri(thumb_url)).Host;
+                //假设大图域名和thumb一致
+                work.url = $"https://{host}/i/images/{internalId}-{i}{work.ext}";
                 work.fileName = $"{workGroup.Id}_{i:d3}";
                 work.ext = ".jpg";
                 workGroup.works.Add(work);
