@@ -165,6 +165,7 @@ namespace PictureSpider.Kemono
         //public bool dowloadCover { get; set; } = false;
         public bool dowloadWorks { get; set; } = true;
         public bool dowloadVideoWorks { get; set; } = false;
+        public bool dowloadImageWorks { get; set; } = true;
         public bool dowloadEmbed { get; set; } = true;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 

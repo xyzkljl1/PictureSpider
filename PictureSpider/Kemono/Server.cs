@@ -721,7 +721,8 @@ namespace PictureSpider.Kemono
                     {
                         if (workGroup.user.dowloadVideoWorks)
                             works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
-                        works.AddRange(workGroup.works.Where(work => !work.Ext.IsVideo()));
+                        if (workGroup.user.dowloadImageWorks)
+                            works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
                     }
                     if (workGroup.user.dowloadExternalWorks)
                         works.AddRange(workGroup.externalWorks);
