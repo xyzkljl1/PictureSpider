@@ -79,6 +79,8 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
+            //await FetchUser("20393035","fanbox");
+            //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "20393035").ToList().FirstOrDefault());
             return;
 #endif
             //await FetchUser("7349257","fanbox");
@@ -337,20 +339,41 @@ namespace PictureSpider.Kemono
             int totalCount = 0;
             string service = user.service;
             DateTime latest= DateTime.MinValue;
+            {
+                /*
+                 * {
+                      "id": "5564244",
+                      "name": "theobrobine",
+                      "service": "patreon",
+                      "indexed": "2020-09-30T06:13:38.348472",
+                      "updated": "2026-02-06T05:49:51.236062",
+                      "public_id": "theobrobine",
+                      "relation_id": 8,
+                      "has_chats": false,
+                      "post_count": 455,
+                      "dm_count": 0,
+                      "share_count": 0,
+                      "chat_count": 0
+                    }
+                 */
+                var profile = await HttpGetJson($"{baseAPIUrl}/{user.service}/user/{user.id}/profile");
+                if (profile is null || (!profile.ContainsKey("post_count")))
+                {
+                    LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
+                    return;
+                }
+                totalCount = profile["post_count"].Value<int>();
+            }
             do
             {
-                var doc = await HttpGetJson($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}");
-                if(doc is null||(!doc.ContainsKey("props"))||(!doc.ContainsKey("results")))
+                var posts = await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}");
+                if(posts is null || posts.Count < 1)
                 {
                     LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
                     break;
                 }
-                if (offset == 0)
-                    totalCount=doc["props"].Value<int>("count");
-                int step= doc["props"].Value<int>("limit");
-                if (step <= 0) throw new TopLevelException("?");
-                offset += step;
-                foreach(var obj in doc["results"])
+                offset += posts.Count;
+                foreach(var obj in posts)
                 {
                     string id = obj.Value<string>("id");
                     DateTime date = obj.Value<DateTime>("published");
@@ -379,9 +402,10 @@ namespace PictureSpider.Kemono
                         break;
                     }
                 }
-                foreach (var arr in doc["result_attachments"])//非图片的附件会在result_attachments中指定server(但似乎不管用哪个域名都会重定向到正确的server)
-                    foreach (var attachment in arr)
-                        await UpdateWork(attachment, service);
+                // post查询改成了返回array，没有result_attachments了，不知道去哪里获取，暂时使用n1
+                // foreach (var arr in posts["result_attachments"])//非图片的附件会在result_attachments中指定server(但似乎不管用哪个域名都会重定向到正确的server)
+                //    foreach (var attachment in arr)
+                //        await UpdateWork(attachment, service);
             }
             while (offset < totalCount);
             await database.SaveChangesAsync();
@@ -420,6 +444,13 @@ namespace PictureSpider.Kemono
             var r = await HttpGet(url);
             if (r != null)
                 return (JObject)JsonConvert.DeserializeObject(r);
+            return null;
+        }
+        public async Task<JArray> HttpGetJArray(string url)
+        {
+            var r = await HttpGet(url);
+            if (r != null)
+                return (JArray)JsonConvert.DeserializeObject(r);
             return null;
         }
         public override BaseUser GetUserById(string id)
