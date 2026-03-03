@@ -5,25 +5,25 @@
 namespace PictureSpider.Migrations
 {
     /// <inheritdoc />
-    public partial class hitomi_dev2 : Migration
+    public partial class k2 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "test",
-                table: "Illusts",
-                type: "longtext",
-                nullable: true)
-                .Annotation("MySql:CharSet", "utf8mb4");
+            migrationBuilder.AddColumn<bool>(
+                name: "dowloadVideoWorks",
+                table: "Users",
+                type: "tinyint(1)",
+                nullable: false,
+                defaultValue: false);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "test",
-                table: "Illusts");
+                name: "dowloadVideoWorks",
+                table: "Users");
         }
     }
 }

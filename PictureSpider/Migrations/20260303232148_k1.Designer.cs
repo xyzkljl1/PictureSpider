@@ -9,11 +9,11 @@ using PictureSpider.Kemono;
 
 #nullable disable
 
-namespace PictureSpider.Migrations.DatabaseMigrations
+namespace PictureSpider.Migrations
 {
     [DbContext(typeof(Database))]
-    [Migration("20250104171756_kemono5")]
-    partial class kemono5
+    [Migration("20260303232148_k1")]
+    partial class k1
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,6 +21,9 @@ namespace PictureSpider.Migrations.DatabaseMigrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.5")
+                .HasAnnotation("Proxies:ChangeTracking", false)
+                .HasAnnotation("Proxies:CheckEquality", false)
+                .HasAnnotation("Proxies:LazyLoading", true)
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -36,11 +39,17 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("excluded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("fav")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("index")
                         .HasColumnType("int");
 
                     b.Property<string>("name")
                         .HasColumnType("longtext");
+
+                    b.Property<bool>("readed")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("url")
                         .HasColumnType("longtext");
@@ -116,11 +125,17 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("excluded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("fav")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("index")
                         .HasColumnType("int");
 
                     b.Property<string>("name")
                         .HasColumnType("longtext");
+
+                    b.Property<bool>("readed")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("urlHost")
                         .HasColumnType("longtext");

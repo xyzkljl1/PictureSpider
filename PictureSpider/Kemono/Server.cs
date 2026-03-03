@@ -79,8 +79,6 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            //await FetchUser("20393035","fanbox");
-            //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "20393035").ToList().FirstOrDefault());
             return;
 #endif
             //await FetchUser("7349257","fanbox");
@@ -551,6 +549,125 @@ namespace PictureSpider.Kemono
                 "flagged": 0,
             }
         }*/
+            // 带有视频附件的，视频附件可能会同时出现在videos和attachments里
+            /*{
+              "post": {
+                "id": "139824726",
+                "user": "18156693",
+                "service": "patreon",
+                "title": "EVE - Doggy - 4K",
+                "content": "<p>Alt version of Tifa video<br>VA: <a href=\"https://twitter.com/PleasedByViolet\" rel=\"noopener noreferrer\">twitter.com/PleasedByViolet</a><br>Sound: <a href=\"https://twitter.com/lerico213\" rel=\"noopener noreferrer\">twitter.com/lerico213</a></p>",
+                "embed": {
+                },
+                "shared_file": false,
+                "added": "2025-10-15T05:51:39.108071",
+                "published": "2025-09-26T21:47:14",
+                "edited": "2025-09-26T21:47:14",
+                "file": {
+                  "name": "previewgif.gif",
+                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                },
+                "attachments": [
+                  {
+                    "name": "EVE_Doggy_09-25_4K.mp4",
+                    "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
+                  },
+                  {
+                    "name": "previewgif.gif",
+                    "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                  }
+
+                ],
+                "poll": null,
+                "captions": null,
+                "tags": null,
+                "incomplete_rewards": null,
+                "next": "139824621",
+                "prev": "140314992"
+              },
+              "attachments": [
+                {
+                  "server": "https://n1.kemono.cr",
+                  "name": "EVE_Doggy_09-25_4K.mp4",
+                  "extension": ".mp4",
+                  "name_extension": ".mp4",
+                  "stem": "972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058",
+                  "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
+                }
+
+              ],
+              "previews": [
+                {
+                  "type": "thumbnail",
+                  "server": "https://n4.kemono.cr",
+                  "name": "previewgif.gif",
+                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                },
+                {
+                  "type": "thumbnail",
+                  "server": "https://n4.kemono.cr",
+                  "name": "previewgif.gif",
+                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                }
+
+              ],
+              "videos": [
+                {
+                  "index": 0,
+                  "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4",
+                  "name": "EVE_Doggy_09-25_4K.mp4",
+                  "extension": ".mp4",
+                  "name_extension": ".mp4",
+                  "server": "https://n1.kemono.cr"
+                }
+
+              ],
+              "props": {
+                "flagged": null,
+                "revisions": [
+                  [
+                    0,
+                    {
+                      "id": "139824726",
+                      "user": "18156693",
+                      "service": "patreon",
+                      "title": "EVE - Doggy - 4K",
+                      "content": "<p>Alt version of Tifa video<br>VA: <a href=\"https://twitter.com/PleasedByViolet\" rel=\"noopener noreferrer\">twitter.com/PleasedByViolet</a><br>Sound: <a href=\"https://twitter.com/lerico213\" rel=\"noopener noreferrer\">twitter.com/lerico213</a></p>",
+                      "embed": {
+                      },
+                      "shared_file": false,
+                      "added": "2025-10-15T05:51:39.108071",
+                      "published": "2025-09-26T21:47:14",
+                      "edited": "2025-09-26T21:47:14",
+                      "file": {
+                        "name": "previewgif.gif",
+                        "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                      },
+                      "attachments": [
+                        {
+                          "name": "EVE_Doggy_09-25_4K.mp4",
+                          "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
+                        },
+                        {
+                          "name": "previewgif.gif",
+                          "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
+                        }
+
+                      ],
+                      "poll": null,
+                      "captions": null,
+                      "tags": null,
+                      "incomplete_rewards": null,
+                      "next": "139824621",
+                      "prev": "140314992"
+                    }
+
+                  ]
+                ]
+              }
+            }
+
+             */
             var doc = await HttpGetJson($"{baseAPIUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}");
             if (doc is null || !doc.ContainsKey("post"))
             {
@@ -601,7 +718,11 @@ namespace PictureSpider.Kemono
                 {
                     var works = new List<BaseWork>();
                     if (workGroup.user.dowloadWorks)
-                        works.AddRange(workGroup.works);
+                    {
+                        if (workGroup.user.dowloadVideoWorks)
+                            works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
+                        works.AddRange(workGroup.works.Where(work => !work.Ext.IsVideo()));
+                    }
                     if (workGroup.user.dowloadExternalWorks)
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
@@ -857,18 +978,19 @@ namespace PictureSpider.Kemono
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
                     var ext = work.Ext;
-                    if(ext.IsImage()&&work is Work)
+                    if(ext.IsImage() && work is Work)
                     {
                         if(!await ElectWorkURLHost(work as Work))
                             LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
                         await downloader.Add(work, download_dir_tmp);
                     }
-                    /*
                     else if (ext.IsVideo() && work is Work)
                     {
-                        //?
-                    }*/
-                    else if (ext.IsVideo()&&work is ExternalWork)
+                        if (!await ElectWorkURLHost(work as Work))
+                            LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
+                        await downloader.Add(work, download_dir_tmp);
+                    }
+                    else if (ext.IsVideo() && work is ExternalWork)
                         await downloader.Add(work, download_dir_tmp);
                     else if (ext.IsZip())
                     {

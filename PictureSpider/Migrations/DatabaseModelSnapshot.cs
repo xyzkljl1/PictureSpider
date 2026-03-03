@@ -3,31 +3,31 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.Kemono;
 
 #nullable disable
 
-namespace PictureSpider.Migrations.DatabaseMigrations
+namespace PictureSpider.Migrations
 {
     [DbContext(typeof(Database))]
-    [Migration("20250104163330_kemono4")]
-    partial class kemono4
+    partial class DatabaseModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.5")
+                .HasAnnotation("Proxies:ChangeTracking", false)
+                .HasAnnotation("Proxies:CheckEquality", false)
+                .HasAnnotation("Proxies:LazyLoading", true)
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("PictureSpider.Kemono.ExternalWork", b =>
                 {
-                    b.Property<string>("url")
+                    b.Property<string>("id")
                         .HasColumnType("varchar(95)");
 
                     b.Property<int>("type")
@@ -36,10 +36,19 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("excluded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("fav")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("index")
                         .HasColumnType("int");
 
                     b.Property<string>("name")
+                        .HasColumnType("longtext");
+
+                    b.Property<bool>("readed")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("url")
                         .HasColumnType("longtext");
 
                     b.Property<string>("workGroupid")
@@ -48,7 +57,7 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<string>("workGroupuserservice")
                         .HasColumnType("varchar(95)");
 
-                    b.HasKey("url", "type");
+                    b.HasKey("id", "type");
 
                     b.HasIndex("workGroupid", "workGroupuserservice");
 
@@ -77,6 +86,9 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                         .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("dowloadExternalWorks")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("dowloadVideoWorks")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("dowloadWorks")
@@ -113,11 +125,17 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("excluded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("fav")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("index")
                         .HasColumnType("int");
 
                     b.Property<string>("name")
                         .HasColumnType("longtext");
+
+                    b.Property<bool>("readed")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("urlHost")
                         .HasColumnType("longtext");

@@ -40,8 +40,9 @@ namespace PictureSpider.Kemono
         {
             get
             {
+                // 视频类不通过此程序预览，需要用用户名作目录
                 if(Ext.IsVideo())
-                    return $"{GetGroup.user.id}/{service}_{GetGroup.id}_{index}_{Path.GetFileName(name)}";
+                    return $"{GetGroup.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(GetGroup.user.displayText)}/{service}_{GetGroup.id}_{index}_{Path.GetFileName(name)}";
                 return $"{service}/{GetGroup.user.id}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
             }
         }
@@ -163,6 +164,7 @@ namespace PictureSpider.Kemono
         public bool dowloadExternalWorks { get; set; } = false;//未实现
         //public bool dowloadCover { get; set; } = false;
         public bool dowloadWorks { get; set; } = true;
+        public bool dowloadVideoWorks { get; set; } = false;
         public bool dowloadEmbed { get; set; } = true;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 

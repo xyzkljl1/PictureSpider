@@ -56,7 +56,7 @@ namespace PictureSpider
         public async Task<bool> Add(BaseWork work,string root_dir)
         {
             var path = Path.GetFullPath(Path.Combine(root_dir, work.TmpSubPath));
-            return await Add(work.GetDownloader, work.DownloadURL,Path.GetDirectoryName(path) ,Path.GetFileName(path));
+            return await Add(work.GetDownloader, work.DownloadURL, Path.GetDirectoryName(path) ,Path.GetFileName(path));
         }
 
         public BaseDownloadQueue GetDownloader(DownloaderType downloaderType)
