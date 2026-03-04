@@ -109,7 +109,7 @@ namespace PictureSpider.Kemono
             get
             {
                 if(Ext.IsVideo())//目前客户端不能浏览视频，所以尽量放在同一级目录以便使用外部目录浏览
-                    return $"{workGroup.user.id}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
+                    return $"{workGroup.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(workGroup.user.displayText)}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
                 return $"{service}/{workGroup.user.id}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
             }
         }

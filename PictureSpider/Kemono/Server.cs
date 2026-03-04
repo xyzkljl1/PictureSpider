@@ -79,6 +79,7 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
+            // TODO: Sorato asou zip
             return;
 #endif
             //await FetchUser("7349257","fanbox");
@@ -364,8 +365,10 @@ namespace PictureSpider.Kemono
             }
             do
             {
-                var posts = await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}");
-                if(posts is null || posts.Count < 1)
+                // o=0在某些作者上会得到403，如https://kemono.cr/patreon/user/120210020/posts
+                var posts = offset > 0?await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}"):
+                                    await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts");
+                if (posts is null || posts.Count < 1)
                 {
                     LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
                     break;
@@ -982,13 +985,13 @@ namespace PictureSpider.Kemono
                     if(ext.IsImage() && work is Work)
                     {
                         if(!await ElectWorkURLHost(work as Work))
-                            LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
+                            LogError($"Fail to find valid host1 from n1~n4:work {(work as Work).urlPath}");
                         await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsVideo() && work is Work)
                     {
                         if (!await ElectWorkURLHost(work as Work))
-                            LogError($"Fail to find valid host from n1~n4:work {(work as Work).urlPath}");
+                            LogError($"Fail to find valid host2 from n1~n4:work {(work as Work).urlPath}");
                         await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsVideo() && work is ExternalWork)
