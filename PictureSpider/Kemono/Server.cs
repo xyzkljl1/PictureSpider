@@ -38,7 +38,7 @@ namespace PictureSpider.Kemono
         Downloader downloader;
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
-        private List<BaseWork> downloadQueue = new List<BaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
+        private List<KemonoBaseWork> downloadQueue = new List<KemonoBaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.KemonoConnectStr)
         {
             logPrefix = "K";
@@ -708,10 +708,11 @@ namespace PictureSpider.Kemono
                 throw new Exception("HTTP Not Success");
         }
 
-        //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
+        // 下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
+        // 只管理图片，对dettach类型(视频等)只负责加到下载队列
         private void SyncLocalFile()
         {
-            //查找tmp目录，将所有应下载的文件加入队列
+            // 查找tmp目录，将所有应下载的文件加入队列
             {
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fetched == true
@@ -721,7 +722,15 @@ namespace PictureSpider.Kemono
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
-                    var works = new List<BaseWork>();
+                    var works = new List<KemonoBaseWork>();
+                    // 仅含Dettach类型的workGroup不会进入浏览队列，如果检测到所有work都是Dettach类型且已下载过，就标记为readed以避免重复扫描
+                    // 无视user.dowloadWorks/dowloadExternalWorks, 以防之后要变更下载的类型。
+                    if (workGroup.works.All(work => work.Dettached && work.DettachDownloaded)
+                        && workGroup.externalWorks.All(work => work.Dettached && work.DettachDownloaded))                                
+                    {
+                        workGroup.DettachDownloaded = true;
+                        continue;
+                    }
                     if (workGroup.user.dowloadWorks)
                     {
                         if (workGroup.user.dowloadVideoWorks)
@@ -735,13 +744,15 @@ namespace PictureSpider.Kemono
                     {
                         if (workGroup.fav == false || work.excluded == false)//没有排除
                             if (!downloadQueue.Contains(work)) //不在下载队列
-                                if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}")) //不在本地
-                                    downloadQueue.Add(work);
+                                if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}"))  // 不在本地
+                                    if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
+                                        downloadQueue.Add(work);
                     } 
                 }
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
             }
+            database.SaveChanges();
             //整理Fav文件夹
             {
                 //.ToList()以释放数据库连接
@@ -751,20 +762,19 @@ namespace PictureSpider.Kemono
                                     where illustGroup.fav
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
-                {
                     foreach (var illust in illustGroup.works)
-                    {
-                        var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
-                        var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
-                        if (!illust.excluded)
+                        if (!illust.Dettached) // 一个group中可能同时存在图片和dettach类型
                         {
-                            if (existedFiles.Contains(fav_path))
-                                existedFiles.Remove(fav_path);
-                            else
-                                CopyFile(tmp_path, fav_path);
+                            var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
+                            var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
+                            if (!illust.excluded)
+                            {
+                                if (existedFiles.Contains(fav_path))
+                                    existedFiles.Remove(fav_path);
+                                else
+                                    CopyFile(tmp_path, fav_path);
+                            }
                         }
-                    }
-                }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
                     DeleteFile(file);
                 Util.ClearEmptyFolders(download_dir_fav);
@@ -772,13 +782,14 @@ namespace PictureSpider.Kemono
             //清理tmp文件夹
             {
                 int ct = 0;
-                var illustGroups = (from illustGroup in database.WorkGroups
+                var workGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.readed && illustGroup.fetched && !illustGroup.fav
                                     select illustGroup).ToList();
-                foreach (var illustGroup in illustGroups)
+                foreach (var workGroup in workGroups)
                 {
-                    foreach (var illust in illustGroup.works)
-                        ct += DeleteFile($"{download_dir_tmp}/{illust.TmpSubPath}");
+                    foreach (var work in workGroup.works)
+                        if (!work.Dettached)
+                            ct += DeleteFile($"{download_dir_tmp}/{work.TmpSubPath}");
                 }
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
@@ -968,15 +979,15 @@ namespace PictureSpider.Kemono
             return false;
         }
 
-        private async Task ProcessIllustDownloadQueue(List<BaseWork> workList, int limit = -1)
+        private async Task ProcessIllustDownloadQueue(List<KemonoBaseWork> workList, int limit = -1)
         {
             try
             {
                 //移除临时文件
                 foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
                     File.Delete(file);
-                var download_illusts = new List<BaseWork>();
-                var ignore_illusts = new List<BaseWork>();
+                var download_illusts = new List<KemonoBaseWork>();
+                var ignore_illusts = new List<KemonoBaseWork>();
                 int download_ct = 0;
                 foreach (var work in workList)
                 {
@@ -1038,9 +1049,12 @@ namespace PictureSpider.Kemono
                         {
                             success_ct++;
                             workList.Remove(illust);
+                            if (illust.Dettached) // dettach类型只下载一次，
+                                illust.DettachDownloaded = true;
                             //转换格式
                         }
                     }
+                    await database.SaveChangesAsync();
                     Log($"Process Download Queue: {success_ct}/{download_illusts.Count} Success, {downloadQueue.Count} Left.");
                 }
             }

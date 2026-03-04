@@ -16,10 +16,25 @@ using static TdLib.TdApi;
 
 namespace PictureSpider.Kemono
 {
+    public class KemonoBaseWork: BaseWork {
+        // 表示交由外部程序管理，本程序只负责下载，用于非图片类型文件
+        [NotMapped]
+        public bool Dettached
+        {
+            get { return !Ext.IsImage(); }
+        }
+        // 对于Detach类型，用readed表示已经下载过至少一次
+        [NotMapped]
+        public bool DettachDownloaded
+        {
+            get { return readed; }
+            set { readed = value; }
+        }
+    }
     //attachment没有id，用path+service确定
     [PrimaryKey(nameof(urlPath), nameof(service))]
     [Table("Works")]
-    public class Work:BaseWork
+    public class Work: KemonoBaseWork
     {
         public string name { get; set; }//注意name可能是个文件名也可能是个带文件名的网址
         public string service { get; set; }//不确定service来自于coverGroup还是workGroup,需要存储一份
@@ -87,7 +102,7 @@ namespace PictureSpider.Kemono
     //尚未实现
     [PrimaryKey(nameof(id), nameof(type))]
     [Table("ExternalWorks")]
-    public class ExternalWork: BaseWork
+    public class ExternalWork: KemonoBaseWork
     {
         public enum ExternalWorkType
         {
@@ -95,6 +110,13 @@ namespace PictureSpider.Kemono
         }
         public string id { get; set; }
         public string name { get; set; }
+        /*
+        // 表示交由外部程序管理，本程序只负责下载，用于非图片类型文件
+        [NotMapped]
+        public bool Dettached
+        {
+            get { return !Ext.IsImage(); }
+        }*/
         [NotMapped]
         public string service { get { return workGroup.service; } }
         public string url { get; set; }
@@ -137,6 +159,13 @@ namespace PictureSpider.Kemono
     {
         public string id { get; set; }
         public string title { get; set; }
+        // 表示该group中所有work都是dettached且detachDownloaded,用readed实现
+        [NotMapped]
+        public bool DettachDownloaded
+        {
+            get { return readed; }
+            set { readed = value; }
+        }
         [NotMapped]
         public string service { get { return user.service; }}
         public string desc { get; set; }
