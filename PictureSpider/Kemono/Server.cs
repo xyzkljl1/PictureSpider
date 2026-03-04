@@ -36,6 +36,7 @@ namespace PictureSpider.Kemono
         private string download_dir_tmp = "";
         private string download_dir_fav = "";
         Downloader downloader;
+        CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
         private List<BaseWork> downloadQueue = new List<BaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.KemonoConnectStr)
@@ -47,18 +48,20 @@ namespace PictureSpider.Kemono
             {
                 MaxConnectionsPerServer = 256,
                 UseCookies = true,
+                CookieContainer = cookies,
                 Proxy = new WebProxy(config.ProxyGo, false),
                 AutomaticDecompression = DecompressionMethods.All
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
             httpClient.Timeout = new TimeSpan(0, 0, 35);
-            // user/posts request 必须text/css在前才能正确接收到响应
-            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/css, */*");
+            // user/posts request 必须使用text/css
+            // 使用"text/css,*/*"可以获得response,但是会间歇性403
+            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/css");
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7");
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36");
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36");
             httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
-            //httpClient.DefaultRequestHeaders.Referrer=new Uri($"{baseUrl}/fanbox/user/7349257");
+            httpClient.DefaultRequestHeaders.Referrer=new Uri($"{baseUrl}/fanbox/user/7349257");
 
             download_dir_root = config.KemonoDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
@@ -80,6 +83,7 @@ namespace PictureSpider.Kemono
         {
 #if DEBUG
             // TODO: Sorato asou zip
+            // TODO video readed不重复下载
             return;
 #endif
             //await FetchUser("7349257","fanbox");
@@ -365,9 +369,7 @@ namespace PictureSpider.Kemono
             }
             do
             {
-                // o=0在某些作者上会得到403，如https://kemono.cr/patreon/user/120210020/posts
-                var posts = offset > 0?await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}"):
-                                    await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts");
+                var posts = await HttpGetJArray($"{baseAPIUrl}/{user.service}/user/{user.id}/posts?o={offset}");
                 if (posts is null || posts.Count < 1)
                 {
                     LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
