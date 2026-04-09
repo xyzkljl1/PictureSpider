@@ -70,6 +70,7 @@ namespace PictureSpider.Pixiv
          * 其它方法参考 https://github.com/SeaHOH/GotoX https://github.com/bypass-GFW-SNI/main https://github.com/bypass-GFW-SNI/proxy
          * 目前使用的是 https://github.com/URenko/Accesser 在本地的代理,端口号1200(在Accesser目录下config.toml配置)
          */
+        // SNI代理有问题，暂时换回常规代理
         public Server(Config config)
         {
             base.tripleBookmarkState = true;
@@ -86,11 +87,11 @@ namespace PictureSpider.Pixiv
                     Directory.CreateDirectory(dir);
 
             database = new Database(config.PixivConnectStr);
-            //request_proxy = config.Proxy;
-            request_proxy = config.ProxySNI;
+            request_proxy = config.Proxy;
+            //request_proxy = config.ProxySNI;
             user_id = config.PixivUserId;
             user_name = config.PixivUserName;
-            Log("Use SNI Proxy:"+request_proxy);
+            Log("Use Not-SNI Proxy:"+request_proxy);
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pixiv, request_proxy, "https://www.pixiv.net/");
         }
 #pragma warning disable CS0162 // 检测到无法访问的代码
@@ -112,9 +113,13 @@ namespace PictureSpider.Pixiv
         }
         public async Task<string> Test()
         {
+            //var queue = new TaskQueue<List<int>>(1);
+            //foreach (var user in await database.GetFollowedUser())
+            //    await queue.Add(RequestAllByUserId(user.userId));
+            //await queue.GetResultSet();
             //var x = await RequestIllustAsync(74802304);
             //await UpdateHttpClientByDatabaseCookie();
-            //var list=await RequestAllByUserId(20446187);
+            //var list=await RequestAllByUserId(15115322);
             //await AddToIllustFetchQueue(list.ToHashSet(), new Dictionary<int, int>());
             //await ProcessIllustFetchQueue(100);
             //var res = await RequestIllustAsync(125036771);
@@ -161,9 +166,9 @@ namespace PictureSpider.Pixiv
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
-                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
-                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
-                //            httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
+                httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
+                httpClient.DefaultRequestHeaders.Add("sec-fetch-site", "same-origin");
+                httpClient.DefaultRequestHeaders.Add("sec-fetch-dest", "empty");
                 httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
                 // httpClient.DefaultRequestHeaders.Add("x-csrf-token", this.cookie_server.csrf_token);
             }
@@ -179,7 +184,7 @@ namespace PictureSpider.Pixiv
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -196,7 +201,7 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.Timeout = new TimeSpan(0, 0, 35);
                 httpClientCSRF.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClientCSRF.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36");
+                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
                 httpClientCSRF.DefaultRequestHeaders.Host = "www.pixiv.net";
                 //httpClientCSRF.DefaultRequestHeaders.Add("Cookie", this.cookie);
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
@@ -794,7 +799,8 @@ namespace PictureSpider.Pixiv
         }
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
         {
-            var queue = new TaskQueue<List<int>>(10);
+            // 出于神秘原因，网站对user请求的并发容忍大幅降低了
+            var queue = new TaskQueue<List<int>>(1);
             (await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             (await database.GetQueuedUser()  ).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             return await queue.GetResultSet();
@@ -814,7 +820,7 @@ namespace PictureSpider.Pixiv
         private async Task<List<int>> RequestAllByUserId(int userId)
         {
             string url = String.Format("{0}ajax/user/{1}/profile/all", base_url, userId);
-            string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
+            string referer = String.Format("{0}users/{1}", base_url, user_id);
             //这里要登录后查询，有的用户不登陆看不到作品如25877697
             JObject ret = await RequestJsonAsync(url, referer,false);
             if (ret.Value<Boolean>("error"))
