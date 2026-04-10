@@ -994,7 +994,7 @@ namespace PictureSpider.Pixiv
         {
             //每隔70天更新全部，没有名字的立刻更新
             var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-7 * 10));
-            var queue = new TaskQueue<User>(1500);
+            var queue = new TaskQueue<User>(1);
             foreach (var user in user_list)
                 await queue.Add(RequestUserAsync(user.userId));
             await queue.Done();
