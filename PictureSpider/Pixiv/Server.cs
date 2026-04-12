@@ -501,7 +501,6 @@ namespace PictureSpider.Pixiv
         //动图在下载后转成GIF
         private async Task<List<int>> DownloadIllusts(HashSet<int> id_list, int limit=-1)
         {
-            //注意：有的图本来就是半边虚的！
             try
             {
                 //移除临时文件
@@ -992,8 +991,8 @@ namespace PictureSpider.Pixiv
         //更新所有已知的未关注作者状态
         private async Task FetchAllUnfollowedUserStatus()
         {
-            //每隔70天更新全部，没有名字的立刻更新
-            var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-7 * 10));
+            //每隔300天更新全部，没有名字的立刻更新;由于user请求的频率被限制，减少更新频率
+            var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-3 * 100));
             var queue = new TaskQueue<User>(1);
             foreach (var user in user_list)
                 await queue.Add(RequestUserAsync(user.userId));

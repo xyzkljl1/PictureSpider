@@ -179,8 +179,9 @@ namespace PictureSpider
                             //视同文件损坏，删除
                             Console.WriteLine("Can't Load Image "+path);
                             Console.WriteLine(e.Message);
-                            Console.WriteLine("Delete Image");
-                            File.Delete(path);
+                            //暂定：不要删除，观察一段时间
+                            //Console.WriteLine("Delete Image");
+                            //File.Delete(path);
                             var img = (Image)empty_image.Clone();
                             img.Tag = -1;
                             cache.data = img;
