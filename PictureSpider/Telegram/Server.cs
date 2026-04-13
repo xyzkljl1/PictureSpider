@@ -103,10 +103,15 @@ namespace PictureSpider.Telegram
 #if DEBUG
             return;
 #endif
+
             try
             {
-                var ok =await tgClient.SetTdlibParametersAsync(apiId:apiId,apiHash:apiHash, systemLanguageCode: "zh-hans", deviceModel:"Desktop",applicationVersion:"5.6.2",
-                                useChatInfoDatabase:true,useFileDatabase:true,useMessageDatabase:true,useSecretChats:true);
+                var ok = await tgClient.SetTdlibParametersAsync(apiId: apiId, apiHash: apiHash, systemLanguageCode: "zh-hans", deviceModel: "Desktop", applicationVersion: "5.6.2",
+                                useChatInfoDatabase: true, useFileDatabase: true, useMessageDatabase: true, useSecretChats: true);
+                // 似乎必须设置代理
+                // 出于某种神秘原因，release运行时，即使不AddProxyAsync也不设置系统代理，client还是会自动使用一个代理,从而正常连接
+                // 而debug时，会无视系统代理并进行直连？并使用ipv6？，必须手动设置代理才能连上。
+                var proxy = await tgClient.AddProxyAsync(new Proxy { Server = loginProxy.Split(':')[0], Port = Int32.Parse(loginProxy.Split(':')[1]), Type = new TdApi.ProxyType.ProxyTypeHttp() }, true);
                 if (!await Login())
                 {
                     LogError("Stop Init because login failed");
@@ -128,10 +133,10 @@ namespace PictureSpider.Telegram
         {
             var loginState = await tgClient.GetAuthorizationStateAsync();
             //登录过一次后会自动记住，下次启动无需登录
-            if(loginState.DataType!= "authorizationStateReady")
+            if (loginState.DataType != "authorizationStateReady")
             {
                 // 似乎只有重新登录的时候需要设置代理？其它时候不需要？
-                var proxy = await tgClient.AddProxyAsync(loginProxy.Split(':')[0], Int32.Parse(loginProxy.Split(':')[1]), true, new TdApi.ProxyType.ProxyTypeHttp());
+                // var proxy = await tgClient.AddProxyAsync(new Proxy { Server = loginProxy.Split(':')[0], Port = Int32.Parse(loginProxy.Split(':')[1]), Type = new TdApi.ProxyType.ProxyTypeHttp()}, true);
                 //login,似乎不需要密码或验证码？
                 await tgClient.SetAuthenticationPhoneNumberAsync(phone_number);
                 loginState = await tgClient.GetAuthorizationStateAsync();
@@ -155,7 +160,7 @@ namespace PictureSpider.Telegram
                 }
                 else
                     Log("Login with phone number");
-                await tgClient.RemoveProxyAsync(proxy.Id);
+                //await tgClient.RemoveProxyAsync(proxy.Id);
             }
             return true;
         }
@@ -310,23 +315,36 @@ namespace PictureSpider.Telegram
                                     Log($"Drop Message {message.id} for not found");
                                     continue;
                                 }
+                                else if (e.Error.Code == 400 && e.Error.Message == "Chat not found") // channel gone
+                                {
+                                    message.state = MessageState.NotFound;
+                                    database.SaveChanges();
+                                    Log($"Drop Message {message.id} for chat not found");
+                                    continue;
+                                }
                                 throw;
+                            }
+                            // 暂定,避免重复处理
+                            {
+                                message.state = MessageState.Ignore;
+                                // 不save, 成功处理的会变为Dup/Done并save
+                                // 走完循环且没有命中任何处理过程，说明目前无法处理，在退出循环时save
                             }
                             if (messageInfo.Content == null) continue;
                             if (channel.download_telegraph)
                             {
                                 var content=messageInfo.Content as MessageText;
-                                if (content != null&& content.WebPage!=null&&content.WebPage.Url.Contains("https://telegra.ph"))
+                                if (content != null&& content.LinkPreview!=null&&content.LinkPreview.Url.Contains("https://telegra.ph"))
                                 {
-                                    if (database.FinishedTasks.FirstOrDefault(ele=>ele.url==content.WebPage.Url) != null)//查重
+                                    if (database.FinishedTasks.FirstOrDefault(ele=>ele.url==content.LinkPreview.Url) != null)//查重
                                     {
                                         message.state = MessageState.Dup;
                                     }
-                                    else if (await RequestGetAsync($"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.WebPage.Url)}"))
+                                    else if (await RequestGetAsync($"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.LinkPreview.Url)}"))
                                     {
                                         message.state = MessageState.Done;
-                                        Log($"Send Task to MyDownload Server:{message.id} / {content.WebPage.Title} / {content.WebPage.Url}");
-                                        database.FinishedTasks.Add(new FinishedTask { url=content.WebPage.Url , title=content.WebPage.Title ,comment=$"Download telegraph from {message.id} in {channel.title} at {DateTime.Now}"});
+                                        Log($"Send Task to MyDownload Server:{message.id} / {content.LinkPreview.Title} / {content.LinkPreview.Url}");
+                                        database.FinishedTasks.Add(new FinishedTask { url=content.LinkPreview.Url , title=content.LinkPreview.Title ,comment=$"Download telegraph from {message.id} in {channel.title} at {DateTime.Now}"});
                                         ct++;
                                     }
                                     database.SaveChanges();

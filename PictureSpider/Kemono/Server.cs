@@ -82,8 +82,7 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            // TODO: Sorato asou zip
-            // TODO video readed不重复下载
+            // TODO: Sorato asou zip          
             return;
 #endif
             //await FetchUser("7349257","fanbox");

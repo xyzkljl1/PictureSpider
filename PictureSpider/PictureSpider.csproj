@@ -80,6 +80,8 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.26.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.26.0" />
     <PackageReference Include="MegaApiClient" Version="1.10.4" />
     <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.5" />
     <PackageReference Include="Microsoft.ClearScript" Version="7.4.5" />
@@ -101,7 +103,7 @@
     <PackageReference Include="Microsoft.Extensions.Primitives" Version="8.0.0" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
     <PackageReference Include="System.Text.Encodings.Web" Version="8.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
@@ -115,8 +117,8 @@
     <PackageReference Include="morelinq" Version="4.2.0" />
     <PackageReference Include="MySql.Data" Version="8.4.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
-    <PackageReference Include="TDLib" Version="1.8.29" />
-    <PackageReference Include="tdlib.native" Version="1.8.29" />
+    <PackageReference Include="TDLib" Version="1.8.63" />
+    <PackageReference Include="tdlib.native" Version="1.8.63" />
     <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup>
