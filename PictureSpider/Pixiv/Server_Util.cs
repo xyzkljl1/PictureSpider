@@ -105,7 +105,8 @@ namespace PictureSpider.Pixiv
             doc.LoadHtml(result);
             return doc;
         }
-        public async Task<string> RequestUserName(int userId)
+        // 从另一个api获取用户名，仅用于被RequestUserNameAsync调用
+        private async Task<string> RequestUserNameAsyncAlter(int userId)
         {
             string url = String.Format("{0}ajax/user/{1}?full=0", base_url, userId);//即使full=1也不包含illusts
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
@@ -119,6 +120,8 @@ namespace PictureSpider.Pixiv
             }
             if (ret.Value<Boolean>("error"))
             {
+                if (ret.Value<string>("message") == "抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。") //作者跑路了,正常情况
+                    return null;
                 Console.Error.WriteLine("Get UserName {0} Fail:{1}", userId, ret.Value<string>("message"));
                 throw new TopLevelException(ret.Value<string>("message"));
             }
@@ -127,33 +130,35 @@ namespace PictureSpider.Pixiv
                 return body.Value<string>("name");
             return null;
         }
-        public async Task<User> RequestUserAsync(int userId)
+        // 获取user的name, 返回null表示因网络等原因无法获取
+        // 返回非空User表示已成功获取，对已销号用户直接返回原User，以避免重复更新用户状态
+        public async Task<User> RequestUserNameAsync(User user)
         {
-            if (userId == 0)
-                return null;
-            string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, userId);
+            if (user.userId == 0)
+                return user;
+            string url = String.Format("{0}ajax/user/{1}/profile/top", base_url, user.userId);
             string referer = String.Format("{0}member_illust.php?id={1}", base_url, user_id);
             JObject ret = await RequestJsonAsync(url, referer,true);
             if (ret.Value<Boolean>("NetError"))
             {
-                Console.Error.WriteLine(String.Format("Get User {0} Net Error",userId));
+                Console.Error.WriteLine(String.Format("Get User {0} Net Error",user.userId));
                 return null;
             }
             if (ret.Value<Boolean>("error"))
             {
                 if(ret.Value<string>("message")=="抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。")//作者跑路了,正常情况
-                    return null;
-                Console.Error.WriteLine("Get User {0} Fail:{1}",userId,ret.Value<string>("message"));
+                    return user;
+                Console.Error.WriteLine("Get User {0} Fail:{1}", user.userId, ret.Value<string>("message"));
                 throw new TopLevelException(ret.Value<string>("message"));
             }
             var body = ret.Value<JObject>("body");
             var userName = body.Value<JObject>("extraData").Value<JObject>("meta").Value<string>("title");//这个是带-pixiv的，不是真实用户名
             //尝试通过另一个api获得用户名，获取不到就拿上一个将就一下
             //不能通过获取任意illust的方式获取用户名，因为调用频率限制很严格
-            var tmp=await RequestUserName(userId);
+            var tmp=await RequestUserNameAsyncAlter(user.userId);
             if (tmp != null)
                 userName = tmp;
-            return new User(userId, userName, false,false);
+            return new User(user.userId, userName, false,false);
         }
         public async Task<int> RequestFollowedUserCount()
         {

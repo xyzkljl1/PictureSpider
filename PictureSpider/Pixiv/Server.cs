@@ -995,14 +995,15 @@ namespace PictureSpider.Pixiv
             var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-3 * 100));
             var queue = new TaskQueue<User>(1);
             foreach (var user in user_list)
-                await queue.Add(RequestUserAsync(user.userId));
+                await queue.Add(RequestUserNameAsync(user));
             await queue.Done();
+            var ct = user_list.Count;
             user_list.Clear();
             foreach (var task in queue.done_task_list)
                 if(task.Result!=null)
                     user_list.Add(task.Result);
             database.UpdateUserName(user_list);
-            Log("Done");
+            Log($"Done {user_list.Count}/{ct}");
         }
 
         //确认是否成功登录
