@@ -107,7 +107,8 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
                 await ProcessIllustDownloadQueue(downloadQueue, 40);
-                await Task.Delay(new TimeSpan(0, 15, 0));
+                //有时会整批失败，过段时间就好了，略微增加间隔
+                await Task.Delay(new TimeSpan(0, 22, 0));
             }
             while (true);
         }
@@ -266,7 +267,7 @@ namespace PictureSpider.Hitomi
                         var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
-                            Log($"Download Fail: {illust.url}");
+                            Log($"Download Fail: {path} {illust.url}");
                             illustList.Remove(illust);//移到队末并重置url
                             illustList.Add(illust);                            
                             fail_illustGroup.Add(illust.illustGroup);
