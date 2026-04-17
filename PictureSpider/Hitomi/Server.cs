@@ -106,9 +106,9 @@ namespace PictureSpider.Hitomi
                     await SyncLocalFile();
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
-                await ProcessIllustDownloadQueue(downloadQueue, 40);
+                await ProcessIllustDownloadQueue(downloadQueue, 35);
                 //有时会整批失败，过段时间就好了，略微增加间隔
-                await Task.Delay(new TimeSpan(0, 22, 0));
+                await Task.Delay(new TimeSpan(0, 25, 0));
             }
             while (true);
         }

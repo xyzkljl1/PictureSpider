@@ -1,4 +1,3 @@
-/config.json
 .vs
 /json4.json
 /json3.json
@@ -8,8 +7,9 @@
 *.csproj.user
 /*/obj
 /packages
-/aria2/aria2.log
+/*/aria2.log
 /telegramApp.txt
 /.idea/.idea.PictureSpider/.idea
 /PictureSpider/Migrations/DatabaseMigrations/DatabaseModelSnapshot.cs
 /PictureSpider/AI/models
+/*/config.json
