@@ -19,6 +19,7 @@ using Windows.Web.Http;
 using HttpClient = System.Net.Http.HttpClient;
 using HttpResponseMessage = System.Net.Http.HttpResponseMessage;
 using System.Text.RegularExpressions;
+using System.Data.Common;
 namespace PictureSpider.Pixiv
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -113,8 +114,33 @@ namespace PictureSpider.Pixiv
         }
         public async Task<string> Test()
         {
+            //await ResetHttpClient();
+            //await RequestAllKeywordSearchIllustBlock((DateTime.Now - new DateTime(2000, 1, 1)).Days);
+            /*
+            var private_files = new HashSet<string>();
+            var pub_files = new HashSet<string>();
+            var illust_ids = await database.StandardQuery(String.Format("select id from illust where bookmarked=0 and bookmarkPrivate=0 and readed=1 and valid=1"),
+                        (DbDataReader reader) => { return reader.GetInt32(0); });
+            var text = new List<String>();
+            for (int i = 0; i < 10; ++i)
+                text.Add ("");
+            var rnd = new Random();
+            foreach (var illust in await database.GetIllustFull(illust_ids))
+            {
+                int id = rnd.Next() % 10;
+                for (int i = 0; i < illust.pageCount; ++i)
+                {
+                    string file_name = illust.storeFileName(i);
+                    string src = Path.Combine(download_dir_main, file_name);
+                    if (File.Exists(src))
+                        text[id] += src + "\n";
+                }
+            }
+            for(int i =0;i< text.Count; ++i)
+                File.WriteAllText($"G:\\pixiv\\readed_{i}.txt", text[i]);
+            */
             //var queue = new TaskQueue<List<int>>(1);
-            //foreach (var user in await database.GetFollowedUser())
+            //foreach (var user in await database.GetFollowedUser()) 
             //    await queue.Add(RequestAllByUserId(user.userId));
             //await queue.GetResultSet();
             //var x = await RequestIllustAsync(74802304);
@@ -775,6 +801,8 @@ namespace PictureSpider.Pixiv
                     var task= RequestSearchResult(key, false, start_page, start_page + step, like_count_min, like_count_max);
                     task_list[key] = task;
                     page_count += step;
+                    if (task_list.Count >= 3) // 限制并发
+                        break;
                 }
                 await Task.WhenAll(task_list.Values);
                 //丢掉已经搜索完的
@@ -790,6 +818,7 @@ namespace PictureSpider.Pixiv
                         if(!ret.Contains(id))
                             ret.Add(id);
                 task_list.Clear();
+                await Task.Delay(new TimeSpan(0, 0, 5)); // 降低速率
                 Log(String.Format("Search Res {0}p: {1}",start_page,ret.Count));
                 start_page += step;
             }
@@ -799,9 +828,13 @@ namespace PictureSpider.Pixiv
         private async Task<HashSet<int>> RequestAllQueuedAndFollowedUserIllust()
         {
             // 出于神秘原因，网站对user请求的并发容忍大幅降低了
-            var queue = new TaskQueue<List<int>>(1);
-            (await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
-            (await database.GetQueuedUser()  ).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
+            var queue = new TaskQueue<List<int>>(5);
+            //.ForEach不会await到async函数执行完成再执行下一次！！！会导致队列限速失效
+            //(await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
+            foreach (var user in await database.GetFollowedUser())
+                await queue.Add(RequestAllByUserId(user.userId));
+            foreach (var user in await database.GetQueuedUser())
+                await queue.Add(RequestAllByUserId(user.userId));
             return await queue.GetResultSet();
         }
         private async Task<HashSet<int>> RequestAllCurrentRankIllust()

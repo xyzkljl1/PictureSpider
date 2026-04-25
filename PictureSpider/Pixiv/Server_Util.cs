@@ -23,7 +23,7 @@ namespace PictureSpider.Pixiv
         static public void CheckStatusCode(HttpResponseMessage response)
         {
             if (!response.IsSuccessStatusCode)
-                throw new Exception("HTTP Not Success");
+                throw new Exception($"HTTP Not Success {response.StatusCode}");
         }
         public async Task<string> RequestPixivAsyncGet(string url, Uri referer, bool anonymous = false)
         {
@@ -201,7 +201,7 @@ namespace PictureSpider.Pixiv
             var ret = new List<int>();
             try
             {
-                var queue = new TaskQueue<List<int>>(25);
+                var queue = new TaskQueue<List<int>>(5);
                 for (int i = start_page; i < end_page; ++i)//页数从1开始，在RequestSearchPage里面加1了
                     await queue.Add(RequestSearchPage(key_word, i, text_mode, start_like_count,end_like_count));
                 await queue.Done();
