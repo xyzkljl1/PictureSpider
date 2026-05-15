@@ -77,7 +77,8 @@ namespace PictureSpider
         private readonly LLamaWeights model;
         private readonly LLamaContext context;
         private readonly ModelParams param;
-        private string modelPath = "E:\\MyWebsiteHelper\\PictureSpider\\PictureSpider\\AI\\models\\qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf";
+        //private string modelPath = "E:\\MyWebsiteHelper\\PictureSpider\\PictureSpider\\AI\\models\\qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf";
+        private string modelPath = "E:\\MyWebsiteHelper\\PictureSpider\\PictureSpider\\AI\\models\\Qwen3-14B-Q8_0.gguf";
         public LLMChatService()
         {
             /*
