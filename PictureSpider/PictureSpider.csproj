@@ -148,7 +148,7 @@
     <None Update="aria2\aria2.conf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="aria2\aria2c_Hentaivox.exe">
+    <None Update="aria2\aria2c_Hentaiera.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="aria2\aria2c_Hitomi.exe">

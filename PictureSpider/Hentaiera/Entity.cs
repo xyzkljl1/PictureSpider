@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PictureSpider.Hentaivox
+namespace PictureSpider.Hentaiera
 {
     [Table("Works")]
     public class Work : TypicalWork<WorkGroup> {}
