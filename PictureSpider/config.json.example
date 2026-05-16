@@ -1,23 +1,33 @@
-﻿{
+{
   "Proxy": "127.0.0.1:1196",
-  "ProxySNI": "127.0.0.1:7654",
+  "ProxySNI": "127.0.0.1:1200",
   "ProxyGo": "127.0.0.1:8000",
-  "PixivDownloadDir": "D:/Pixiv/",
-  "PixivUserName": "123",
-  "PixivUserId": "123",
-  "PixivConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=pass;",
-  "HitomiConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=hitomi;",
-  "HitomiDownloadDir": "C:/Hitomi/",
+  "PixivDownloadDir": "D:/PictureSpider/Pixiv/",
+  "PixivUserName": "",
+  "PixivUserId": "0",
+  "PixivConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=pass;",
+  "HitomiConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=hitomi;",
+  "HitomiDownloadDir": "D:/PictureSpider/Hitomi/",
   "ShowInitButton": false,
-  "LSFConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=localsinglefile;",
-  "LSFFavDir": "C:\\telegra",
+  "LSFConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=localsinglefile;",
+  "LSFFavDir": "D:\\PictureSpider\\LocalSingleFile\\fav",
   "LSFTmpDirs": [
-    "D:\\telegra_tmp"
+    "D:\\PictureSpider\\LocalSingleFile\\tmp",
+    "D:\\PictureSpider\\Hentaiera\\tmp"
   ],
   "TelegramPhoneNumber": "",
-  "TelegramDownloadDir": "C:\\123",
-  "TelegramConnectStr": "",
+  "TelegramApiID": 0,
+  "TelegramApiHash": "",
+  "TelegramDownloadDir": "D:\\PictureSpider\\Telegram",
+  "TwitterConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=twitter;",
+  "TwitterBearerToken": "",
+  "TwitterDownloadDir": "D:/PictureSpider/Twitter/",
+  "TwitterUserName": "",
+  "TwitterPassword": "",
+  "TelegramConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=telegram;",
+  "KemonoDownloadDir": "D:/PictureSpider/Kemono/",
+  "KemonoConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=kemono;",
   "MyDownloadServerAddress": "http://127.0.0.1:4000",
-  "KemonoDownloadDir": "C:/Kemono/",
-  "KemonoConnectStr": "server=127.0.0.1;port=3306;UID=root;pwd=123;database=kemono;"
+  "TypicalConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=",
+  "TypicalDownloadDir": "D:\\PictureSpider"
 }
