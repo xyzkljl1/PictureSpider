@@ -82,9 +82,11 @@ namespace PictureSpider.Kemono
         public override async Task Init()
         {
 #if DEBUG
-            // TODO: Sorato asou zip          
+            // TODO: Sorato asou zip
             return;
 #endif
+            LogError("Kemono原图服务器似乎有问题，暂停Fetch，可能是周期性的，过两个月再看");
+            return;
             //await FetchUser("7349257","fanbox");
             //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
             //await FetchUser("3659577", "patreon");
