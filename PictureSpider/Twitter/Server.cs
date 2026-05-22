@@ -72,8 +72,7 @@ namespace PictureSpider.Twitter
 
         public override async Task Init()
         {
-            await database.Database.EnsureCreatedAsync();
-            await database.EnsureTwitterSchemaAsync();
+            await database.Database.MigrateAsync();
 #if !DEBUG
             await LoadAuthAsync();
             if (string.IsNullOrWhiteSpace(authCookie))
