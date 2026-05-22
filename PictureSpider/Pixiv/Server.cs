@@ -397,7 +397,7 @@ namespace PictureSpider.Pixiv
             if (do_week_task)//需要在FetchIllust之后
             {
                 await GenerateExplorerQueue();
-                await FetchAllUnfollowedUserStatus();
+                await FetchUserStatus();
                 await SyncBookmarkDirectory();
             }
 
@@ -414,7 +414,7 @@ namespace PictureSpider.Pixiv
             await FetchAllBookMarkIllust(false);
             illust_list.UnionWith(await RequestAllQueuedAndFollowedUserIllust());
             await AddToIllustFetchQueue(illust_list,new Dictionary<int, int>());
-            await FetchAllUnfollowedUserStatus();
+            await FetchUserStatus();
             await DownloadIllustsInExplorerQueue();
             Log("Fetch Task Done");
         }
@@ -1037,11 +1037,12 @@ namespace PictureSpider.Pixiv
             database.UpdateFollowedUser(userList);
             Log("Fetch " + userList.Count.ToString() + " followings");
         }
-        //更新所有已知的未关注作者状态
-        private async Task FetchAllUnfollowedUserStatus()
+        //更新所有已知作者状态
+        private async Task FetchUserStatus()
         {
             //每隔300天更新全部，没有名字的立刻更新;由于user请求的频率被限制，减少更新频率
             var user_list = await database.GetUnFollowedUserNeedUpdate(DateTime.Now.AddDays(-3 * 100));
+            user_list.AddRange(await database.GetQueuedOrFollowedUserStatusUpdateBatch(100));
             var queue = new TaskQueue<User>(1);
             foreach (var user in user_list)
                 await queue.Add(RequestUserNameAsync(user));
@@ -1051,7 +1052,7 @@ namespace PictureSpider.Pixiv
             foreach (var task in queue.done_task_list)
                 if(task.Result!=null)
                     user_list.Add(task.Result);
-            database.UpdateUserName(user_list);
+            database.UpdateUserNameAndValid(user_list);
             Log($"Done {user_list.Count}/{ct}");
         }
 

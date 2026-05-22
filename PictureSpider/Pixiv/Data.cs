@@ -13,10 +13,12 @@ namespace PictureSpider.Pixiv
         //Original Data
         public int userId;
         public string userName;
-        public User(int _id,string _name,Boolean _f, Boolean _q)
+        public bool invalid;
+        public User(int _id,string _name,Boolean _f, Boolean _q, Boolean _invalid = false)
         {
             userId = _id;
             userName = _name;
+            invalid = _invalid;
             base.displayId = userId.ToString();
             base.displayText=userName;
             base.followed = _f;

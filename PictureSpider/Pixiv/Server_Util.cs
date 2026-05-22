@@ -105,6 +105,12 @@ namespace PictureSpider.Pixiv
             doc.LoadHtml(result);
             return doc;
         }
+        private bool IsPixivUserGone(JObject ret)
+        {
+            return !ret.Value<Boolean>("NetError")
+                   && ret.Value<Boolean>("error")
+                   && ret.Value<string>("message") == "抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。";
+        }
         // 从另一个api获取用户名，仅用于被RequestUserNameAsync调用
         private async Task<string> RequestUserNameAsyncAlter(int userId)
         {
@@ -120,7 +126,7 @@ namespace PictureSpider.Pixiv
             }
             if (ret.Value<Boolean>("error"))
             {
-                if (ret.Value<string>("message") == "抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。") //作者跑路了,正常情况
+                if (IsPixivUserGone(ret)) //作者跑路了,正常情况
                     return null;
                 Console.Error.WriteLine("Get UserName {0} Fail:{1}", userId, ret.Value<string>("message"));
                 throw new TopLevelException(ret.Value<string>("message"));
@@ -131,7 +137,6 @@ namespace PictureSpider.Pixiv
             return null;
         }
         // 获取user的name, 返回null表示因网络等原因无法获取
-        // 返回非空User表示已成功获取，对已销号用户直接返回原User，以避免重复更新用户状态
         public async Task<User> RequestUserNameAsync(User user)
         {
             if (user.userId == 0)
@@ -146,8 +151,11 @@ namespace PictureSpider.Pixiv
             }
             if (ret.Value<Boolean>("error"))
             {
-                if(ret.Value<string>("message")=="抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。")//作者跑路了,正常情况
+                if(IsPixivUserGone(ret))//作者跑路了,正常情况
+                {
+                    user.invalid = true;
                     return user;
+                }
                 Console.Error.WriteLine("Get User {0} Fail:{1}", user.userId, ret.Value<string>("message"));
                 throw new TopLevelException(ret.Value<string>("message"));
             }

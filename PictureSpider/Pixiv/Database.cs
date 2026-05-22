@@ -195,8 +195,8 @@ namespace PictureSpider.Pixiv
         }
         public async Task<User> GetUserByIllustId(int illustId)
         {   //这里一定能找到user
-            return (await StandardQuery(String.Format("select userId,userName,followed,queued from user where userId in (select userId from illust where id={0})", illustId),
-                        (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); }))[0];
+            return (await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where userId in (select userId from illust where id={0})", illustId),
+                        ReadUser))[0];
         }
         public async Task<int> GetQueueUpdateInterval()
         {   
@@ -210,26 +210,40 @@ namespace PictureSpider.Pixiv
         }
         public User GetUserByIdSync(int userId)
         {
-            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued from user where userId ={0}", userId),
-                    (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
+            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued,`invalid` from user where userId ={0}", userId),
+                    ReadUser);
             if (ret != null && ret.Count > 0)
                 return ret.First();
             return null;
         }
-        public async Task<List<User>> GetFollowedUser(bool followed=true)
+        public async Task<List<User>> GetFollowedUser(bool followed=true, bool validOnly=false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where followed={0};",followed),
-                       (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where followed={0}{1};",followed,validOnly? " and `invalid`=false" : ""),
+                       ReadUser);
         }
-        public async Task<List<User>> GetQueuedUser()
+        public async Task<List<User>> GetQueuedUser(bool validOnly=false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where queued=true;"),
-                       (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where queued=true{0};", validOnly ? " and `invalid`=false" : ""),
+                       ReadUser);
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued from user where followed=0 and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
-                       (DbDataReader reader) => { return new User(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)); });
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
+                       ReadUser);
+        }
+        public async Task<List<User>> GetQueuedOrFollowedUserStatusUpdateBatch(int count)
+        {
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0};", count),
+                       ReadUser);
+        }
+
+        private User ReadUser(DbDataReader reader)
+        {
+            return new User(reader.GetInt32(0),
+                            reader.GetString(1),
+                            reader.GetBoolean(2),
+                            reader.GetBoolean(3),
+                            reader.GetBoolean(4));
         }
 
         public void UpdateTagStatusSync(string tag, TagStatus followed)
@@ -286,7 +300,7 @@ namespace PictureSpider.Pixiv
                         cmd.ExecuteNonQuery();
                     foreach (var user in data)
                     {
-                        string cmdText = "insert into user values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n";
+                        string cmdText = "insert into user(userId,userName,followed,queued,updateTime) values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW(),`invalid`=false;\n";
                         var cmd = new MySqlCommand(cmdText, connection, ts);
                         cmd.Parameters.AddWithValue("@0", user.userId);
                         cmd.Parameters.AddWithValue("@1", user.userName);
@@ -306,7 +320,7 @@ namespace PictureSpider.Pixiv
                 }
             }
         }
-        public void UpdateUserName(List<User> data)
+        public void UpdateUserNameAndValid(List<User> data)
         {
             using (MySqlConnection connection = new MySqlConnection(this.connect_str))
             {
@@ -318,10 +332,11 @@ namespace PictureSpider.Pixiv
                     int affected = 0;
                     foreach (var user in data)
                     {
-                        string cmdText = "insert user values(@0,@1,false,false,NOW()) on duplicate key update userId=@0,userName=@1,updateTime=NOW();\n";
+                        string cmdText = "insert into user(userId,userName,followed,queued,updateTime,`invalid`) values(@0,@1,false,false,NOW(),@2) on duplicate key update userId=@0,userName=@1,updateTime=NOW(),`invalid`=@2;\n";
                         var cmd = new MySqlCommand(cmdText, connection, ts);
                         cmd.Parameters.AddWithValue("@0", user.userId);
                         cmd.Parameters.AddWithValue("@1", user.userName);
+                        cmd.Parameters.AddWithValue("@2", user.invalid);
                         affected += cmd.ExecuteNonQuery();
                     }
                     ts.Commit();
@@ -337,7 +352,7 @@ namespace PictureSpider.Pixiv
         }
         public void UpdateUserSync(User user)
         {
-            StandardNoneQuerySync("insert into user values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n"
+            StandardNoneQuerySync("insert into user(userId,userName,followed,queued,updateTime) values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n"
                 , (cmd) => {
                     cmd.Parameters.AddWithValue("@0", user.userId);
                     cmd.Parameters.AddWithValue("@1", user.userName);
