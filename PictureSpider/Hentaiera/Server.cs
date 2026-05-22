@@ -183,6 +183,52 @@ namespace PictureSpider.Hentaiera
             await database.SaveChangesAsync();
         }
 
+        protected async override Task ProcessIllustDownloadQueue(List<Work> illustList, int limit = -1)
+        {
+            var works = (limit >= 0 ? illustList.Take(limit) : illustList).ToList();
+            var updated = false;
+            foreach (var work in works)
+                updated |= await RefreshDownloadUrlIfNeeded(work);
+            if (updated)
+                await database.SaveChangesAsync();
+            await base.ProcessIllustDownloadQueue(illustList, limit);
+        }
+
+        private async Task<bool> RefreshDownloadUrlIfNeeded(Work work)
+        {
+            if (await IsImageUrlAccessible(work.url))
+                return false;
+            // Hentaiera CDN image paths expire, so refresh only inaccessible queued pages before aria2 starts.
+            var url = await FetchOriginalImageUrl(work.workGroup.Id, work.index, work.url);
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                LogError($"Fail to refresh image url {work.workGroup.Id}/{work.index}");
+                return false;
+            }
+            if (work.url == url)
+                return false;
+            work.url = url;
+            work.ext = Path.GetExtension(url).ToLowerInvariant();
+            return true;
+        }
+
+        private async Task<bool> IsImageUrlAccessible(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return false;
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Head, url);
+                request.Headers.Referrer = new Uri(baseUrl);
+                using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private List<HtmlNode> SelectGalleryNodes(HtmlDocument doc)
         {
             return doc.DocumentNode
