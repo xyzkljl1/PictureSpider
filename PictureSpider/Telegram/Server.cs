@@ -67,14 +67,14 @@ namespace PictureSpider.Telegram
         private string loginProxy = ""; // http proxy like "host:port",see Login()
         private TdClient tgClient;
         private HttpClient localHttpClient;
+        private static readonly object tdLogConfigLock = new();
+        private static bool tdLogConfigured;
         //private static readonly ManualResetEventSlim ReadyToAuthenticate = new();
         public Server(Config config):base(config.TelegramConnectStr)
         {
             base.logPrefix = "G";
+            ConfigureTdLibLogging();
             tgClient = new TdClient();
-            //这破玩意输出的log太多了，直接关了
-            //但是执行完之前还会输出一段日志到error，怎么解决？
-            tgClient.Execute(new TdApi.SetLogVerbosityLevel { NewVerbosityLevel = 0 });
 
             loginProxy = config.Proxy;
             myDownloadServerAddr =config.MyDownloadServerAddress;
@@ -96,6 +96,19 @@ namespace PictureSpider.Telegram
             };
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             localHttpClient = new HttpClient(handler);
+        }
+
+        private static void ConfigureTdLibLogging()
+        {
+            lock (tdLogConfigLock)
+            {
+                if (tdLogConfigured)
+                    return;
+
+                TdJsonClient.GlobalExecute("{\"@type\":\"setLogStream\",\"log_stream\":{\"@type\":\"logStreamEmpty\"}}");
+                TdJsonClient.GlobalExecute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}");
+                tdLogConfigured = true;
+            }
         }
 #pragma warning disable CS0162 // 检测到无法访问的代码
         // 注意以comments形式下载的，应该只设置在其chat上，而不设置channel
