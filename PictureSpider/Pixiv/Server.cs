@@ -54,6 +54,8 @@ namespace PictureSpider.Pixiv
         private HashSet<string> banned_keyword;
         Aria2DownloadQueue downloader;
         private string request_proxy;
+        private const string DefaultPixivUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
+        private string pixiv_user_agent = DefaultPixivUserAgent;
 
         private HashSet<int> illust_fetch_queue = new HashSet<int>();//计划更新的illustid,线程不安全,只在RunSchedule里使用
         private HashSet<int> illust_download_queue = new HashSet<int>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
@@ -101,6 +103,8 @@ namespace PictureSpider.Pixiv
         public override async Task Init()
         {
             banned_keyword = await database.GetBannedKeyword();
+            await database.EnsureUserAgentCache();
+            pixiv_user_agent = await database.GetUserAgent(DefaultPixivUserAgent);
             await ResetHttpClient();
 #if DEBUG
             await Test();
@@ -189,7 +193,7 @@ namespace PictureSpider.Pixiv
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
                 httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+                ApplyPixivUserAgent(httpClient);
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -210,7 +214,7 @@ namespace PictureSpider.Pixiv
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+                ApplyPixivUserAgent(httpClient_anonymous);
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -227,7 +231,7 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.Timeout = new TimeSpan(0, 0, 35);
                 httpClientCSRF.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClientCSRF.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+                ApplyPixivUserAgent(httpClientCSRF);
                 httpClientCSRF.DefaultRequestHeaders.Host = "www.pixiv.net";
                 //httpClientCSRF.DefaultRequestHeaders.Add("Cookie", this.cookie);
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
@@ -235,6 +239,18 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-user", "?1");
             }
             await UpdateHttpClientByDatabaseCookie();
+        }
+        private void ApplyPixivUserAgent(HttpClient client)
+        {
+            try
+            {
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(string.IsNullOrWhiteSpace(pixiv_user_agent) ? DefaultPixivUserAgent : pixiv_user_agent);
+            }
+            catch
+            {
+                client.DefaultRequestHeaders.UserAgent.Clear();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(DefaultPixivUserAgent);
+            }
         }
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
@@ -1120,12 +1136,33 @@ namespace PictureSpider.Pixiv
         }
         public override async Task ListenerUtil_SetCookie(string cookie)
         {
+            await ListenerUtil_SetCookie(cookie, "");
+        }
+        public override async Task ListenerUtil_SetCookie(string cookie, string userAgent)
+        {
             //获取cookie和csrftoken
+            await database.EnsureUserAgentCache();
             var old_cookie = await database.GetCookie();
-            if (cookie!=old_cookie)
+            var userAgentChanged = false;
+            if (!string.IsNullOrWhiteSpace(userAgent))
             {
+                var old_user_agent = await database.GetUserAgent(DefaultPixivUserAgent);
+                userAgentChanged = userAgent != old_user_agent;
+                if (userAgentChanged)
+                    await database.UpdateUserAgent(userAgent);
+                pixiv_user_agent = userAgent;
+            }
+            var cookieChanged = cookie != old_cookie;
+            if (cookieChanged)
                 await database.UpdateCookie(cookie);
-                await UpdateHttpClientByDatabaseCookie();
+            if (userAgentChanged)
+                await ResetHttpClient();
+            else if (cookieChanged)
+            {
+                if (httpClient is null)
+                    await ResetHttpClient();
+                else
+                    await UpdateHttpClientByDatabaseCookie();
             }
         }
         public override bool ListenerUtil_IsValidUrl(string url)
@@ -1170,6 +1207,8 @@ namespace PictureSpider.Pixiv
         public async Task UpdateHttpClientByDatabaseCookie()
         {
             var cookie = await database.GetCookie();
+            httpClient.DefaultRequestHeaders.Remove("Cookie");
+            httpClient.DefaultRequestHeaders.Remove("x-csrf-token");
             if (!string.IsNullOrEmpty(cookie))
             {
                 var csrf_token = await database.GetCSRFToken();

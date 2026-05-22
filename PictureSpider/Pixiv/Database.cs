@@ -146,6 +146,29 @@ namespace PictureSpider.Pixiv
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
             return ret[0];
         }
+        public async Task EnsureUserAgentCache()
+        {
+            var exists = await StandardQuery<int>(@"SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'status'
+                    AND COLUMN_NAME = 'UserAgentCache'",
+                (DbDataReader reader) => { return Convert.ToInt32(reader.GetValue(0)); });
+            if (exists.Count == 0 || exists[0] == 0)
+                await StandardNoneQuery("ALTER TABLE `status` ADD COLUMN UserAgentCache text COLLATE utf8mb3_bin NULL",
+                    (cmd) => { });
+        }
+        public async Task<string> GetUserAgent(string fallback)
+        {
+            var ret = await StandardQuery<string>("select UserAgentCache from `status` where id=\"Current\"",
+                (DbDataReader reader) =>
+                {
+                    return reader.IsDBNull(0) ? fallback : reader.GetString(0);
+                });
+            if (ret.Count == 0)
+                throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
+            return string.IsNullOrWhiteSpace(ret[0]) ? fallback : ret[0];
+        }
         public async Task<List<string>> GetFollowedTagsOrdered()
         {
             return await StandardQuery("select `word` from keyword where `status`='Follow' and type='tag' ORDER BY word ",
@@ -429,6 +452,10 @@ namespace PictureSpider.Pixiv
         public async Task UpdateCSRFToken(string token)
         {
             await StandardNoneQuery("update status set CSRFTokenCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", token); });
+        }
+        public async Task UpdateUserAgent(string userAgent)
+        {
+            await StandardNoneQuery("update `status` set UserAgentCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", userAgent); });
         }
 
         //注意字符串必须以cmd.Parameters.AddWithValue以避免转义问题

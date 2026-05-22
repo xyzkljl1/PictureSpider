@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS `status` (
   `QueueUpdateTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `Queue` mediumtext COLLATE utf8mb3_bin NOT NULL,
   `CSRFTokenCache` varchar(300) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL DEFAULT '""',
+  `UserAgentCache` text COLLATE utf8mb3_bin NULL,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin;
 
