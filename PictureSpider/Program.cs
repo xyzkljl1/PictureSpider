@@ -41,13 +41,14 @@ namespace PictureSpider
                     //    return;
                     Util.SetMainThreadId();
                     using (var kemonoServer = new Kemono.Server(config))
+                    using (var twitterServer = new Twitter.Server(config))
                     using (var hitomiServer = new Hitomi.Server(config))
                         using (var pixivServer = new Pixiv.Server(config))
                             using (var lsfServer = new LocalSingleFile.Server(config))
                                 using (var tgServer = new Telegram.Server(config))
                                 using (var hentaieraServer = new Hentaiera.Server(config))
                                 {
-                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer };
+                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer };
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)

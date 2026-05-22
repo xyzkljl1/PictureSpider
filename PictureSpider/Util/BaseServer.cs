@@ -90,6 +90,7 @@ namespace PictureSpider
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public async virtual Task<bool> ListenerUtil_FollowUser(string url) { return false; }
         public virtual async Task ListenerUtil_SetCookie(string cookie) { }
+        public virtual async Task ListenerUtil_SetCookie(string cookie, string userAgent) { await ListenerUtil_SetCookie(cookie); }
 #pragma warning restore CS1998
 
         //File操作，因为需要Log，放到baseserver里

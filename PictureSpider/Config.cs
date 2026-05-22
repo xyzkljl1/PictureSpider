@@ -24,12 +24,8 @@ namespace PictureSpider
         public string TypicalDownloadDir = "./";
         public string HitomiConnectStr = "";
         public string HitomiDownloadDir = "./";
-        //public string TwitterAPIKey = "";
-        //public string TwitterAPISecret = "";
-        public string TwitterBearerToken = "";
+        public string TwitterUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
         public string TwitterDownloadDir = "./";
-        public string TwitterUserName = "";
-        public string TwitterPassword = "";
         public bool ShowInitButton = false;
         public string TelegramPhoneNumber = "";
         public string TelegramDownloadDir = "";

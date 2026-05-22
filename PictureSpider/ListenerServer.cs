@@ -1,5 +1,6 @@
 ﻿using HtmlAgilityPack;
 using System;
+using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -55,15 +56,8 @@ namespace PictureSpider
                             using (StreamReader reader = new StreamReader(ctx.Request.InputStream))
                             {
                                 String data = reader.ReadToEnd();
-                                if (data.Length > 0)
-                                {
-                                    Console.WriteLine("Receive Pixiv Cookie");
-                                    foreach (var server in baseServers)
-                                        if(server is Pixiv.Server)
-                                            await server.ListenerUtil_SetCookie(data);
-                                }
+                                success = await DispatchCookie(data);
                                 reader.Close();
-                                success = true;
                             }
                         //使用Writer输出http响应代码
                         if(success)
@@ -90,6 +84,47 @@ namespace PictureSpider
                     }
                 }
             }
+        }
+
+        private async Task<bool> DispatchCookie(string data)
+        {
+            if (string.IsNullOrWhiteSpace(data))
+                return false;
+
+            var site = "pixiv";
+            var cookie = data;
+            var userAgent = "";
+            try
+            {
+                var json = JObject.Parse(data);
+                site = json["site"]?.ToString()?.ToLowerInvariant() ?? site;
+                cookie = json["cookie"]?.ToString() ?? "";
+                userAgent = json["userAgent"]?.ToString() ?? "";
+            }
+            catch
+            {
+                // Legacy PixivHelper versions post a raw Pixiv cookie string.
+            }
+
+            if (string.IsNullOrWhiteSpace(cookie))
+                return false;
+
+            Console.WriteLine($"Receive {site} Cookie");
+            var success = false;
+            foreach (var server in baseServers)
+            {
+                if (site == "pixiv" && server is Pixiv.Server)
+                {
+                    await server.ListenerUtil_SetCookie(cookie, userAgent);
+                    success = true;
+                }
+                else if ((site == "twitter" || site == "x") && server is Twitter.Server)
+                {
+                    await server.ListenerUtil_SetCookie(cookie, userAgent);
+                    success = true;
+                }
+            }
+            return success;
         }
     }
 }
