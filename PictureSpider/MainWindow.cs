@@ -72,11 +72,7 @@ namespace PictureSpider
             DataBindings.Add(new Binding("Text", _pixiv_server.GetBindHandle<string>("VerifyState"), "Content"));
 
             //onListCheckBoxClick(null,null);
-#if !DEBUG
-            listenerServer = new ListenerServer(servers, config.Proxy);
-#else
-            listenerServer = new ListenerServer(servers, config.Proxy);
-#endif
+            listenerServer = new ListenerServer(servers);
         }
         private void OnClose(object sender, FormClosingEventArgs e)
         {

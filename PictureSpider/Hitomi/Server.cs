@@ -651,7 +651,8 @@ namespace PictureSpider.Hitomi
                     var users = await FetchUserIDsByIllustGroupID(id);
                     if (users.Count > 0)
                     {
-                        users.ForEach(async (u)=> await AddQueuedUser(u));
+                        foreach (var user in users)
+                            await AddQueuedUser(user);
                         return true;
                     }
                 }
@@ -666,7 +667,8 @@ namespace PictureSpider.Hitomi
                     var users=await FetchUserIDsByIllustGroupID(id);
                     if(users.Count>0)
                     {
-                        users.ForEach(async(u) => await AddQueuedUser(u));
+                        foreach (var user in users)
+                            await AddQueuedUser(user);
                         return true;
                     }
                 }

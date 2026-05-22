@@ -1134,10 +1134,6 @@ namespace PictureSpider.Pixiv
                 }
             await database.UpdateCSRFToken(csrf_token);
         }
-        public override async Task ListenerUtil_SetCookie(string cookie)
-        {
-            await ListenerUtil_SetCookie(cookie, "");
-        }
         public override async Task ListenerUtil_SetCookie(string cookie, string userAgent)
         {
             //获取cookie和csrftoken

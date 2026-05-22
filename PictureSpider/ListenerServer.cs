@@ -1,13 +1,8 @@
-﻿using HtmlAgilityPack;
 using System;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net.Http;
 using System.Net;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 
@@ -20,12 +15,10 @@ namespace PictureSpider
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     class ListenerServer
     {
-        private string proxy;
         List<BaseServer> baseServers = null;
-        public ListenerServer(List<BaseServer> _baseServers, string _proxy)
+        public ListenerServer(List<BaseServer> _baseServers)
         {
             baseServers = new List<BaseServer> (_baseServers);
-            proxy = _proxy;
             Task.Run(Run).Wait();
         }
         private async void Run()

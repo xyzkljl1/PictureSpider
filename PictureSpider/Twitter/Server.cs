@@ -777,11 +777,6 @@ namespace PictureSpider.Twitter
             return "";
         }
 
-        public override async Task ListenerUtil_SetCookie(string cookie)
-        {
-            await ListenerUtil_SetCookie(cookie, "");
-        }
-
         public override async Task ListenerUtil_SetCookie(string cookie, string userAgent)
         {
             if (string.IsNullOrWhiteSpace(cookie))
