@@ -25,6 +25,7 @@ namespace PictureSpider.Twitter
         private const int MaxPagesPerUserRun = 200;
         // 下载任务可能长期堆积，按小时小批量消化，避免一次性打满请求。
         private const int DownloadLimitPerRun = 80;
+        private const int Aria2AddConcurrency = 8;
 
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
 
@@ -40,7 +41,6 @@ namespace PictureSpider.Twitter
         private string authUserAgent = "";
         private string csrfToken = "";
         private DateTime nextXRequestAt = DateTime.MinValue;
-        private DateTime nextMediaRequestAt = DateTime.MinValue;
         private string userByScreenNameQueryId = "IGgvgiOx4QZndDHuD3x9TQ";
         private string userMediaQueryId = "9EovraBTXJYGSEQXZqlLmQ";
 
@@ -454,14 +454,6 @@ namespace PictureSpider.Twitter
             nextXRequestAt = DateTime.UtcNow.AddSeconds(random.Next(7, 14));
         }
 
-        private async Task ThrottleMediaRequest()
-        {
-            var now = DateTime.UtcNow;
-            if (nextMediaRequestAt > now)
-                await Task.Delay(nextMediaRequestAt - now);
-            nextMediaRequestAt = DateTime.UtcNow.AddSeconds(random.Next(2, 5));
-        }
-
         private IEnumerable<(Tweet Tweet, List<Media> Medias)> ExtractTweetsAndMedia(JToken json, string userId, string userName)
         {
             foreach (var tweetResult in FindTweetResults(json))
@@ -658,10 +650,13 @@ namespace PictureSpider.Twitter
 
         private async Task DownloadWaitingMedia(int limit)
         {
-            // 串行下载，配合 DownloadLimitPerRun 和 ThrottleMediaRequest 控制堆积任务的释放速度。
+            // Add tasks in a bounded batch, then wait once for aria2 to drain the batch.
             var medias = await database.GetWaitingDownloadMedia(limit);
             Log($"Download Waiting Media count={medias.Count} limit={limit}");
             var success = 0;
+            var downloadMedias = new List<Media>();
+            var downloadPaths = new Dictionary<string, string>();
+            var queue = new TaskQueue<bool>(Aria2AddConcurrency);
             foreach (var media in medias)
             {
                 var path = Path.Combine(download_dir_tmp, media.file_name);
@@ -673,18 +668,29 @@ namespace PictureSpider.Twitter
                     success++;
                     continue;
                 }
-                try
+                Log($"Download media {media.id} => {media.file_name}");
+                downloadMedias.Add(media);
+                downloadPaths[media.id] = path;
+                await queue.Add(AddMediaDownloadTask(media.url, path, media.expand_url));
+            }
+            await queue.Done();
+            var queued = queue.done_task_list.Count(task => task.Result);
+            if (queued > 0)
+            {
+                Log($"Aria2 download begin {queued}/{downloadMedias.Count}");
+                await downloader.WaitForAll();
+            }
+            foreach (var media in downloadMedias)
+            {
+                var path = downloadPaths[media.id];
+                media.downloaded = File.Exists(path);
+                if (media.downloaded)
                 {
-                    Log($"Download media {media.id} => {media.file_name}");
-                    await DownloadMediaFile(media.url, path, media.expand_url);
-                    media.downloaded = File.Exists(path);
-                    if (media.downloaded)
-                        success++;
+                    Log($"Aria2 download done {media.file_name}");
+                    success++;
                 }
-                catch (Exception e)
-                {
-                    LogError($"Download fail {media.url}: {FormatException(e)}");
-                }
+                else
+                    LogError($"Download fail {media.url}: target file was not found.");
             }
             if (medias.Count > 0)
             {
@@ -693,27 +699,31 @@ namespace PictureSpider.Twitter
             }
         }
 
-        private async Task DownloadMediaFile(string url, string path, string referer)
+        private async Task<bool> AddMediaDownloadTask(string url, string path, string referer)
         {
-            await ThrottleMediaRequest();
-            var dir = Path.GetDirectoryName(path);
-            Util.TouchDir(dir);
-            var fileName = Path.GetFileName(path);
-            var options = new DownloadRequestOptions
+            try
             {
-                Referer = string.IsNullOrWhiteSpace(referer) ? "https://x.com/" : referer,
-                UserAgent = string.IsNullOrWhiteSpace(authUserAgent) ? config.TwitterUserAgent : authUserAgent,
-                Split = 1,
-                MaxConnectionPerServer = 1
-            };
-            Log($"Aria2 download start {fileName}");
-            var added = await downloader.Add(url, dir, fileName, options);
-            if (!added)
-                throw new Exception("Aria2 add download task failed.");
-            await downloader.WaitForAll();
-            if (!File.Exists(path))
-                throw new FileNotFoundException("Aria2 finished but target file was not found.", path);
-            Log($"Aria2 download done {fileName}");
+                var dir = Path.GetDirectoryName(path);
+                Util.TouchDir(dir);
+                var fileName = Path.GetFileName(path);
+                var options = new DownloadRequestOptions
+                {
+                    Referer = string.IsNullOrWhiteSpace(referer) ? "https://x.com/" : referer,
+                    UserAgent = string.IsNullOrWhiteSpace(authUserAgent) ? config.TwitterUserAgent : authUserAgent,
+                    Split = 1,
+                    MaxConnectionPerServer = 1
+                };
+                Log($"Aria2 download queue {fileName}");
+                var added = await downloader.Add(url, dir, fileName, options);
+                if (!added)
+                    LogError($"Aria2 add download task failed {fileName}");
+                return added;
+            }
+            catch (Exception e)
+            {
+                LogError($"Download queue fail {url}: {FormatException(e)}");
+                return false;
+            }
         }
 
         private async Task SyncBookmarkDirectory()
