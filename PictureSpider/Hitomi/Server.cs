@@ -481,21 +481,21 @@ namespace PictureSpider.Hitomi
             //加上ToList令查询完成后再执行循环
             //获取follow/queue作者的作品
             // 增加延迟看能不能解决fetch失败的问题
+            foreach (var illustGroup in (from illustGroup in database.IllustGroups
+                                         where illustGroup.fetched == false && (illustGroup.user.followed == true || illustGroup.user.queued == true)
+                                         select illustGroup).ToList())
+            {
+                await FetchIllustGroupById(illustGroup);
+                await Task.Delay(5 * 1000);
+            }
             foreach (var user in (from user in database.Users
                                   where user.followed == true || user.queued == true
                                   select user).ToList())
             {
                 await FetchIllustGroupListByUser(user);
-                await Task.Delay(3 * 1000);
+                await Task.Delay(5 * 1000);
             }
             Log("Fetch User Done");
-            foreach (var illustGroup in (from illustGroup in database.IllustGroups
-                                  where illustGroup.fetched==false&&(illustGroup.user.followed==true|| illustGroup.user.queued==true)
-                                  select illustGroup).ToList())
-            {
-                await FetchIllustGroupById(illustGroup);
-                await Task.Delay(3 * 1000);
-            }
         }
         //获取该user的作品id并插入数据库
         public async Task FetchIllustGroupListByUser(User user)
