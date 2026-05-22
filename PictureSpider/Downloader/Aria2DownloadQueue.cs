@@ -25,7 +25,8 @@ namespace PictureSpider
         private Process process=null;
         private string referer = "";
         private int threads = 16;
-        public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer,int _threads=16)
+        private int waitPollSeconds = 600;
+        public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer,int _threads=16,int _wait_poll_seconds=600)
         {
             aria2_rpc_secret=Guid.NewGuid().ToString();
             process_name = $"aria2c_{postfix.ToString()}";
@@ -33,6 +34,7 @@ namespace PictureSpider
             referer = _referer;
             httpClient = new HttpClient();
             threads = _threads;
+            waitPollSeconds = _wait_poll_seconds;
         }
         public void ClearTmpFiles(string dir)
         {
@@ -40,6 +42,11 @@ namespace PictureSpider
                 File.Delete(file);
         }
         public async override Task<bool> Add(string url, string dir, string file_name)
+        {
+            return await Add(url, dir, file_name, null);
+        }
+
+        public async override Task<bool> Add(string url, string dir, string file_name, DownloadRequestOptions options)
         {
             //用/以避免转义
             dir = dir.Replace('\\', '/');
@@ -58,11 +65,23 @@ namespace PictureSpider
                  * 失败时RequesttAria2Async会直接抛出异常所以此处无需验证返回的json
                 */
                 //dir = "E:/test/2";
-                var data = String.Format("{{\"jsonrpc\": \"2.0\",\"id\":\"PixivAss\",\"method\": \"aria2.addUri\"," +
-                                    "\"params\": [\"token:{0}\",[\"{1}\"],{{\"dir\":\"{2}\",\"out\":\"{3}\"" +
-                                    "}}]}}",
-                                    aria2_rpc_secret, url, dir, file_name);
-                await RequestAria2Async(data);
+                var ariaOptions = new JObject
+                {
+                    ["dir"] = dir,
+                    ["out"] = file_name
+                };
+                ApplyRequestOptions(ariaOptions, options);
+                var data = new JObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = "PixivAss",
+                    ["method"] = "aria2.addUri",
+                    ["params"] = new JArray(
+                        $"token:{aria2_rpc_secret}",
+                        new JArray(url),
+                        ariaOptions)
+                };
+                await RequestAria2Async(data.ToString(Formatting.None));
             }
             catch (Exception e)
             {
@@ -71,9 +90,33 @@ namespace PictureSpider
             }
             return true;
         }
+
+        private void ApplyRequestOptions(JObject ariaOptions, DownloadRequestOptions options)
+        {
+            if (options is null)
+                return;
+            if (!string.IsNullOrWhiteSpace(options.Referer))
+                ariaOptions["referer"] = options.Referer;
+            if (!string.IsNullOrWhiteSpace(options.UserAgent))
+                ariaOptions["user-agent"] = options.UserAgent;
+            if (options.Split.HasValue)
+                ariaOptions["split"] = options.Split.Value.ToString();
+            if (options.MaxConnectionPerServer.HasValue)
+                ariaOptions["max-connection-per-server"] = options.MaxConnectionPerServer.Value.ToString();
+
+            var headers = new JArray();
+            if (!string.IsNullOrWhiteSpace(options.Cookie))
+                headers.Add($"Cookie: {options.Cookie}");
+            foreach (var header in options.Headers ?? new Dictionary<string, string>())
+                if (!string.IsNullOrWhiteSpace(header.Key))
+                    headers.Add($"{header.Key}: {header.Value}");
+            if (headers.Count > 0)
+                ariaOptions["header"] = headers;
+        }
+
         public async override Task WaitForAll()
         {
-            while (!await CheckIfDownloadDone()) await Task.Delay(new TimeSpan(0, 10, 0));
+            while (!await CheckIfDownloadDone()) await Task.Delay(TimeSpan.FromSeconds(waitPollSeconds));
         }
         private void CheckIfProcessRunning()
         {

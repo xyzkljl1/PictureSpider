@@ -30,6 +30,7 @@ namespace PictureSpider.Twitter
 
         private readonly Config config;
         private readonly HttpClient httpClient;
+        private readonly Aria2DownloadQueue downloader;
         private readonly Random random = new Random();
         private readonly string request_proxy;
         private readonly string download_dir_root;
@@ -66,20 +67,24 @@ namespace PictureSpider.Twitter
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
             httpClient.Timeout = new TimeSpan(0, 0, 60);
+            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Twitter, request_proxy, "https://x.com/", 1, 10);
         }
 
         public override async Task Init()
         {
+            Log("Twitter init start");
             await database.Database.EnsureCreatedAsync();
             await database.EnsureTwitterSchemaAsync();
-#if !DEBUG
+            Log("Twitter schema ready");
+//#if !DEBUG
             await LoadAuthAsync();
             if (string.IsNullOrWhiteSpace(authCookie))
                 LogError("Twitter auth is empty. Start PixivHelper in Chrome to send X/Twitter cookies first.");
 #pragma warning disable CS4014
+            Log("Twitter schedule start");
             Task.Run(RunSchedule);
 #pragma warning restore CS4014
-#endif
+            //#endif
         }
 
         public override void SetReaded(ExplorerFileBase file)
@@ -160,10 +165,12 @@ namespace PictureSpider.Twitter
             {
                 try
                 {
+                    Log($"Twitter schedule tick {interval_ct}");
                     await LoadAuthAsync();
                     if (string.IsNullOrWhiteSpace(authCookie))
                     {
                         // 允许程序先启动；等待 Chrome 插件把 X/Twitter cookie 写入数据库。
+                        Log("Twitter auth empty, schedule waits for listener cookie");
                         await Task.Delay(interval);
                         interval_ct++;
                         continue;
@@ -171,13 +178,16 @@ namespace PictureSpider.Twitter
                     if (interval_ct % 24 == 0)
                     {
                         var users = await database.GetUsers(true, true);
+                        Log($"Twitter fetch users count={users.Count}");
                         foreach (var user in users)
                         {
                             await FetchTweetsByUserWeb(user.name, user.api_latest_tweet_id);
                             await Task.Delay(TimeSpan.FromSeconds(random.Next(20, 45)));
                         }
+                        Log("Twitter sync bookmark directory");
                         await SyncBookmarkDirectory();
                     }
+                    Log("Twitter download waiting media");
                     await DownloadWaitingMedia(DownloadLimitPerRun);
                 }
                 catch (Exception e)
@@ -192,6 +202,7 @@ namespace PictureSpider.Twitter
 
         private async Task FetchTweetsByUserWeb(string user_name, string since_tweet_id)
         {
+            Log($"Fetch User(Web) @{NormalizeScreenName(user_name)} since={since_tweet_id}");
             var user = await FetchUserByName(user_name);
             if (user is null)
                 return;
@@ -210,6 +221,7 @@ namespace PictureSpider.Twitter
                 page++;
                 var json = await FetchUserMediaPage(user.id, cursor);
                 var pageTweets = ExtractTweetsAndMedia(json, user.id, user.name).ToList();
+                Log($"Fetch User(Web) @{user.name} page={page} tweets={pageTweets.Count}");
                 foreach (var item in pageTweets)
                 {
                     if (long.TryParse(item.Tweet.id, out var tweetId))
@@ -252,6 +264,7 @@ namespace PictureSpider.Twitter
         private async Task<User> FetchUserByName(string user_name)
         {
             user_name = NormalizeScreenName(user_name);
+            Log($"Fetch user info @{user_name}");
             var json = await GraphQlGet(userByScreenNameQueryId, "UserByScreenName",
                 new Dictionary<string, object>
                 {
@@ -315,6 +328,7 @@ namespace PictureSpider.Twitter
 
         private async Task<JObject> FetchUserMediaPage(string userId, string cursor)
         {
+            Log($"Fetch user media page userId={userId} cursor={(string.IsNullOrWhiteSpace(cursor) ? "first" : "next")}");
             var variables = new Dictionary<string, object>
             {
                 ["userId"] = userId,
@@ -371,6 +385,7 @@ namespace PictureSpider.Twitter
 
         private async Task DiscoverGraphQlOperationIds()
         {
+            Log("Discover Twitter GraphQL operation ids");
             var html = await SendXRequest("https://x.com/home", false, "https://x.com/");
             // operationName/queryId 写在前端 bundle 中，限制扫描数量避免一次加载过多脚本。
             var scripts = Regex.Matches(html, @"https://abs\.twimg\.com/responsive-web/client-web/[^""']+?\.js")
@@ -645,6 +660,7 @@ namespace PictureSpider.Twitter
         {
             // 串行下载，配合 DownloadLimitPerRun 和 ThrottleMediaRequest 控制堆积任务的释放速度。
             var medias = await database.GetWaitingDownloadMedia(limit);
+            Log($"Download Waiting Media count={medias.Count} limit={limit}");
             var success = 0;
             foreach (var media in medias)
             {
@@ -652,12 +668,14 @@ namespace PictureSpider.Twitter
                 if (File.Exists(path))
                 {
                     // 兼容旧文件迁移：文件已存在时直接恢复数据库下载状态。
+                    Log($"Download skip existing {media.file_name}");
                     media.downloaded = true;
                     success++;
                     continue;
                 }
                 try
                 {
+                    Log($"Download media {media.id} => {media.file_name}");
                     await DownloadMediaFile(media.url, path, media.expand_url);
                     media.downloaded = File.Exists(path);
                     if (media.downloaded)
@@ -680,18 +698,22 @@ namespace PictureSpider.Twitter
             await ThrottleMediaRequest();
             var dir = Path.GetDirectoryName(path);
             Util.TouchDir(dir);
-            var tmpPath = path + ".tmp";
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.ParseAdd(string.IsNullOrWhiteSpace(authUserAgent) ? config.TwitterUserAgent : authUserAgent);
-            request.Headers.Referrer = new Uri(string.IsNullOrWhiteSpace(referer) ? "https://x.com/" : referer);
-            using var response = await httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            await using (var input = await response.Content.ReadAsStreamAsync())
-            await using (var output = File.Create(tmpPath))
-                await input.CopyToAsync(output);
-            if (File.Exists(path))
-                File.Delete(path);
-            File.Move(tmpPath, path);
+            var fileName = Path.GetFileName(path);
+            var options = new DownloadRequestOptions
+            {
+                Referer = string.IsNullOrWhiteSpace(referer) ? "https://x.com/" : referer,
+                UserAgent = string.IsNullOrWhiteSpace(authUserAgent) ? config.TwitterUserAgent : authUserAgent,
+                Split = 1,
+                MaxConnectionPerServer = 1
+            };
+            Log($"Aria2 download start {fileName}");
+            var added = await downloader.Add(url, dir, fileName, options);
+            if (!added)
+                throw new Exception("Aria2 add download task failed.");
+            await downloader.WaitForAll();
+            if (!File.Exists(path))
+                throw new FileNotFoundException("Aria2 finished but target file was not found.", path);
+            Log($"Aria2 download done {fileName}");
         }
 
         private async Task SyncBookmarkDirectory()
@@ -772,6 +794,7 @@ namespace PictureSpider.Twitter
             else if (string.IsNullOrWhiteSpace(authUserAgent))
                 authUserAgent = config.TwitterUserAgent;
             await SaveAuthState();
+            Log("Twitter auth updated from listener");
         }
 
         public override bool ListenerUtil_IsValidUrl(string url)
@@ -806,9 +829,13 @@ namespace PictureSpider.Twitter
                 }
             }
             if (user.followed || user.queued)
+            {
+                Log($"Twitter user already followed or queued @{user.name}");
                 return true;
+            }
             user.queued = true;
             await database.SaveChangesAsync();
+            Log($"Twitter user queued @{user.name}");
             return true;
         }
 
