@@ -24,6 +24,7 @@ namespace PictureSpider.Twitter
                 `api_latest_tweet_id` varchar(64) NOT NULL DEFAULT '0',
                 `followed` tinyint(1) NOT NULL DEFAULT 0,
                 `queued` tinyint(1) NOT NULL DEFAULT 0,
+                `invalid` tinyint(1) NOT NULL DEFAULT 0,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `IX_user_name` (`name`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -68,6 +69,7 @@ namespace PictureSpider.Twitter
             await EnsureColumnAsync("user", "api_latest_tweet_id", "`api_latest_tweet_id` varchar(64) NOT NULL DEFAULT '0'");
             await EnsureColumnAsync("user", "followed", "`followed` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("user", "queued", "`queued` tinyint(1) NOT NULL DEFAULT 0");
+            await EnsureColumnAsync("user", "invalid", "`invalid` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("media", "downloaded", "`downloaded` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("media", "readed", "`readed` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("media", "bookmarked", "`bookmarked` tinyint(1) NOT NULL DEFAULT 0");
@@ -100,7 +102,7 @@ namespace PictureSpider.Twitter
 
         public async Task<List<User>> GetUsers(bool followed, bool queued)
         {
-            var query = Users.AsQueryable();
+            var query = Users.Where(user => !user.invalid);
             if (followed && queued)
                 query = query.Where(user => user.followed || user.queued);
             else if (followed)
@@ -117,7 +119,7 @@ namespace PictureSpider.Twitter
 
         public async Task<List<Media>> GetWaitingDownloadMedia(int limit = -1)
         {
-            var userIds = Users.Where(user => user.queued || user.followed).Select(user => user.id);
+            var userIds = Users.Where(user => !user.invalid && (user.queued || user.followed)).Select(user => user.id);
             // 堆积媒体按较新的 tweet 优先取出，单轮数量由 Server.DownloadLimitPerRun 控制。
             var query = Medias.Where(media => !media.downloaded && userIds.Contains(media.user_id))
                               .OrderByDescending(media => media.tweet_id);

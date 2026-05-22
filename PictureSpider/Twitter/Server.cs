@@ -202,7 +202,6 @@ namespace PictureSpider.Twitter
 
         private async Task FetchTweetsByUserWeb(string user_name, string since_tweet_id)
         {
-            Log($"Fetch User(Web) @{NormalizeScreenName(user_name)} since={since_tweet_id}");
             var user = await FetchUserByName(user_name);
             if (user is null)
                 return;
@@ -263,7 +262,10 @@ namespace PictureSpider.Twitter
         private async Task<User> FetchUserByName(string user_name)
         {
             user_name = NormalizeScreenName(user_name);
-            Log($"Fetch user info @{user_name}");
+            var cachedUser = await database.Users.FirstOrDefaultAsync(x => x.name == user_name);
+            if (cachedUser?.invalid == true)
+                return null;
+
             var json = await GraphQlGet(userByScreenNameQueryId, "UserByScreenName",
                 new Dictionary<string, object>
                 {
@@ -279,7 +281,13 @@ namespace PictureSpider.Twitter
             var id = result?["rest_id"]?.ToString() ?? "";
             if (string.IsNullOrWhiteSpace(id))
             {
-                LogError($"Can't fetch Twitter user @{user_name}");
+                if (IsAccountSuspended(json, result))
+                {
+                    await MarkUserInvalid(user_name);
+                    LogError($"Fetch Twitter user @{user_name} failed: Account suspended");
+                }
+                else
+                    LogError($"Fetch Twitter user @{user_name} failed");
                 return null;
             }
 
@@ -288,11 +296,39 @@ namespace PictureSpider.Twitter
             {
                 id = id,
                 name = legacy?["screen_name"]?.ToString() ?? user_name,
-                nick_name = legacy?["name"]?.ToString() ?? user_name
+                nick_name = legacy?["name"]?.ToString() ?? user_name,
+                invalid = false
             };
             user.displayId = user.id;
             user.displayText = user.name;
             return await UpsertUser(user);
+        }
+
+        private bool IsAccountSuspended(JObject json, JObject result)
+        {
+            var reason = result?["reason"]?.ToString() ?? "";
+            var message = result?["message"]?.ToString() ?? "";
+            if (reason.Equals("Suspended", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (message.IndexOf("Account suspended", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            var text = (result ?? json).ToString(Formatting.None);
+            return text.IndexOf("Account suspended", StringComparison.OrdinalIgnoreCase) >= 0
+                   || text.IndexOf("\"Suspended\"", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private async Task MarkUserInvalid(string userName)
+        {
+            userName = NormalizeScreenName(userName);
+            var user = await database.Users.FirstOrDefaultAsync(x => x.name == userName);
+            if (user is null)
+            {
+                user = new User($"name:{userName.ToLowerInvariant()}", userName, userName);
+                database.Users.Add(user);
+            }
+            user.invalid = true;
+            await database.SaveChangesAsync();
         }
 
         private async Task<User> UpsertUser(User remoteUser)
@@ -305,6 +341,7 @@ namespace PictureSpider.Twitter
                 remoteUser.queued = existingByName.queued;
                 remoteUser.api_latest_tweet_id = existingByName.api_latest_tweet_id;
                 remoteUser.search_latest_tweet_id = existingByName.search_latest_tweet_id;
+                remoteUser.invalid = false;
                 database.Users.Remove(existingByName);
                 await database.SaveChangesAsync();
             }
@@ -314,6 +351,7 @@ namespace PictureSpider.Twitter
                 existing.nick_name = remoteUser.nick_name;
                 existing.displayId = remoteUser.id;
                 existing.displayText = remoteUser.name;
+                existing.invalid = false;
                 await database.SaveChangesAsync();
                 return existing;
             }
@@ -824,6 +862,8 @@ namespace PictureSpider.Twitter
                 try
                 {
                     user = await FetchUserByName(screenName);
+                    if (user is null)
+                        return false;
                 }
                 catch
                 {
@@ -832,6 +872,11 @@ namespace PictureSpider.Twitter
                     database.Users.Add(user);
                     await database.SaveChangesAsync();
                 }
+            }
+            if (user.invalid)
+            {
+                LogError($"Twitter user @{user.name} is invalid");
+                return false;
             }
             if (user.followed || user.queued)
             {

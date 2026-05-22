@@ -35,6 +35,7 @@ namespace PictureSpider.Twitter
         [Required]
         [MaxLength(64)]
         public virtual string api_latest_tweet_id { get; set; } = "0";
+        public virtual bool invalid { get; set; } = false;
 
         public User() { }
 
