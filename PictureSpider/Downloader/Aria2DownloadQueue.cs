@@ -145,8 +145,8 @@ namespace PictureSpider
                     //process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --all-proxy=""{0}""", download_proxy);
                     //Pixiv:[del]不需要代理[/del]，由于迷之原因，现在需要referer和代理才能下载了，而且岛风go还不行
                     //不要带cookie，会收到警告信
-                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --rpc-secret={2} --rpc-listen-port={1} --all-proxy=""{0}"" --referer={3} -x {4}",
-                                                                proxy, port, aria2_rpc_secret,referer,threads);
+                    process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --rpc-secret={2} --rpc-listen-port={1} --all-proxy=""{0}"" --referer={3} -x {4} --stop-with-process={5}",
+                                                                proxy, port, aria2_rpc_secret,referer,threads,Environment.ProcessId);
                     process.Start();
                     Console.WriteLine($"{process_name} Restart");
                 }
