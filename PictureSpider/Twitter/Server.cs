@@ -72,19 +72,16 @@ namespace PictureSpider.Twitter
 
         public override async Task Init()
         {
-            Log("Twitter init start");
             await database.Database.EnsureCreatedAsync();
             await database.EnsureTwitterSchemaAsync();
-            Log("Twitter schema ready");
-//#if !DEBUG
+#if !DEBUG
             await LoadAuthAsync();
             if (string.IsNullOrWhiteSpace(authCookie))
                 LogError("Twitter auth is empty. Start PixivHelper in Chrome to send X/Twitter cookies first.");
 #pragma warning disable CS4014
-            Log("Twitter schedule start");
             Task.Run(RunSchedule);
 #pragma warning restore CS4014
-            //#endif
+#endif
         }
 
         public override void SetReaded(ExplorerFileBase file)
@@ -224,7 +221,6 @@ namespace PictureSpider.Twitter
                 page++;
                 var json = await FetchUserMediaPage(user.id, cursor);
                 var pageTweets = ExtractTweetsAndMedia(json, user.id, user.name).ToList();
-                Log($"Fetch User(Web) @{user.name} page={page} tweets={pageTweets.Count}");
                 foreach (var item in pageTweets)
                 {
                     if (long.TryParse(item.Tweet.id, out var tweetId))
@@ -331,7 +327,6 @@ namespace PictureSpider.Twitter
 
         private async Task<JObject> FetchUserMediaPage(string userId, string cursor)
         {
-            Log($"Fetch user media page userId={userId} cursor={(string.IsNullOrWhiteSpace(cursor) ? "first" : "next")}");
             var variables = new Dictionary<string, object>
             {
                 ["userId"] = userId,

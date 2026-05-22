@@ -189,7 +189,7 @@ namespace PictureSpider.Pixiv
                 httpClient.Timeout = new TimeSpan(0, 0, 35);
                 httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
                 httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
                 httpClient.DefaultRequestHeaders.Host = base_host;
                 //httpClient.DefaultRequestHeaders.Add("Cookie", this.cookie_server.cookie);
                 httpClient.DefaultRequestHeaders.Add("sec-fetch-mode", "cors");
@@ -210,7 +210,7 @@ namespace PictureSpider.Pixiv
                 httpClient_anonymous.Timeout = new TimeSpan(0, 0, 35);
                 httpClient_anonymous.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClient_anonymous.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
+                httpClient_anonymous.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
                 httpClient_anonymous.DefaultRequestHeaders.Host = base_host;
                 httpClient_anonymous.DefaultRequestHeaders.Add("Connection", "keep-alive");
             }
@@ -227,7 +227,7 @@ namespace PictureSpider.Pixiv
                 httpClientCSRF.Timeout = new TimeSpan(0, 0, 35);
                 httpClientCSRF.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3");
                 httpClientCSRF.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.8");
-                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
+                httpClientCSRF.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
                 httpClientCSRF.DefaultRequestHeaders.Host = "www.pixiv.net";
                 //httpClientCSRF.DefaultRequestHeaders.Add("Cookie", this.cookie);
                 httpClientCSRF.DefaultRequestHeaders.Add("sec-fetch-mode", "navigate");
