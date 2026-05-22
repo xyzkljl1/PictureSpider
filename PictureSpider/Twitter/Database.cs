@@ -71,6 +71,7 @@ namespace PictureSpider.Twitter
             await EnsureColumnAsync("media", "downloaded", "`downloaded` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("media", "readed", "`readed` tinyint(1) NOT NULL DEFAULT 0");
             await EnsureColumnAsync("media", "bookmarked", "`bookmarked` tinyint(1) NOT NULL DEFAULT 0");
+            await EnsureMediaTypeColumnAsync();
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -161,6 +162,25 @@ namespace PictureSpider.Twitter
                 await ExecuteRawAsync($"ALTER TABLE `{table}` ADD COLUMN {definition};");
         }
 
+        private async Task EnsureMediaTypeColumnAsync()
+        {
+            var dataType = await ExecuteStringScalarAsync(@"SELECT DATA_TYPE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'media'
+                    AND COLUMN_NAME = 'media_type'");
+            if (dataType == "int")
+                return;
+
+            await ExecuteRawAsync(@"UPDATE `media`
+                SET `media_type` = CASE
+                    WHEN LOWER(CAST(`media_type` AS CHAR)) IN ('1', 'image', 'photo') THEN '1'
+                    WHEN LOWER(CAST(`media_type` AS CHAR)) IN ('2', 'video', 'animated_gif') THEN '2'
+                    ELSE '3'
+                END;");
+            await ExecuteRawAsync(@"ALTER TABLE `media` MODIFY COLUMN `media_type` int NOT NULL DEFAULT 3;");
+        }
+
         private async Task ExecuteRawAsync(string sql)
         {
             var connection = Database.GetDbConnection();
@@ -192,6 +212,26 @@ namespace PictureSpider.Twitter
                 command.CommandText = sql;
                 var result = await command.ExecuteScalarAsync();
                 return System.Convert.ToInt32(result);
+            }
+            finally
+            {
+                if (shouldClose)
+                    await connection.CloseAsync();
+            }
+        }
+
+        private async Task<string> ExecuteStringScalarAsync(string sql)
+        {
+            var connection = Database.GetDbConnection();
+            var shouldClose = connection.State != ConnectionState.Open;
+            if (shouldClose)
+                await connection.OpenAsync();
+            try
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                var result = await command.ExecuteScalarAsync();
+                return result?.ToString() ?? "";
             }
             finally
             {

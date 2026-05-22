@@ -165,39 +165,42 @@ namespace PictureSpider.Twitter
             {
                 try
                 {
-                    Log($"Twitter schedule tick {interval_ct}");
-                    await LoadAuthAsync();
-                    if (string.IsNullOrWhiteSpace(authCookie))
-                    {
-                        // 允许程序先启动；等待 Chrome 插件把 X/Twitter cookie 写入数据库。
-                        Log("Twitter auth empty, schedule waits for listener cookie");
-                        await Task.Delay(interval);
-                        interval_ct++;
-                        continue;
-                    }
-                    if (interval_ct % 24 == 0)
-                    {
-                        var users = await database.GetUsers(true, true);
-                        Log($"Twitter fetch users count={users.Count}");
-                        foreach (var user in users)
-                        {
-                            await FetchTweetsByUserWeb(user.name, user.api_latest_tweet_id);
-                            await Task.Delay(TimeSpan.FromSeconds(random.Next(20, 45)));
-                        }
-                        Log("Twitter sync bookmark directory");
-                        await SyncBookmarkDirectory();
-                    }
-                    Log("Twitter download waiting media");
-                    await DownloadWaitingMedia(DownloadLimitPerRun);
+                    await RunScheduleOnce(interval_ct);
                 }
                 catch (Exception e)
                 {
-                    LogError(e.Message);
+                    LogError(FormatException(e));
                 }
                 await Task.Delay(interval);
                 interval_ct++;
             }
             while (true);
+        }
+
+        private async Task RunScheduleOnce(int interval_ct)
+        {
+            Log($"Twitter schedule tick {interval_ct}");
+            await LoadAuthAsync();
+            if (string.IsNullOrWhiteSpace(authCookie))
+            {
+                // 允许程序先启动；等待 Chrome 插件把 X/Twitter cookie 写入数据库。
+                Log("Twitter auth empty, schedule waits for listener cookie");
+                return;
+            }
+            if (interval_ct % 24 == 0)
+            {
+                var users = await database.GetUsers(true, true);
+                Log($"Twitter fetch users count={users.Count}");
+                foreach (var user in users)
+                {
+                    await FetchTweetsByUserWeb(user.name, user.api_latest_tweet_id);
+                    await Task.Delay(TimeSpan.FromSeconds(random.Next(20, 45)));
+                }
+                Log("Twitter sync bookmark directory");
+                await SyncBookmarkDirectory();
+            }
+            Log("Twitter download waiting media");
+            await DownloadWaitingMedia(DownloadLimitPerRun);
         }
 
         private async Task FetchTweetsByUserWeb(string user_name, string since_tweet_id)
@@ -633,6 +636,8 @@ namespace PictureSpider.Twitter
                     old.url = tweet.url;
                 }
             }
+            // 旧数据库上 media.tweet_id 可能有外键约束；先落 tweet，避免 EF 在同一批次中先插 media。
+            await database.SaveChangesAsync();
             foreach (var media in medias)
             {
                 var old = await database.Medias.FirstOrDefaultAsync(x => x.id == media.id);
@@ -683,7 +688,7 @@ namespace PictureSpider.Twitter
                 }
                 catch (Exception e)
                 {
-                    LogError($"Download fail {media.url}: {e.Message}");
+                    LogError($"Download fail {media.url}: {FormatException(e)}");
                 }
             }
             if (medias.Count > 0)
@@ -870,6 +875,14 @@ namespace PictureSpider.Twitter
         {
             text = Regex.Replace(text ?? "", @"\s+", " ").Trim();
             return text.Length > 500 ? text.Substring(0, 500) : text;
+        }
+
+        private string FormatException(Exception exception)
+        {
+            var messages = new List<string>();
+            for (var current = exception; current is not null; current = current.InnerException)
+                messages.Add(current.Message);
+            return string.Join(" | Inner: ", messages);
         }
 
         private Dictionary<string, object> UserFeatures()
