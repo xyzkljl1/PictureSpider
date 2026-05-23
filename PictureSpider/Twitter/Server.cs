@@ -67,7 +67,7 @@ namespace PictureSpider.Twitter
             handler.ServerCertificateCustomValidationCallback = delegate { return true; };
             httpClient = new HttpClient(handler);
             httpClient.Timeout = new TimeSpan(0, 0, 60);
-            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Twitter, request_proxy, "https://x.com/", 1, 10);
+            downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Twitter, request_proxy, "https://x.com/", 1, 30);
         }
 
         public override async Task Init()
@@ -285,6 +285,11 @@ namespace PictureSpider.Twitter
                     await MarkUserInvalid(user_name);
                     LogError($"Fetch Twitter user @{user_name} failed: Account suspended");
                 }
+                else if (IsAccountUnavailable(json, result))
+                {
+                    await MarkUserInvalid(user_name);
+                    LogError($"Fetch Twitter user @{user_name} failed: Account does not exist");
+                }
                 else
                     LogError($"Fetch Twitter user @{user_name} failed");
                 return null;
@@ -315,6 +320,20 @@ namespace PictureSpider.Twitter
             var text = (result ?? json).ToString(Formatting.None);
             return text.IndexOf("Account suspended", StringComparison.OrdinalIgnoreCase) >= 0
                    || text.IndexOf("\"Suspended\"", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool IsAccountUnavailable(JObject json, JObject result)
+        {
+            var text = (result ?? json).ToString(Formatting.None);
+            if (text.IndexOf("This account doesn", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("User not found", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            // X Web GraphQL currently returns an empty data object for profiles that show
+            // "This account doesn't exist" in the browser.
+            return result is null
+                   && json["data"] is JObject data
+                   && !data.Properties().Any();
         }
 
         private async Task MarkUserInvalid(string userName)
@@ -691,6 +710,7 @@ namespace PictureSpider.Twitter
             var medias = await database.GetWaitingDownloadMedia(limit);
             Log($"Download Waiting Media count={medias.Count} limit={limit}");
             var success = 0;
+            var existing = 0;
             var downloadMedias = new List<Media>();
             var downloadPaths = new Dictionary<string, string>();
             var queue = new TaskQueue<bool>(Aria2AddConcurrency);
@@ -700,12 +720,11 @@ namespace PictureSpider.Twitter
                 if (File.Exists(path))
                 {
                     // 兼容旧文件迁移：文件已存在时直接恢复数据库下载状态。
-                    Log($"Download skip existing {media.file_name}");
                     media.downloaded = true;
+                    existing++;
                     success++;
                     continue;
                 }
-                Log($"Download media {media.id} => {media.file_name}");
                 downloadMedias.Add(media);
                 downloadPaths[media.id] = path;
                 await queue.Add(AddMediaDownloadTask(media.url, path, media.expand_url));
@@ -722,17 +741,14 @@ namespace PictureSpider.Twitter
                 var path = downloadPaths[media.id];
                 media.downloaded = File.Exists(path);
                 if (media.downloaded)
-                {
-                    Log($"Aria2 download done {media.file_name}");
                     success++;
-                }
                 else
                     LogError($"Download fail {media.url}: target file was not found.");
             }
             if (medias.Count > 0)
             {
                 await database.SaveChangesAsync();
-                Log($"Download Done:{success}/{medias.Count}");
+                Log($"Download Done:{success}/{medias.Count}, existing={existing}, queued={queued}");
             }
         }
 
@@ -750,7 +766,6 @@ namespace PictureSpider.Twitter
                     Split = 1,
                     MaxConnectionPerServer = 1
                 };
-                Log($"Aria2 download queue {fileName}");
                 var added = await downloader.Add(url, dir, fileName, options);
                 if (!added)
                     LogError($"Aria2 add download task failed {fileName}");
