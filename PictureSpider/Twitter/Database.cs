@@ -57,7 +57,9 @@ namespace PictureSpider.Twitter
         {
             var userIds = Users.Where(user => !user.invalid && (user.queued || user.followed)).Select(user => user.id);
             // Drain accumulated media in newest-tweet-first batches controlled by Server.DownloadLimitPerRun.
-            var query = Medias.Where(media => !media.downloaded && userIds.Contains(media.user_id))
+            var query = Medias.Where(media => !media.downloaded
+                                              && !media.download_unavailable
+                                              && userIds.Contains(media.user_id))
                               .OrderByDescending(media => media.tweet_id);
             if (limit > 0)
                 return await query.Take(limit).ToListAsync();

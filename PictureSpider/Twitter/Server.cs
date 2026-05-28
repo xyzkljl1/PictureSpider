@@ -698,7 +698,10 @@ namespace PictureSpider.Twitter
                     old.file_name = media.file_name;
                     // URL 变化时旧文件可能对应过期资源，重置后让下载队列重新获取。
                     if (urlChanged)
+                    {
                         old.downloaded = false;
+                        old.download_unavailable = false;
+                    }
                 }
             }
             await database.SaveChangesAsync();
@@ -711,6 +714,7 @@ namespace PictureSpider.Twitter
             Log($"Download Waiting Media count={medias.Count} limit={limit}");
             var success = 0;
             var existing = 0;
+            var unavailable = 0;
             var downloadMedias = new List<Media>();
             var downloadPaths = new Dictionary<string, string>();
             var queue = new TaskQueue<bool>(Aria2AddConcurrency);
@@ -723,6 +727,12 @@ namespace PictureSpider.Twitter
                     media.downloaded = true;
                     existing++;
                     success++;
+                    continue;
+                }
+                if (await IsDownloadUrlUnavailable(media.url, media.expand_url))
+                {
+                    media.download_unavailable = true;
+                    unavailable++;
                     continue;
                 }
                 downloadMedias.Add(media);
@@ -748,8 +758,34 @@ namespace PictureSpider.Twitter
             if (medias.Count > 0)
             {
                 await database.SaveChangesAsync();
-                Log($"Download Done:{success}/{medias.Count}, existing={existing}, queued={queued}");
+                Log($"Download Done:{success}/{medias.Count}, existing={existing}, queued={queued}, unavailable={unavailable}");
             }
+        }
+
+        private async Task<bool> IsDownloadUrlUnavailable(string url, string referer)
+        {
+            try
+            {
+                var status = await ProbeDownloadUrl(HttpMethod.Head, url, referer);
+                if (status is HttpStatusCode.NotFound or HttpStatusCode.Gone)
+                    status = await ProbeDownloadUrl(HttpMethod.Get, url, referer);
+                return status is HttpStatusCode.NotFound or HttpStatusCode.Gone;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<HttpStatusCode> ProbeDownloadUrl(HttpMethod method, string url, string referer)
+        {
+            using var request = new HttpRequestMessage(method, url);
+            request.Headers.UserAgent.ParseAdd(string.IsNullOrWhiteSpace(authUserAgent) ? config.TwitterUserAgent : authUserAgent);
+            request.Headers.Referrer = new Uri(string.IsNullOrWhiteSpace(referer) ? "https://x.com/" : referer);
+            if (method == HttpMethod.Get)
+                request.Headers.TryAddWithoutValidation("Range", "bytes=0-0");
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            return response.StatusCode;
         }
 
         private async Task<bool> AddMediaDownloadTask(string url, string path, string referer)

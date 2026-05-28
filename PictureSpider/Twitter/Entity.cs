@@ -100,6 +100,7 @@ namespace PictureSpider.Twitter
         [MaxLength(260)]
         public virtual string file_name { get; set; } = "";
         public virtual bool downloaded { get; set; } = false;
+        public virtual bool download_unavailable { get; set; } = false;
         public virtual bool readed { get; set; } = false;
         public virtual bool bookmarked { get; set; } = false;
     }

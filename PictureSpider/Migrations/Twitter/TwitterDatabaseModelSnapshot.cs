@@ -56,6 +56,9 @@ namespace PictureSpider.Migrations.Twitter
                     b.Property<bool>("downloaded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("download_unavailable")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("expand_url")
                         .IsRequired()
                         .HasMaxLength(500)
