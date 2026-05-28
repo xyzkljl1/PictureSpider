@@ -86,7 +86,9 @@ namespace PictureSpider.Twitter
 
         public async Task<List<Media>> GetMediaByUserId(string user_id)
         {
-            return await Medias.Where(media => media.user_id == user_id && media.downloaded)
+            return await Medias.Where(media => media.user_id == user_id
+                                               && media.downloaded
+                                               && (media.bookmarked || !media.readed))
                                .OrderByDescending(media => media.tweet_id)
                                .ToListAsync();
         }
