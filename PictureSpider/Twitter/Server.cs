@@ -47,7 +47,7 @@ namespace PictureSpider.Twitter
         public Server(Config config) : base(config.TwitterConnectStr)
         {
             this.config = config;
-            logPrefix = "T";
+            logPrefix = "X";
 
             request_proxy = config.ProxyGo;
             download_dir_root = config.TwitterDownloadDir;
