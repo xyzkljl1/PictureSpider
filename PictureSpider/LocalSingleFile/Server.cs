@@ -163,7 +163,7 @@ namespace PictureSpider.LocalSingleFile
         {
             return null;
         }
-        public override void SetReaded(ExplorerFileBase file)
+        public override Task SetReaded(ExplorerFileBase file)
         {
             var path= (file as ExplorerFile).path;
             var pathraw = Util.String2Bytes(path);
@@ -192,8 +192,9 @@ namespace PictureSpider.LocalSingleFile
                         database.Waited.Remove(illust);
             }
             database.SaveChanges();
+            return Task.CompletedTask;
         }
-        public override void SetBookmarked(ExplorerFileBase file)
+        public override Task SetBookmarked(ExplorerFileBase file)
         {
             var path = (file as ExplorerFile).path;
             var pathraw = Util.String2Bytes(path);
@@ -227,6 +228,7 @@ namespace PictureSpider.LocalSingleFile
                 }
             }
             database.SaveChanges();
+            return Task.CompletedTask;
         }
         public override void ExplorerQueueSwitchVertical(List<ExplorerFileBase> file_list,bool manually,int offset, int cur_index, int cur_sub_index, bool to_end, out int new_index, out int new_sub_index)
         {

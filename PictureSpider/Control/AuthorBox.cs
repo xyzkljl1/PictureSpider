@@ -64,7 +64,7 @@ namespace PictureSpider
             frozen = false;
         }
 
-        private void OnCheckedChange(object sender, EventArgs e)
+        private async void OnCheckedChange(object sender, EventArgs e)
         {
             if (frozen)
                 return;
@@ -74,8 +74,9 @@ namespace PictureSpider
                 user.followed = followCheckBox.CheckState == CheckState.Checked;
                 user.queued = followCheckBox.CheckState == CheckState.Indeterminate;
             }
-            server.SetUserFollowOrQueue(user);
+            await server.SetUserFollowOrQueue(user);
             AuthorModified?.Invoke(this, EventArgs.Empty);
+            await Task.CompletedTask;
         }
     }
 }

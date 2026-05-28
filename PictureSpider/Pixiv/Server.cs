@@ -312,20 +312,23 @@ namespace PictureSpider.Pixiv
             }
             return result;
         }
-        public override void SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
+        public override Task SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
         {
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustReadedSync(illust.id);
+            return Task.CompletedTask;
         }
-        public override void SetBookmarked(ExplorerFileBase file)
+        public override Task SetBookmarked(ExplorerFileBase file)
         {
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkedSync(illust.id,file.bookmarked,file.bookmarkPrivate);
+            return Task.CompletedTask;
         }
-        public override void SetBookmarkEach(ExplorerFileBase file)
+        public override Task SetBookmarkEach(ExplorerFileBase file)
         {
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkEachSync(illust.id,illust.bookmarkEach);
+            return Task.CompletedTask;
         }
         public override BaseUser GetUserById(string id)
         {
@@ -334,13 +337,18 @@ namespace PictureSpider.Pixiv
                 return database.GetUserByIdSync(user_id);
             return null;
         }
-        public override void SetUserFollowOrQueue(BaseUser user)
+        public override Task SetUserFollowOrQueue(BaseUser user)
         {
             database.UpdateUserSync(user as User);
+            return Task.CompletedTask;
         }
         public override Dictionary<string, TagStatus> GetAllTagsStatus() { return database.GetAllTagsStatusSync(); }
         public override Dictionary<string, string> GetAllTagsDesc() { return database.GetAllTagsDescSync(); }
-        public override void UpdateTagStatus(string tag, TagStatus status) { database.UpdateTagStatusSync(tag, status); }
+        public override Task UpdateTagStatus(string tag, TagStatus status)
+        {
+            database.UpdateTagStatusSync(tag, status);
+            return Task.CompletedTask;
+        }
         /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
         private async Task RunSchedule()

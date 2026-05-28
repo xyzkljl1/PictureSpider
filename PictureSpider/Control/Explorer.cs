@@ -253,22 +253,23 @@ namespace PictureSpider
             Task.Run(() => Load(illust, j-20, j+20));
         }
         //标记当前为已读
-        private void MarkReaded()
+        private Task MarkReaded()
         {
-            MarkReaded(this.index);
+            return MarkReaded(this.index);
         }
-        private void MarkReaded(int _index)
+        private async Task MarkReaded(int _index)
         {
             var eFile = file_list[_index];
             if ((!eFile.bookmarked) && !eFile.readed)
             {
                 eFile.readed = true;
-                server.SetReaded(eFile);
+                await server.SetReaded(eFile);
             }
+            await Task.CompletedTask;
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
         //manually:是被SlideHorizon失败触发的还是被手动按上下键触发的
-        private bool SlideVertical(int offset,bool toEnd=false,bool manually=false)
+        private async Task<bool> SlideVertical(int offset,bool toEnd=false,bool manually=false)
         {
             if (index < 0 || index >= file_list.Count)
                 return false;
@@ -278,11 +279,11 @@ namespace PictureSpider
             //不考虑循环，如果index从3->5,就认为[3,5)已读,不考虑从3向前切换经过队头达到5的情况
             for(int i = Math.Min(new_index,index);i<= Math.Max(new_index, index);++i)
                 if(i!=new_index)
-                    MarkReaded(i);
+                    await MarkReaded(i);
             SlideTo(new_index, new_sub_index);
             return true;
         }
-        private bool SlideHorizon(int i)
+        private async Task<bool> SlideHorizon(int i)
         {
             if (index < 0 || index >= file_list.Count)
                 return false;
@@ -292,21 +293,21 @@ namespace PictureSpider
                     new_sub_index+=step)
                 if(file_list[index].isPageValid(new_sub_index))
                 {
-                    MarkReaded();
+                    await MarkReaded();
                     SlideTo(index, new_sub_index);
                     return true;
                 }
             return false;
         }
-        public void SlideRight(object sender,EventArgs args)
+        public async void SlideRight(object sender,EventArgs args)
         {
-            if (!SlideHorizon(1))
-                SlideVertical(1);
+            if (!await SlideHorizon(1))
+                await SlideVertical(1);
         }
-        public void SlideLeft(object sender, EventArgs args)
+        public async void SlideLeft(object sender, EventArgs args)
         {
-            if (!SlideHorizon(-1))
-                SlideVertical(-1, true);
+            if (!await SlideHorizon(-1))
+                await SlideVertical(-1, true);
         }
         /*
         public void SlideUp(object sender, EventArgs args)
@@ -319,17 +320,17 @@ namespace PictureSpider
         }
         */ 
         //切换书签状态，无->bookmark->bookmarkPrivate
-        public void SwitchBookmarkStatus(object sender, MouseEventArgs args)
+        public async void SwitchBookmarkStatus(object sender, MouseEventArgs args)
         {
             if (index < 0 || index >= file_list.Count)
                 return;
             var illust = file_list[index];
             if (args.Button == MouseButtons.Left)//左键切换整组是否收藏
-                SwitchBookmarkStatusImpLeftClick(illust);
+                await SwitchBookmarkStatusImpLeftClick(illust);
             else if (args.Button == MouseButtons.Right&&illust.bookmarked&&illust.validPageCount()>1)//右键切换单张收藏，不允许全部屏蔽
-                SwitchBookmarkStatusImpRightClick(illust);
+                await SwitchBookmarkStatusImpRightClick(illust);
         }
-        private void SwitchBookmarkStatusImpLeftClick(ExplorerFileBase illust)
+        private async Task SwitchBookmarkStatusImpLeftClick(ExplorerFileBase illust)
         {
             if (server.tripleBookmarkState)
             {
@@ -342,19 +343,21 @@ namespace PictureSpider
             }
             else
                 illust.bookmarked = !illust.bookmarked;
-            server.SetBookmarked(illust);
+            await server.SetBookmarked(illust);
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");
+            await Task.CompletedTask;
         }
-        private void SwitchBookmarkStatusImpRightClick(ExplorerFileBase illust)
+        private async Task SwitchBookmarkStatusImpRightClick(ExplorerFileBase illust)
         {
             int i_index = (int)this.Image.Tag;
             illust.switchPageValid(i_index);
-            server.SetBookmarkEach(illust);
+            await server.SetBookmarkEach(illust);
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");
+            await Task.CompletedTask;
         }
         //在浏览器中打开当前图片
         public void OpenInBrowser(object sender, EventArgs args)
@@ -376,31 +379,31 @@ namespace PictureSpider
             process.Close();
         }
         //响应键盘
-        public void OnKeyUp(object sender, KeyEventArgs e)
+        public async void OnKeyUp(object sender, KeyEventArgs e)
         {
             //左右键盘逐帧切换，到头时进入下一组
             //上下键直接进入下一组
             //按Del等于左键点击收藏按钮
             if (e.KeyCode == Keys.Left)
             {
-                if(!SlideHorizon(-1))
-                    SlideVertical(-1,true);
+                if(!await SlideHorizon(-1))
+                    await SlideVertical(-1,true);
             }
             else if (e.KeyCode == Keys.Right)
             {
-                if (!SlideHorizon(1))
-                    SlideVertical(1);
+                if (!await SlideHorizon(1))
+                    await SlideVertical(1);
             }
             else if (e.KeyCode == Keys.Up)
-                SlideVertical(-1,false,true);
+                await SlideVertical(-1,false,true);
             else if (e.KeyCode == Keys.Down)
-                SlideVertical(1,false,true);
+                await SlideVertical(1,false,true);
             else if (e.KeyCode == Keys.Delete)
             {
                 if (index < 0 || index >= file_list.Count)
                     return;
                 var illust = file_list[index];
-                SwitchBookmarkStatusImpLeftClick(illust);
+                await SwitchBookmarkStatusImpLeftClick(illust);
             }
         }
     }

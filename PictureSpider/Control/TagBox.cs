@@ -96,7 +96,7 @@ namespace PictureSpider
             this.ResumeLayout();
             blockSignal = false;
         }
-        private void ItemCheckHandler(object sender, EventArgs e)
+        private async void ItemCheckHandler(object sender, EventArgs e)
         {
             if (blockSignal)
                 return;
@@ -108,14 +108,15 @@ namespace PictureSpider
             var new_status = CheckState2TagStatus[((CheckBox)sender).CheckState];
             if (!tagsStatus.ContainsKey(text))
             {
-                server.UpdateTagStatus(text, new_status);
+                await server.UpdateTagStatus(text, new_status);
                 tagsStatus.Add(text, new_status);
             }
             else if(tagsStatus[text]!= new_status)
             {
-                server.UpdateTagStatus(text, new_status);
+                await server.UpdateTagStatus(text, new_status);
                 tagsStatus[text] = new_status;
             }
+            await Task.CompletedTask;
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {

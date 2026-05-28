@@ -83,16 +83,17 @@ namespace PictureSpider.Twitter
 #endif
         }
 
-        public override void SetReaded(ExplorerFileBase file)
+        public override Task SetReaded(ExplorerFileBase file)
         {
             var media = (file as ExplorerFile)?.media;
             if (media is null)
-                return;
+                return Task.CompletedTask;
             var dbMedia = database.Medias.FirstOrDefault(x => x.id == media.id);
             if (dbMedia is null)
-                return;
+                return Task.CompletedTask;
             dbMedia.readed = file.readed;
             database.SaveChanges();
+            return Task.CompletedTask;
         }
 
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
@@ -121,16 +122,17 @@ namespace PictureSpider.Twitter
                          .ToList();
         }
 
-        public override void SetBookmarked(ExplorerFileBase file)
+        public override Task SetBookmarked(ExplorerFileBase file)
         {
             var media = (file as ExplorerFile)?.media;
             if (media is null)
-                return;
+                return Task.CompletedTask;
             var dbMedia = database.Medias.FirstOrDefault(x => x.id == media.id);
             if (dbMedia is null)
-                return;
+                return Task.CompletedTask;
             dbMedia.bookmarked = file.bookmarked;
             database.SaveChanges();
+            return Task.CompletedTask;
         }
 
         public override BaseUser GetUserById(string id)
@@ -140,16 +142,17 @@ namespace PictureSpider.Twitter
             return user;
         }
 
-        public override void SetUserFollowOrQueue(BaseUser user)
+        public override Task SetUserFollowOrQueue(BaseUser user)
         {
             if (user is not User twitterUser)
-                return;
+                return Task.CompletedTask;
             var dbUser = database.Users.FirstOrDefault(x => x.id == twitterUser.id);
             if (dbUser is null)
-                return;
+                return Task.CompletedTask;
             dbUser.followed = twitterUser.followed;
             dbUser.queued = twitterUser.queued;
             database.SaveChanges();
+            return Task.CompletedTask;
         }
 
         private async Task RunSchedule()

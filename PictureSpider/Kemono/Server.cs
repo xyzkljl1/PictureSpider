@@ -461,15 +461,17 @@ namespace PictureSpider.Kemono
         {
             return database.Users.Where(x => x.id == id).FirstOrDefault();
         }
-        public override void SetReaded(ExplorerFileBase file)
+        public override Task SetReaded(ExplorerFileBase file)
         {
             (file as ExplorerFile).illustGroup.readed = file.readed;
             database.SaveChanges();
+            return Task.CompletedTask;
         }
-        public override void SetBookmarked(ExplorerFileBase file)
+        public override Task SetBookmarked(ExplorerFileBase file)
         {
             (file as ExplorerFile).illustGroup.fav = file.bookmarked;
             database.SaveChanges();
+            return Task.CompletedTask;
         }
         public async Task<string> HttpGet(string url)
         {
@@ -689,13 +691,15 @@ namespace PictureSpider.Kemono
                 await ParseGroupContent(illustGroup);
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
-        public override void SetUserFollowOrQueue(BaseUser user)
+        public override Task SetUserFollowOrQueue(BaseUser user)
         {
             database.SaveChanges();
+            return Task.CompletedTask;
         }
-        public override void SetBookmarkEach(ExplorerFileBase file)
+        public override Task SetBookmarkEach(ExplorerFileBase file)
         {
             database.SaveChanges();
+            return Task.CompletedTask;
         }
         public override bool ListenerUtil_IsValidUrl(string url)
         {

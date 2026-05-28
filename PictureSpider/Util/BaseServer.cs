@@ -69,14 +69,14 @@ namespace PictureSpider
             new_index = -1;
             new_sub_index = -1;
         }
-        public virtual void SetReaded(ExplorerFileBase file) { }
-        public virtual void SetBookmarked(ExplorerFileBase file) { }
-        public virtual void SetBookmarkEach(ExplorerFileBase file) { }
+        public virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
+        public virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
+        public virtual Task SetBookmarkEach(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual BaseUser GetUserById(string id) { return null; }
-        public virtual void SetUserFollowOrQueue(BaseUser user) { }
+        public virtual Task SetUserFollowOrQueue(BaseUser user) { return Task.CompletedTask; }
         public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }
         public virtual Dictionary<string, string> GetAllTagsDesc() { return new Dictionary<string, string>(); }
-        public virtual void UpdateTagStatus(string tag,TagStatus status) { }
+        public virtual Task UpdateTagStatus(string tag,TagStatus status) { return Task.CompletedTask; }
         public virtual void Log(string text)
         {
             Console.WriteLine($"{logPrefix} {DateTime.Now.ToString("MM/dd-HH:mm:ss")} {text}");
