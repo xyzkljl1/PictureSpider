@@ -39,7 +39,7 @@ namespace PictureSpider.Kemono
         Downloader downloader;
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
-        private List<KemonoBaseWork> downloadQueue = new List<KemonoBaseWork>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
+        private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.KemonoConnectStr)
         {
             logPrefix = "K";
@@ -735,6 +735,37 @@ namespace PictureSpider.Kemono
                 throw new Exception("HTTP Not Success");
         }
 
+        private static string GetDownloadQueueKey(KemonoBaseWork work)
+        {
+            return work switch
+            {
+                Work w => $"Work|{w.service}|{w.urlPath}",
+                ExternalWork w => $"ExternalWork|{(int)w.type}|{w.id}",
+                _ => throw new ArgumentException($"Unsupported Kemono work type: {work.GetType().FullName}")
+            };
+        }
+
+        private async Task<KemonoBaseWork> LoadDownloadQueueWork(string key)
+        {
+            var parts = key.Split(new[] { '|' }, 3);
+            if (parts.Length != 3)
+                return null;
+            if (parts[0] == "Work")
+                return await database.Works
+                    .Include(x => x.workGroup)
+                    .ThenInclude(x => x.user)
+                    .FirstOrDefaultAsync(x => x.service == parts[1] && x.urlPath == parts[2]);
+            if (parts[0] == "ExternalWork" && int.TryParse(parts[1], out var type))
+            {
+                var externalWorkType = (ExternalWork.ExternalWorkType)type;
+                return await database.ExternalWorks
+                    .Include(x => x.workGroup)
+                    .ThenInclude(x => x.user)
+                    .FirstOrDefaultAsync(x => x.type == externalWorkType && x.id == parts[2]);
+            }
+            return null;
+        }
+
         // 下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         // 只管理图片，对dettach类型(视频等)只负责加到下载队列
         private void SyncLocalFile()
@@ -769,11 +800,12 @@ namespace PictureSpider.Kemono
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
                     {
+                        var key = GetDownloadQueueKey(work);
                         if (workGroup.fav == false || work.excluded == false)//没有排除
-                            if (!downloadQueue.Contains(work)) //不在下载队列
+                            if (!downloadQueue.Contains(key)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}"))  // 不在本地
                                     if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
-                                        downloadQueue.Add(work);
+                                        downloadQueue.Add(key);
                     } 
                 }
                 if (downloadQueue.Count > tmp)
@@ -845,6 +877,7 @@ namespace PictureSpider.Kemono
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
                                         .Include(x => x.works)
+                                        .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
                                        && illustGroup.user.followed
                                     select illustGroup).ToList();
@@ -860,6 +893,7 @@ namespace PictureSpider.Kemono
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
                                         .Include(x => x.works)
+                                        .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.fav
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
@@ -877,6 +911,7 @@ namespace PictureSpider.Kemono
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
                                         .Include(x => x.works)
+                                        .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
@@ -1021,18 +1056,24 @@ namespace PictureSpider.Kemono
             return false;
         }
 
-        private async Task ProcessIllustDownloadQueue(List<KemonoBaseWork> workList, int limit = -1)
+        private async Task ProcessIllustDownloadQueue(List<string> workList, int limit = -1)
         {
             try
             {
                 //移除临时文件
                 foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
                     File.Delete(file);
-                var download_illusts = new List<KemonoBaseWork>();
-                var ignore_illusts = new List<KemonoBaseWork>();
+                var download_illusts = new List<(string key, KemonoBaseWork work)>();
+                var ignore_illusts = new List<string>();
                 int download_ct = 0;
-                foreach (var work in workList)
+                foreach (var key in workList.ToList())
                 {
+                    var work = await LoadDownloadQueueWork(key);
+                    if (work is null)
+                    {
+                        ignore_illusts.Add(key);
+                        continue;
+                    }
                     var path = Path.Combine(download_dir_tmp, work.TmpSubPath);
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
@@ -1053,21 +1094,21 @@ namespace PictureSpider.Kemono
                         await downloader.Add(work, download_dir_tmp);
                     else if (ext.IsZip())
                     {
-                        ignore_illusts.Add(work);//暂定：直接忽略压缩包
+                        ignore_illusts.Add(key);//暂定：直接忽略压缩包
                         continue;
                     }
                     else
                     {
-                        ignore_illusts.Add(work);
+                        ignore_illusts.Add(key);
                         continue;
                     }
                     download_ct++;
-                    download_illusts.Add(work);
+                    download_illusts.Add((key, work));
                     if (limit >= 0 && download_ct >= limit)
                         break;
                 }
-                foreach (var illust in ignore_illusts)
-                    workList.Remove(illust);
+                foreach (var key in ignore_illusts)
+                    workList.Remove(key);
                 ignore_illusts.Clear();
 
                 //等待完成并查询状态
@@ -1076,21 +1117,21 @@ namespace PictureSpider.Kemono
                 {
                     int success_ct = 0;
                     //var fail_illustGroup=new HashSet<WorkGroup>();
-                    foreach (var illust in download_illusts)
+                    foreach (var (key, illust) in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
 //                            Log($"Download Fail: {illust.url}");
-                            workList.Remove(illust);//移到队末并重置url
-                            workList.Add(illust);                            
+                            workList.Remove(key);//移到队末并重置url
+                            workList.Add(key);
                             //fail_illustGroup.Add(illust.workGroup);
                             //throw new Exception("debug");
                         }
                         else
                         {
                             success_ct++;
-                            workList.Remove(illust);
+                            workList.Remove(key);
                             if (illust.Dettached) // dettach类型只下载一次，
                                 illust.DettachDownloaded = true;
                             //转换格式
