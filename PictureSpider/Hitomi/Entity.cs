@@ -69,12 +69,15 @@ namespace PictureSpider.Hitomi
         public User() { }
         public User(string _name) { name = _name; }
     }
-    public class ExplorerFile : ExplorerFileBase
+    public class ExplorerFile : ExplorerFileBaseEx
     {
         //基类中定义的属性在基类中修改，未定义的在illust中
         public IllustGroup illustGroup;
         public List<Illust> sortedIllusts;
         public string download_dir_tmp;
+        [DbKey]
+        [NotMapped]
+        public string IllustGroupDbKey => illustGroup.Id.ToString();
         public ExplorerFile(IllustGroup _illustGroup, string _download_dir)
         {
             illustGroup = _illustGroup;
@@ -101,6 +104,12 @@ namespace PictureSpider.Hitomi
         public override bool isPageValid(int page) { return !sortedIllusts[page].excluded; }
         public override void switchPageValid(int page) { 
             sortedIllusts[page].excluded= !sortedIllusts[page].excluded;
+        }
+        public override string GetPageDbKey(int page)
+        {
+            if (page < 0 || page >= sortedIllusts.Count)
+                throw new ArgumentOutOfRangeException(nameof(page));
+            return sortedIllusts[page].Id.ToString();
         }
     }
 }

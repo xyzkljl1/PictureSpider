@@ -100,7 +100,6 @@ namespace PictureSpider.Hitomi
             await SyncLocalFile();
             do
             {
-                //await ReloadDb();
                 await ApplyPendingUiOperations();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
@@ -592,37 +591,6 @@ namespace PictureSpider.Hitomi
         {
             using var db = NewDbContext(true);
             return db.Users.AsNoTracking().Where(x=>x.name==id).FirstOrDefault();
-        }
-        public override async Task SetBookmarkEach(ExplorerFileBase file, int page) {
-            var hitomiFile = (ExplorerFile)file;
-            if (page >= 0 && page < hitomiFile.sortedIllusts.Count)
-            {
-                var illust = hitomiFile.sortedIllusts[page];
-                await QueuePendingUiOperation(new PendingUiOperation
-                {
-                    Kind = PendingUiOperationKind.SetPageExcluded,
-                    TargetKey = illust.Id.ToString(),
-                    Value = illust.excluded ? 1 : 0
-                });
-            }
-        }
-        public override async Task SetReaded(ExplorerFileBase file) {
-            var hitomiFile = (ExplorerFile)file;
-            await QueuePendingUiOperation(new PendingUiOperation
-            {
-                Kind = PendingUiOperationKind.SetReaded,
-                TargetKey = hitomiFile.illustGroup.Id.ToString(),
-                Value = hitomiFile.readed ? 1 : 0
-            });
-        }
-        public override async Task SetBookmarked(ExplorerFileBase file) {
-            var hitomiFile = (ExplorerFile)file;
-            await QueuePendingUiOperation(new PendingUiOperation
-            {
-                Kind = PendingUiOperationKind.SetBookmarked,
-                TargetKey = hitomiFile.illustGroup.Id.ToString(),
-                Value = hitomiFile.bookmarked ? 1 : 0
-            });
         }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {

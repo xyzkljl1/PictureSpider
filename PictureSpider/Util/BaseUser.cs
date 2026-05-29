@@ -79,23 +79,27 @@ namespace PictureSpider
     {
     }
 
+    public static class DbKeyUtil
+    {
+        public static string GetDbKey(object target)
+        {
+            if (target is null)
+                throw new ArgumentNullException(nameof(target));
+            var props = target.GetType().GetProperties()
+                .Where(x => Attribute.IsDefined(x, typeof(DbKeyAttribute)))
+                .ToList();
+            if (props.Count != 1)
+                throw new InvalidOperationException($"{target.GetType().FullName} must have exactly one DbKey property.");
+            var value = props[0].GetValue(target)?.ToString();
+            if (string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException($"{target.GetType().FullName}.{props[0].Name} DbKey is empty.");
+            return value;
+        }
+    }
+
     public class BaseUserEx : BaseUser
     {
         [NotMapped]
-        public virtual string DbKey
-        {
-            get
-            {
-                var props = GetType().GetProperties()
-                    .Where(x => Attribute.IsDefined(x, typeof(DbKeyAttribute)))
-                    .ToList();
-                if (props.Count != 1)
-                    throw new InvalidOperationException($"{GetType().FullName} must have exactly one DbKey property.");
-                var value = props[0].GetValue(this)?.ToString();
-                if (string.IsNullOrWhiteSpace(value))
-                    throw new InvalidOperationException($"{GetType().FullName}.{props[0].Name} DbKey is empty.");
-                return value;
-            }
-        }
+        public virtual string DbKey => DbKeyUtil.GetDbKey(this);
     }
 }

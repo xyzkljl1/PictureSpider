@@ -38,6 +38,41 @@ namespace PictureSpider
                 Value = (int)userEx.FollowQueueStatus
             });
         }
+        public override Task SetReaded(ExplorerFileBase file)
+        {
+            var fileEx = (ExplorerFileBaseEx)file;
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetReaded,
+                TargetKey = fileEx.DbKey,
+                Value = fileEx.readed ? 1 : 0
+            });
+        }
+
+        public override Task SetBookmarked(ExplorerFileBase file)
+        {
+            var fileEx = (ExplorerFileBaseEx)file;
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetBookmarked,
+                TargetKey = fileEx.DbKey,
+                Value = fileEx.bookmarked ? 1 : 0
+            });
+        }
+
+        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
+        {
+            var fileEx = (ExplorerFileBaseEx)file;
+            if (page < 0 || page >= fileEx.pageCount())
+                return Task.CompletedTask;
+            var excluded = !fileEx.isPageValid(page);
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetPageExcluded,
+                TargetKey = fileEx.GetPageDbKey(page),
+                Value = excluded ? 1 : 0
+            });
+        }
         protected async Task ApplyPendingUiOperations()
         {
             while (true)

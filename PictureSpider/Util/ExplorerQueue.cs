@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -24,6 +25,16 @@ namespace PictureSpider
         public abstract string FilePath(int page);
         public virtual bool isPageValid(int page) { return true; }
         public virtual void switchPageValid(int page) { }
+    }
+    public abstract class ExplorerFileBaseEx : ExplorerFileBase
+    {
+        [NotMapped]
+        public virtual string DbKey => DbKeyUtil.GetDbKey(this);
+
+        public virtual string GetPageDbKey(int page)
+        {
+            throw new NotSupportedException($"{GetType().FullName} does not support page DbKey.");
+        }
     }
     public struct ExplorerQueue
     {
