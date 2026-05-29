@@ -39,8 +39,8 @@ namespace PictureSpider
         // Always Dispose on destructor 
         ~BaseEFDatabase() { base.Dispose(); }
         public override void Dispose() {
-            // 不应该调用该函数
-            // 但是命令行迁移数据库时会掉，不能throw new NotImplementedException();
+            base.Dispose();
+            GC.SuppressFinalize(this);
         }
         private BaseEFDatabase(String _connStr) { throw new NotImplementedException(); }
         protected override void OnConfiguring(DbContextOptionsBuilder builder)
