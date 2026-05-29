@@ -442,8 +442,13 @@ namespace PictureSpider.Kemono
         }
         public override BaseUser GetUserById(string id)
         {
+            var pos = id.IndexOf('/');
+            if (pos < 0)
+                return null;
+            var service = id.Substring(0, pos);
+            var userId = id.Substring(pos + 1);
             using var db = NewDbContext(true);
-            return db.Users.AsNoTracking().Where(x => x.id == id).FirstOrDefault();
+            return db.Users.AsNoTracking().FirstOrDefault(x => x.id == userId && x.service == service);
         }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {

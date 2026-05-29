@@ -222,7 +222,7 @@ namespace PictureSpider.Kemono
             download_dir_tmp = _download_dir;
             title = illustGroup.title;
             id = illustGroup.id.ToString();
-            userId = $"{illustGroup.user.id}";
+            userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
             sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
@@ -268,7 +268,7 @@ namespace PictureSpider.Kemono
             download_dir_tmp = _download_dir;
             title = illustGroup.title;
             id = illustGroup.id.ToString();
-            userId = $"{illustGroup.user.id}";
+            userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
             sortedIllusts = illustGroup.externalWorks.Where(x => x.Ext.IsImage()).ToList();
