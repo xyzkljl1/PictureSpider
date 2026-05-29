@@ -73,6 +73,25 @@ namespace PictureSpider
                 Value = excluded ? 1 : 0
             });
         }
+        protected virtual TimeSpan PendingOperationInterval => TimeSpan.FromSeconds(5);
+
+        protected async Task RunPendingAndScheduleLoop(Func<Task> runPendingStep,
+            Func<Task> runScheduleStep,
+            TimeSpan scheduleInterval,
+            bool enableScheduleTasks)
+        {
+            var nextScheduleTime = DateTime.MinValue;
+            while (true)
+            {
+                await runPendingStep();
+                if (enableScheduleTasks && DateTime.Now >= nextScheduleTime)
+                {
+                    await runScheduleStep();
+                    nextScheduleTime = DateTime.Now + scheduleInterval;
+                }
+                await Task.Delay(PendingOperationInterval);
+            }
+        }
         protected async Task ApplyPendingUiOperations()
         {
             while (true)

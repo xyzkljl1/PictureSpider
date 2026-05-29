@@ -76,6 +76,7 @@ namespace PictureSpider.Hitomi
         public override async Task Init()
         {
 #if DEBUG
+            Task.Run(() => RunSchedule(false));
             return;
 #endif
             PrepareJS();
@@ -84,23 +85,25 @@ namespace PictureSpider.Hitomi
             /*
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
             await ProcessIllustDownloadQueue(list,-1);*/
-            Task.Run(RunSchedule);
+            Task.Run(() => RunSchedule(true));
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
 #pragma warning restore CS1998
-        private async Task RunSchedule()
+        private async Task RunSchedule(bool enableScheduleTasks)
         {
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
-            var day_of_week = DateTime.Now.DayOfWeek;
 
             await ApplyPendingUiOperations();
-            await SyncLocalFile();
-            do
+            if (enableScheduleTasks)
+                await SyncLocalFile();
+
+            await RunPendingAndScheduleLoop(
+                ApplyPendingUiOperations,
+                async () =>
             {
-                await ApplyPendingUiOperations();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;
@@ -111,10 +114,7 @@ namespace PictureSpider.Hitomi
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
                 await ApplyPendingUiOperations();
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
-                //有时会整批失败，过段时间就好了，略微增加间隔
-                await Task.Delay(new TimeSpan(0, 40, 0));
-            }
-            while (true);
+            }, new TimeSpan(0, 40, 0), enableScheduleTasks);
         }
         private async Task WEBP2JPGorGIF(Illust illust)
         {
@@ -164,7 +164,6 @@ namespace PictureSpider.Hitomi
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         private async Task SyncLocalFile()
         {
-            await ApplyPendingUiOperations();
             //下载
             {
                 
@@ -244,7 +243,6 @@ namespace PictureSpider.Hitomi
         {
             try
             {
-                await ApplyPendingUiOperations();
                 //移除临时文件
                 downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<Illust>();
