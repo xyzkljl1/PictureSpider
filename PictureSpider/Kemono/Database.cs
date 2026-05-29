@@ -4,10 +4,11 @@ using System;
 using System.Linq;
 namespace PictureSpider.Kemono
 {
-    public class Database : BaseEFDatabase
+    public class Database : BaseBackgroundEFDatabase
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            base.OnModelCreating(modelBuilder);
             //级联删除
             modelBuilder
                 .Entity<Work>()

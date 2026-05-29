@@ -183,7 +183,7 @@ namespace PictureSpider.Kemono
     }
     [Table("Users")]
     [PrimaryKey(nameof(id), nameof(service))]
-    public class User : BaseUser
+    public class User : BaseUserEx
     {
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理
@@ -198,17 +198,24 @@ namespace PictureSpider.Kemono
         public bool dowloadEmbed { get; set; } = true;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
+        [DbKey]
+        [NotMapped]
+        public string UserDbKey => $"{service}/{id}";
+
         //一对多外键，需要virtual ICollection
         public virtual ICollection<WorkGroup> workGroups { get; set; }
 
         public User() { }
     }
-    public class ExplorerFile : ExplorerFileBase
+    public class ExplorerFile : ExplorerFileBaseEx
     {
         //基类中定义的属性在基类中修改，未定义的在illust中
         public WorkGroup illustGroup;
         public List<Work> sortedIllusts;
         public string download_dir_tmp;
+        [DbKey]
+        [NotMapped]
+        public string WorkGroupDbKey => $"{illustGroup.service}/{illustGroup.id}";
         public ExplorerFile(WorkGroup _illustGroup, string _download_dir)
         {
             illustGroup = _illustGroup;
@@ -219,6 +226,8 @@ namespace PictureSpider.Kemono
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
             sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
+            foreach (var work in sortedIllusts)
+                work.workGroup ??= illustGroup;
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
         }
         public override string FilePath(int page)
@@ -237,13 +246,22 @@ namespace PictureSpider.Kemono
         {
             sortedIllusts[page].excluded = !sortedIllusts[page].excluded;
         }
+        public override string GetPageDbKey(int page)
+        {
+            if (page < 0 || page >= sortedIllusts.Count)
+                throw new ArgumentOutOfRangeException(nameof(page));
+            return $"Work|{sortedIllusts[page].service}|{sortedIllusts[page].urlPath}";
+        }
     }
-    public class ExplorerExternalFile : ExplorerFileBase
+    public class ExplorerExternalFile : ExplorerFileBaseEx
     {
         //基类中定义的属性在基类中修改，未定义的在illust中
         public WorkGroup illustGroup;
         public List<ExternalWork> sortedIllusts;
         public string download_dir_tmp;
+        [DbKey]
+        [NotMapped]
+        public string WorkGroupDbKey => $"{illustGroup.service}/{illustGroup.id}";
         public ExplorerExternalFile(WorkGroup _illustGroup, string _download_dir)
         {
             illustGroup = _illustGroup;
@@ -254,6 +272,8 @@ namespace PictureSpider.Kemono
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
             sortedIllusts = illustGroup.externalWorks.Where(x => x.Ext.IsImage()).ToList();
+            foreach (var work in sortedIllusts)
+                work.workGroup ??= illustGroup;
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
         }
         public override string FilePath(int page)
@@ -272,6 +292,12 @@ namespace PictureSpider.Kemono
         public override void switchPageValid(int page)
         {
             sortedIllusts[page].excluded = !sortedIllusts[page].excluded;
+        }
+        public override string GetPageDbKey(int page)
+        {
+            if (page < 0 || page >= sortedIllusts.Count)
+                throw new ArgumentOutOfRangeException(nameof(page));
+            return $"ExternalWork|{(int)sortedIllusts[page].type}|{sortedIllusts[page].id}";
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.ClearScript.V8;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -24,7 +25,7 @@ using Mysqlx.Notice;
 
 namespace PictureSpider.Kemono
 {
-    public partial class Server : BaseServerWithDB<Database>, IDisposable
+    public partial class Server : BaseServerWithBackgroundDB<Database>, IDisposable
     {
         private HttpClient httpClient;
         //api/v1/fanbox/user/7349257/posts-legacy
@@ -76,36 +77,18 @@ namespace PictureSpider.Kemono
         {
             httpClient.Dispose();
         }
-#pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
 #pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
-#pragma warning disable CS0162 // 检测到无法访问的代码
-        public override async Task Init()
+        public override Task Init()
         {
 #if DEBUG
-            // TODO: Sorato asou zip
-            return;
+            Task.Run(() => RunSchedule(false));
+#else
+            LogError("Kemono原图服务器似乎有问题，暂停Fetch，只执行UI待处理数据库操作");
+            Task.Run(() => RunSchedule(false));
 #endif
-            LogError("Kemono原图服务器似乎有问题，暂停Fetch，可能是周期性的，过两个月再看");
-            return;
-            //await FetchUser("7349257","fanbox");
-            //await FetchWorkGroupListByUser(database.Users.Where(x=>x.id== "7349257").ToList().FirstOrDefault());
-            //await FetchUser("3659577", "patreon");
-            //await FetchWorkGroup(database.WorkGroups.Where(x=>x.id== "116225295").ToList().First());
-            //foreach (var user in database.Users.ToList())//更新作者
-            //    await FetchUser(user.id, user.service);
-            //await FetchUserAndIllustGroups();
-            //await AddQueuedUser("115314", "fantia");
-            //foreach(var g in database.WorkGroups.ToList())
-            //    await ParseGroupContent(g);
-            //SyncLocalFile();
-            //var wg = database.WorkGroups.Where(x => x.id == "116225295").ToList().First();
-            //downloadQueue.Add(wg.works.First());
-            //await ProcessIllustDownloadQueue(downloadQueue,10);
-            RunSchedule();
+            return Task.CompletedTask;
         }
-#pragma warning restore CS0162
 #pragma warning restore CS4014
-#pragma warning restore CS1998
         private async Task ParseGroupContent(WorkGroup workGroup)
         {
             var doc = new HtmlDocument();
@@ -459,19 +442,68 @@ namespace PictureSpider.Kemono
         }
         public override BaseUser GetUserById(string id)
         {
-            return database.Users.Where(x => x.id == id).FirstOrDefault();
+            using var db = NewDbContext(true);
+            return db.Users.AsNoTracking().Where(x => x.id == id).FirstOrDefault();
         }
-        public override Task SetReaded(ExplorerFileBase file)
+        protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
-            (file as ExplorerFile).illustGroup.readed = file.readed;
-            database.SaveChanges();
-            return Task.CompletedTask;
-        }
-        public override Task SetBookmarked(ExplorerFileBase file)
-        {
-            (file as ExplorerFile).illustGroup.fav = file.bookmarked;
-            database.SaveChanges();
-            return Task.CompletedTask;
+            switch (operation.Kind)
+            {
+                case PendingUiOperationKind.SetReaded:
+                case PendingUiOperationKind.SetBookmarked:
+                    {
+                        var pos = operation.TargetKey.IndexOf('/');
+                        if (pos < 0)
+                            return;
+                        var service = operation.TargetKey.Substring(0, pos);
+                        var id = operation.TargetKey.Substring(pos + 1);
+                        var group = await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service);
+                        if (group is null)
+                            return;
+                        if (operation.Kind == PendingUiOperationKind.SetReaded)
+                            group.readed = operation.Value != 0;
+                        else
+                            group.fav = operation.Value != 0;
+                        break;
+                    }
+                case PendingUiOperationKind.SetPageExcluded:
+                    {
+                        var parts = operation.TargetKey.Split(new[] { '|' }, 3);
+                        if (parts.Length != 3)
+                            return;
+                        if (parts[0] == "Work")
+                        {
+                            var work = await database.Works.FirstOrDefaultAsync(x => x.service == parts[1] && x.urlPath == parts[2]);
+                            if (work is not null)
+                                work.excluded = operation.Value != 0;
+                        }
+                        else if (parts[0] == "ExternalWork" && int.TryParse(parts[1], out var type))
+                        {
+                            var externalWorkType = (ExternalWork.ExternalWorkType)type;
+                            var work = await database.ExternalWorks.FirstOrDefaultAsync(x => x.type == externalWorkType && x.id == parts[2]);
+                            if (work is not null)
+                                work.excluded = operation.Value != 0;
+                        }
+                        break;
+                    }
+                case PendingUiOperationKind.SetUserFollowOrQueue:
+                    {
+                        var pos = operation.TargetKey.IndexOf('/');
+                        if (pos < 0)
+                            return;
+                        var service = operation.TargetKey.Substring(0, pos);
+                        var id = operation.TargetKey.Substring(pos + 1);
+                        var user = await database.Users.FirstOrDefaultAsync(x => x.id == id && x.service == service);
+                        if (user is null)
+                        {
+                            user = new User { id = id, service = service };
+                            user.displayText = user.displayId = id;
+                            database.Users.Add(user);
+                        }
+                        user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
+                        break;
+                    }
+            }
         }
         public async Task<string> HttpGet(string url)
         {
@@ -691,16 +723,6 @@ namespace PictureSpider.Kemono
                 await ParseGroupContent(illustGroup);
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
-        public override Task SetUserFollowOrQueue(BaseUser user)
-        {
-            database.SaveChanges();
-            return Task.CompletedTask;
-        }
-        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
-        {
-            database.SaveChanges();
-            return Task.CompletedTask;
-        }
         public override bool ListenerUtil_IsValidUrl(string url)
         {
             if (url.StartsWith(baseUrl))
@@ -806,7 +828,8 @@ namespace PictureSpider.Kemono
             var ret = new List<ExplorerQueue>();
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Kemono-Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Kemono-Main"));
-            foreach (var user in database.Users.Where(x => x.queued).ToList())
+            using var db = NewDbContext(true);
+            foreach (var user in db.Users.AsNoTracking().Where(x => x.queued).ToList())
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, $"{user.service}/{user.id}", user.displayId));
             return ret;
         }
@@ -816,9 +839,12 @@ namespace PictureSpider.Kemono
 #pragma warning restore CS1998
         {
             var result = new List<ExplorerFileBase>();
+            using var db = NewDbContext(true);
             if (queue.type == ExplorerQueue.QueueType.Main)
             {
-                var illustGroups = (from illustGroup in database.WorkGroups
+                var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
+                                        .Include(x => x.user)
+                                        .Include(x => x.works)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
                                        && illustGroup.user.followed
                                     select illustGroup).ToList();
@@ -831,7 +857,9 @@ namespace PictureSpider.Kemono
             }
             else if (queue.type == ExplorerQueue.QueueType.Fav)
             {
-                var illustGroups = (from illustGroup in database.WorkGroups
+                var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
+                                        .Include(x => x.user)
+                                        .Include(x => x.works)
                                     where illustGroup.fetched && illustGroup.fav
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
@@ -846,7 +874,9 @@ namespace PictureSpider.Kemono
                 string id_text = queue.id;
                 string service = id_text.Substring(0, id_text.IndexOf('/'));
                 string id = id_text.Substring(id_text.IndexOf('/') + 1);
-                var illustGroups = (from illustGroup in database.WorkGroups
+                var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
+                                        .Include(x => x.user)
+                                        .Include(x => x.works)
                                     where illustGroup.fetched && illustGroup.readed == false
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
@@ -886,43 +916,50 @@ namespace PictureSpider.Kemono
         }
         public async Task AddQueuedUser(string id, string service)
         {
-            User user = database.Users.Where(x => x.id == id && x.service == service).ToList().FirstOrDefault();
-            if (user is null)
+            using (var db = NewDbContext(true))
             {
-                user = new User { id = id, service = service };
-                user.displayText = user.displayId = $"{id}";
-                database.Users.Add(user);
+                var user = db.Users.AsNoTracking().Where(x => x.id == id && x.service == service).FirstOrDefault();
+                if (user is not null && (user.followed || user.queued))
+                    return;
             }
-            if (user.followed == false && user.queued == false)
-                user.queued = true;
-            await database.SaveChangesAsync();
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
+                TargetKey = $"{service}/{id}",
+                Value = (int)UserFollowQueueStatus.Queued
+            });
         }
-        private async Task RunSchedule()
+        private async Task RunSchedule(bool enableScheduleTasks)
         {
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
-            SyncLocalFile();
-            do
-            {
-                //await ReloadDb();
-                if (DateTime.Now.Day != last_daily_task)//每日一次
+            await ApplyPendingUiOperations();
+            if (enableScheduleTasks)
+                SyncLocalFile();
+            await RunPendingAndScheduleLoop(
+                ApplyPendingUiOperations,
+                async () =>
                 {
-                    last_daily_task = DateTime.Now.Day;
-                    await FetchUserAndIllustGroups();
-                    SyncLocalFile();
-                    if (day_of_week == DayOfWeek.Sunday) //每周一次
+                    //await ReloadDb();
+                    if (DateTime.Now.Day != last_daily_task)//每日一次
                     {
-                        foreach (var user in database.Users.ToList())//更新作者
-                            await FetchUser(user.id, user.service);
+                        last_daily_task = DateTime.Now.Day;
+                        await FetchUserAndIllustGroups();
+                        await ApplyPendingUiOperations();
+                        SyncLocalFile();
+                        if (day_of_week == DayOfWeek.Sunday) //每周一次
+                        {
+                            foreach (var user in database.Users.ToList())//更新作者
+                                await FetchUser(user.id, user.service);
+                        }
                     }
-                }
-                //同时下载太多503
-                await ProcessIllustDownloadQueue(downloadQueue, 40);
-                await Task.Delay(new TimeSpan(0, 30, 0));
-            }
-            while (true);
+                    //同时下载太多503
+                    await ProcessIllustDownloadQueue(downloadQueue, 40);
+                },
+                new TimeSpan(0, 30, 0),
+                enableScheduleTasks);
         }
         public override async Task<bool> ListenerUtil_FollowUser(string url)
         {
