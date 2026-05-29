@@ -35,7 +35,6 @@ namespace PictureSpider.Hentaiera
         {
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hentaiera, config.Proxy, baseUrl,1);
         }
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
 #pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
 #pragma warning disable CS0162 // 检测到无法访问的代码
         public override async Task Init()
@@ -44,10 +43,9 @@ namespace PictureSpider.Hentaiera
             //await FetchUserAndWorkGroups();
             return;
 #endif
-            Task.Run(RunSchedule);
+            _ = Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
-#pragma warning restore CS4014
 #pragma warning restore CS1998
         //获取该user的作品id并插入数据库
         protected override async Task FetchworkGroupListByUser(User user)

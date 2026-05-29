@@ -77,18 +77,16 @@ namespace PictureSpider.Kemono
         {
             httpClient.Dispose();
         }
-#pragma warning disable CS4014 // 由于此调用不会等待，因此在调用完成前将继续执行当前方法
         public override Task Init()
         {
 #if DEBUG
-            Task.Run(() => RunSchedule(false));
+            _ = Task.Run(() => RunSchedule(false));
 #else
             LogError("Kemono原图服务器似乎有问题，暂停Fetch，只执行UI待处理数据库操作");
-            Task.Run(() => RunSchedule(false));
+            _ = Task.Run(() => RunSchedule(false));
 #endif
             return Task.CompletedTask;
         }
-#pragma warning restore CS4014
         private async Task ParseGroupContent(WorkGroup workGroup)
         {
             var doc = new HtmlDocument();
