@@ -31,6 +31,7 @@ namespace PictureSpider.Twitter
             modelBuilder.Entity<Media>().HasKey(x => x.id);
             modelBuilder.Entity<Media>().HasIndex(x => x.user_id);
             modelBuilder.Entity<Media>().HasIndex(x => x.tweet_id);
+            modelBuilder.Entity<Media>().Ignore(x => x.excluded);
 
             modelBuilder.Entity<AuthState>().ToTable("auth_state");
             modelBuilder.Entity<AuthState>().HasKey(x => x.Id);

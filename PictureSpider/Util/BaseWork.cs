@@ -9,7 +9,7 @@ using static PictureSpider.Downloader;
 
 namespace PictureSpider
 {
-    public class BaseWork
+    public class BaseWork : IHasReadFav
     {
         [NotMapped]
         public virtual string TmpSubPath { get; }

@@ -130,7 +130,7 @@ namespace PictureSpider.Twitter
             var dbMedia = database.Medias.FirstOrDefault(x => x.id == media.id);
             if (dbMedia is null)
                 return Task.CompletedTask;
-            dbMedia.bookmarked = file.bookmarked;
+            dbMedia.fav = file.bookmarked;
             database.SaveChanges();
             return Task.CompletedTask;
         }

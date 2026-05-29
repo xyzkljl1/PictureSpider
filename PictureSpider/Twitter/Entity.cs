@@ -75,7 +75,7 @@ namespace PictureSpider.Twitter
     }
 
     [Table("media")]
-    public class Media
+    public class Media : BaseWork
     {
         [Key]
         [MaxLength(128)]
@@ -101,8 +101,25 @@ namespace PictureSpider.Twitter
         public virtual string file_name { get; set; } = "";
         public virtual bool downloaded { get; set; } = false;
         public virtual bool download_unavailable { get; set; } = false;
-        public virtual bool readed { get; set; } = false;
+        [NotMapped]
+        public override bool fav
+        {
+            get => bookmarked;
+            set => bookmarked = value;
+        }
         public virtual bool bookmarked { get; set; } = false;
+        [NotMapped]
+        public override bool excluded
+        {
+            get => throw new NotSupportedException("Twitter media does not support excluded.");
+            set => throw new NotSupportedException("Twitter media does not support excluded.");
+        }
+        [NotMapped]
+        public override string TmpSubPath => throw new NotSupportedException("Twitter media does not use BaseWork.TmpSubPath.");
+        [NotMapped]
+        public override string FavSubPath => throw new NotSupportedException("Twitter media does not use BaseWork.FavSubPath.");
+        [NotMapped]
+        public override string DownloadURL => throw new NotSupportedException("Twitter media does not use BaseWork.DownloadURL.");
     }
 
     [Table("auth_state")]
@@ -119,10 +136,13 @@ namespace PictureSpider.Twitter
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 
-    public class ExplorerFile : ExplorerFileBase
+    public class ExplorerFile : ExplorerFileBaseEx
     {
         public Media media;
         public string download_dir_main;
+        [DbKey]
+        [NotMapped]
+        public string MediaDbKey => media.id;
 
         public ExplorerFile(Media _illust, string _download_dir)
         {
@@ -133,7 +153,7 @@ namespace PictureSpider.Twitter
             id = media.id;
             tags = new List<string>();
             userId = media.user_id;
-            bookmarked = media.bookmarked;
+            bookmarked = media.fav;
             bookmarkPrivate = false;
             readed = media.readed;
         }
