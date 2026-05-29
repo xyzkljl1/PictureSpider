@@ -353,7 +353,7 @@ namespace PictureSpider
         {
             int i_index = (int)this.Image.Tag;
             illust.switchPageValid(i_index);
-            await server.SetBookmarkEach(illust);
+            await server.SetBookmarkEach(illust, i_index);
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");

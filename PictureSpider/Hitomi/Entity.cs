@@ -91,11 +91,11 @@ namespace PictureSpider.Hitomi
             return Path.Combine(download_dir_tmp, sortedIllusts[page].fileName+sortedIllusts[page].ext);
         }
 
-        public override int pageCount() { return illustGroup.illusts.Count; }
+        public override int pageCount() { return sortedIllusts.Count; }
 
         public override string WebsiteURL(int page) { return $"https://hitomi.la/reader/{illustGroup.Id}.html#{page}"; }
 
-        public override int validPageCount() { return illustGroup.illusts.Count(x=>!x.excluded); }
+        public override int validPageCount() { return sortedIllusts.Count(x=>!x.excluded); }
 
         public override bool isPageValid(int page) { return !sortedIllusts[page].excluded; }
         public override void switchPageValid(int page) { 

@@ -324,7 +324,7 @@ namespace PictureSpider.Pixiv
             database.UpdateIllustBookmarkedSync(illust.id,file.bookmarked,file.bookmarkPrivate);
             return Task.CompletedTask;
         }
-        public override Task SetBookmarkEach(ExplorerFileBase file)
+        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
         {
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkEachSync(illust.id,illust.bookmarkEach);

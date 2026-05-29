@@ -19,10 +19,11 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Microsoft.EntityFrameworkCore;
 
 namespace PictureSpider.Hitomi
 {
-    public partial class Server : BaseServerWithDB<Database>, IDisposable
+    public partial class Server : BaseServerWithBackgroundDB<Database>, IDisposable
     {
         private HttpClient httpClient;
         //private string base_host = "hitomi.la";
@@ -37,7 +38,7 @@ namespace PictureSpider.Hitomi
         private string download_dir_tmp = "";
         private string download_dir_fav = "";
         Aria2DownloadQueue downloader;
-        private List<Illust> downloadQueue = new List<Illust>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
+        private List<int> downloadQueue = new List<int>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
         public Server(Config config): base(config.HitomiConnectStr)
         {
             logPrefix = "H";
@@ -83,7 +84,7 @@ namespace PictureSpider.Hitomi
             /*
             var list = database.Illusts.Where(x => x.Id == 818743).ToList<Illust>();
             await ProcessIllustDownloadQueue(list,-1);*/
-            RunSchedule();
+            Task.Run(RunSchedule);
         }
 #pragma warning restore CS0162
 #pragma warning restore CS4014
@@ -95,17 +96,21 @@ namespace PictureSpider.Hitomi
             int last_daily_task = DateTime.Now.Day;
             var day_of_week = DateTime.Now.DayOfWeek;
 
+            await ApplyPendingUiOperations();
             await SyncLocalFile();
             do
             {
                 //await ReloadDb();
+                await ApplyPendingUiOperations();
                 if (DateTime.Now.Day != last_daily_task)//每日一次
                 {
                     last_daily_task = DateTime.Now.Day;
                     await FetchUserAndIllustGroups();
+                    await ApplyPendingUiOperations();
                     await SyncLocalFile();
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
+                await ApplyPendingUiOperations();
                 await ProcessIllustDownloadQueue(downloadQueue, 25);
                 //有时会整批失败，过段时间就好了，略微增加间隔
                 await Task.Delay(new TimeSpan(0, 40, 0));
@@ -160,6 +165,7 @@ namespace PictureSpider.Hitomi
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         private async Task SyncLocalFile()
         {
+            await ApplyPendingUiOperations();
             //下载
             {
                 
@@ -174,9 +180,9 @@ namespace PictureSpider.Hitomi
                     foreach (var illust in illustGroup.illusts)
                     {
                         if (illustGroup.fav==false || illust.excluded==false)//没有排除
-                            if (!downloadQueue.Contains(illust)) //不在下载队列
+                            if (!downloadQueue.Contains(illust.Id)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
-                                    downloadQueue.Add(illust);
+                                    downloadQueue.Add(illust.Id);
                     }
                 }
                 if (downloadQueue.Count > tmp)
@@ -235,16 +241,36 @@ namespace PictureSpider.Hitomi
                     Log($"Delete from tmp:{ct}");
             }
         }
-        private async Task ProcessIllustDownloadQueue(List<Illust> illustList, int limit = -1)
+        private async Task ProcessIllustDownloadQueue(List<int> illustList, int limit = -1)
         {
             try
             {
+                await ApplyPendingUiOperations();
                 //移除临时文件
                 downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<Illust>();
                 int download_ct = 0;
-                foreach (var illust in illustList)
+                foreach (var illustId in illustList.ToList())
                 {
+                    var illust = await database.Illusts
+                        .Include(x => x.illustGroup)
+                        .ThenInclude(x => x.illusts)
+                        .FirstOrDefaultAsync(x => x.Id == illustId);
+                    if (illust is null)
+                    {
+                        illustList.Remove(illustId);
+                        continue;
+                    }
+                    if (illust.illustGroup.readed && !illust.illustGroup.fav)
+                    {
+                        illustList.Remove(illustId);
+                        continue;
+                    }
+                    if (illust.illustGroup.fav && illust.excluded)
+                    {
+                        illustList.Remove(illustId);
+                        continue;
+                    }
                     //是否应当下载在外部判断
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
@@ -268,15 +294,15 @@ namespace PictureSpider.Hitomi
                         if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
                         {
                             Log($"Download Fail: {path} {illust.url}");
-                            illustList.Remove(illust);//移到队末并重置url
-                            illustList.Add(illust);                            
+                            illustList.Remove(illust.Id);//移到队末并重置url
+                            illustList.Add(illust.Id);
                             fail_illustGroup.Add(illust.illustGroup);
                             //throw new Exception("debug");
                         }
                         else
                         {
                             success_ct++;
-                            illustList.Remove(illust);
+                            illustList.Remove(illust.Id);
                             //转换格式
                             if (illust.ext ==".webp")//一定是小写，不需要.ToLower()
                                 await WEBP2JPGorGIF(illust);
@@ -362,18 +388,24 @@ namespace PictureSpider.Hitomi
             var ret=new List<ExplorerQueue>();
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Hitomi-Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Hitomi-Main"));
-            foreach (var user in database.Users.Where(x => x.queued).ToList())
+            using var db = NewDbContext(true);
+            foreach (var user in db.Users.AsNoTracking().Where(x => x.queued).OrderBy(x => x.name).ToList())
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.name, user.name));
             return ret;
         }
         public async override Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
             var result =new List<ExplorerFileBase>();
+            using var db = NewDbContext(true);
             if(queue.type == ExplorerQueue.QueueType.Main)
             {
-                var illustGroups=(from illustGroup in database.IllustGroups
-                                 where illustGroup.fetched && illustGroup.readed==false  && illustGroup.fav==false
+                var illustGroups=(from illustGroup in db.IllustGroups.AsNoTracking()
+                                     .Include(x => x.user)
+                                     .Include(x => x.illusts)
+                                 where illustGroup.fetched
                                     && illustGroup.user.followed
+                                    && illustGroup.readed == false
+                                    && illustGroup.fav == false
                                  select illustGroup).ToList();
                 foreach(var illustGroup in illustGroups)
                 {
@@ -383,7 +415,9 @@ namespace PictureSpider.Hitomi
             }
             else if(queue.type==ExplorerQueue.QueueType.Fav)
             {
-                var illustGroups = (from illustGroup in database.IllustGroups
+                var illustGroups = (from illustGroup in db.IllustGroups.AsNoTracking()
+                                        .Include(x => x.user)
+                                        .Include(x => x.illusts)
                                     where illustGroup.fetched && illustGroup.fav
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
@@ -394,9 +428,12 @@ namespace PictureSpider.Hitomi
             }
             else
             {
-                var illustGroups = (from illustGroup in database.IllustGroups
-                                    where illustGroup.fetched && illustGroup.readed == false
+                var illustGroups = (from illustGroup in db.IllustGroups.AsNoTracking()
+                                        .Include(x => x.user)
+                                        .Include(x => x.illusts)
+                                    where illustGroup.fetched
                                        && illustGroup.user.name==queue.id
+                                       && illustGroup.readed == false
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -404,7 +441,7 @@ namespace PictureSpider.Hitomi
                     result.Add(exploreFile);
                 }
             }
-            result.Sort((l, r) =>(l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
+            result.Sort((l, r) =>l.title.CompareTo(r.title));
             return result;
         }
         //type只影响illust的下载地址，不取下载地址时可以用任意type
@@ -553,25 +590,97 @@ namespace PictureSpider.Hitomi
         }
         public override BaseUser GetUserById(string id)
         {
-            return database.Users.Where(x=>x.name==id).FirstOrDefault();
+            using var db = NewDbContext(true);
+            return db.Users.AsNoTracking().Where(x=>x.name==id).FirstOrDefault();
         }
-        public override Task SetUserFollowOrQueue(BaseUser user) {
-            database.SaveChanges();
-            return Task.CompletedTask;
+        public override async Task SetUserFollowOrQueue(BaseUser user) {
+            var hitomiUser = (User)user;
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
+                TargetKey = hitomiUser.name,
+                Value = (int)(hitomiUser.followed
+                    ? PendingUserFollowQueueStatus.Followed
+                    : hitomiUser.queued
+                        ? PendingUserFollowQueueStatus.Queued
+                        : PendingUserFollowQueueStatus.None)
+            });
         }
-        public override Task SetBookmarkEach(ExplorerFileBase file) {
-            database.SaveChanges();
-            return Task.CompletedTask;
+        public override async Task SetBookmarkEach(ExplorerFileBase file, int page) {
+            var hitomiFile = (ExplorerFile)file;
+            if (page >= 0 && page < hitomiFile.sortedIllusts.Count)
+            {
+                var illust = hitomiFile.sortedIllusts[page];
+                await QueuePendingUiOperation(new PendingUiOperation
+                {
+                    Kind = PendingUiOperationKind.SetPageExcluded,
+                    TargetKey = illust.Id.ToString(),
+                    Value = illust.excluded ? 1 : 0
+                });
+            }
         }
-        public override Task SetReaded(ExplorerFileBase file) {
-            (file as ExplorerFile).illustGroup.readed = file.readed;
-            database.SaveChanges();
-            return Task.CompletedTask;
+        public override async Task SetReaded(ExplorerFileBase file) {
+            var hitomiFile = (ExplorerFile)file;
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetReaded,
+                TargetKey = hitomiFile.illustGroup.Id.ToString(),
+                Value = hitomiFile.readed ? 1 : 0
+            });
         }
-        public override Task SetBookmarked(ExplorerFileBase file) {
-            (file as ExplorerFile).illustGroup.fav = file.bookmarked;
-            database.SaveChanges();
-            return Task.CompletedTask;
+        public override async Task SetBookmarked(ExplorerFileBase file) {
+            var hitomiFile = (ExplorerFile)file;
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetBookmarked,
+                TargetKey = hitomiFile.illustGroup.Id.ToString(),
+                Value = hitomiFile.bookmarked ? 1 : 0
+            });
+        }
+        protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
+        {
+            switch (operation.Kind)
+            {
+                case PendingUiOperationKind.SetReaded:
+                    if (int.TryParse(operation.TargetKey, out var readedGroupId))
+                    {
+                        var group = await database.IllustGroups.FirstOrDefaultAsync(x => x.Id == readedGroupId);
+                        if (group is not null)
+                            group.readed = operation.Value != 0;
+                    }
+                    break;
+                case PendingUiOperationKind.SetBookmarked:
+                    if (int.TryParse(operation.TargetKey, out var bookmarkedGroupId))
+                    {
+                        var group = await database.IllustGroups.FirstOrDefaultAsync(x => x.Id == bookmarkedGroupId);
+                        if (group is not null)
+                            group.fav = operation.Value != 0;
+                    }
+                    break;
+                case PendingUiOperationKind.SetPageExcluded:
+                    if (int.TryParse(operation.TargetKey, out var illustId))
+                    {
+                        var illust = await database.Illusts.FirstOrDefaultAsync(x => x.Id == illustId);
+                        if (illust is not null)
+                            illust.excluded = operation.Value != 0;
+                    }
+                    break;
+                case PendingUiOperationKind.SetUserFollowOrQueue:
+                    var user = await database.Users.FirstOrDefaultAsync(x => x.name == operation.TargetKey);
+                    if (user is null)
+                    {
+                        user = new User(operation.TargetKey)
+                        {
+                            displayId = operation.TargetKey,
+                            displayText = operation.TargetKey.ReplaceInvalidCharInFilenameWithReturnValue()
+                        };
+                        database.Users.Add(user);
+                    }
+                    var status = (PendingUserFollowQueueStatus)operation.Value;
+                    user.followed = status == PendingUserFollowQueueStatus.Followed;
+                    user.queued = status == PendingUserFollowQueueStatus.Queued;
+                    break;
+            }
         }
         public async Task<string> HttpGet(string url)
         {
@@ -691,20 +800,18 @@ namespace PictureSpider.Hitomi
         }
         public async Task<bool> AddQueuedUser(string id)
         {
-            User user=null;
-            if (database.Users.Count(x => x.name == id) > 0)
-                user = database.Users.Where(x => x.name == id).First();
-            else
+            using (var db = NewDbContext(true))
             {
-                user = new User(id);
-                user.displayText = user.displayId = id;
-                user.displayText = user.displayText.ReplaceInvalidCharInFilenameWithReturnValue();
-                database.Users.Add(user);
+                var user = db.Users.AsNoTracking().Where(x => x.name == id).FirstOrDefault();
+                if (user is not null && (user.followed || user.queued))
+                    return true;
             }
-            if (user.followed || user.queued)
-                return true;
-            user.queued = true;
-            await database.SaveChangesAsync();
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
+                TargetKey = id,
+                Value = (int)PendingUserFollowQueueStatus.Queued
+            });
             return true;
         }
     }

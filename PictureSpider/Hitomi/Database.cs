@@ -7,10 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore.Proxies;
-// see BaseEFDatabase
+// see BaseBackgroundEFDatabase
 namespace PictureSpider.Hitomi
 {
-    public class Database : BaseEFDatabase
+    public class Database : BaseBackgroundEFDatabase
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

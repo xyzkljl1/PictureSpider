@@ -696,7 +696,7 @@ namespace PictureSpider.Kemono
             database.SaveChanges();
             return Task.CompletedTask;
         }
-        public override Task SetBookmarkEach(ExplorerFileBase file)
+        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
         {
             database.SaveChanges();
             return Task.CompletedTask;

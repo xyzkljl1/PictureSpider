@@ -71,7 +71,7 @@ namespace PictureSpider
         }
         public virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
-        public virtual Task SetBookmarkEach(ExplorerFileBase file) { return Task.CompletedTask; }
+        public virtual Task SetBookmarkEach(ExplorerFileBase file, int page) { return Task.CompletedTask; }
         public virtual BaseUser GetUserById(string id) { return null; }
         public virtual Task SetUserFollowOrQueue(BaseUser user) { return Task.CompletedTask; }
         public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }
