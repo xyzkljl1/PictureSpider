@@ -13,13 +13,6 @@ namespace PictureSpider
         SetUserFollowOrQueue = 4
     }
 
-    public enum PendingUserFollowQueueStatus
-    {
-        None = 0,
-        Queued = 1,
-        Followed = 2
-    }
-
     [Table("PendingUiOperations")]
     public class PendingUiOperation
     {

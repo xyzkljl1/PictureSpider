@@ -28,6 +28,16 @@ namespace PictureSpider
             await db.SaveChangesAsync();
         }
 
+        public override Task SetUserFollowOrQueue(BaseUser user)
+        {
+            var userEx = (BaseUserEx)user;
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
+                TargetKey = userEx.DbKey,
+                Value = (int)userEx.FollowQueueStatus
+            });
+        }
         protected async Task ApplyPendingUiOperations()
         {
             while (true)

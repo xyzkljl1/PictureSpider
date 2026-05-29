@@ -57,10 +57,11 @@ namespace PictureSpider.Hitomi
         public virtual ICollection<Illust> illusts { get; set; }
     }
     [Table("Users")]
-    public class User : BaseUser
+    public class User : BaseUserEx
     {
         //Hitomi.la以用户名作id
         [Key]
+        [DbKey]
         public string name { get; set; }
         //一对多外键，需要virtual ICollection
         public virtual ICollection<IllustGroup> illustGroups { get; set; }

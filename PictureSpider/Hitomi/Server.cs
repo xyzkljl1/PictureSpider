@@ -593,19 +593,6 @@ namespace PictureSpider.Hitomi
             using var db = NewDbContext(true);
             return db.Users.AsNoTracking().Where(x=>x.name==id).FirstOrDefault();
         }
-        public override async Task SetUserFollowOrQueue(BaseUser user) {
-            var hitomiUser = (User)user;
-            await QueuePendingUiOperation(new PendingUiOperation
-            {
-                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
-                TargetKey = hitomiUser.name,
-                Value = (int)(hitomiUser.followed
-                    ? PendingUserFollowQueueStatus.Followed
-                    : hitomiUser.queued
-                        ? PendingUserFollowQueueStatus.Queued
-                        : PendingUserFollowQueueStatus.None)
-            });
-        }
         public override async Task SetBookmarkEach(ExplorerFileBase file, int page) {
             var hitomiFile = (ExplorerFile)file;
             if (page >= 0 && page < hitomiFile.sortedIllusts.Count)
@@ -676,9 +663,7 @@ namespace PictureSpider.Hitomi
                         };
                         database.Users.Add(user);
                     }
-                    var status = (PendingUserFollowQueueStatus)operation.Value;
-                    user.followed = status == PendingUserFollowQueueStatus.Followed;
-                    user.queued = status == PendingUserFollowQueueStatus.Queued;
+                    user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
                     break;
             }
         }
@@ -810,7 +795,7 @@ namespace PictureSpider.Hitomi
             {
                 Kind = PendingUiOperationKind.SetUserFollowOrQueue,
                 TargetKey = id,
-                Value = (int)PendingUserFollowQueueStatus.Queued
+                Value = (int)UserFollowQueueStatus.Queued
             });
             return true;
         }
