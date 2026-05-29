@@ -33,12 +33,13 @@ namespace PictureSpider.Hitomi
         //外键
         public virtual IllustGroup illustGroup { get; set; }
         //根据url获得ext,注意并未调用database.SaveChanges();
-        public void ResetEXTByURL()
+        public bool ResetEXTByURL()
         {
-            ext = "";
             var pos = url.LastIndexOf('.');
-            if (pos > 0)
-                ext = url.Substring(pos).ToLower();
+            if (pos <= 0)
+                return false;
+            ext = url.Substring(pos).ToLower();
+            return true;
         }
     }
     [Table("IllustGroups")]

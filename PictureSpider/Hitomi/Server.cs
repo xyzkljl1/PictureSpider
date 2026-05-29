@@ -271,7 +271,13 @@ namespace PictureSpider.Hitomi
                     //是否应当下载在外部判断
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
-                    illust.ResetEXTByURL();//下载前重新获取ext，因为本地文件会被转换格式，如果下载后又丢失文件，ext就和url不符
+                    if (string.IsNullOrEmpty(illust.url) || !illust.ResetEXTByURL())//下载前重新获取ext，因为本地文件会被转换格式，如果下载后又丢失文件，ext就和url不符
+                    {
+                        LogError($"Skip download because url is empty:{illust.illustGroup.Id} {illust.fileName}");
+                        illustList.Remove(illust.Id);
+                        illustList.Add(illust.Id);
+                        continue;
+                    }
                     await database.SaveChangesAsync();
                     await downloader.Add(illust.url, download_dir_tmp, $"{illust.fileName}{illust.ext}");
                     download_ct++;
