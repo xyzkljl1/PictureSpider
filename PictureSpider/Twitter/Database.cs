@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Twitter
 {
-    public class Database : BaseEFDatabase
+    public class Database : BaseBackgroundEFDatabase
     {
         public DbSet<User> Users { get; set; }
         public DbSet<Tweet> Tweets { get; set; }

@@ -18,7 +18,7 @@ namespace PictureSpider.Twitter
      * Official X API is no longer a good free entry point for this project.
      * This module uses browser cookies with X Web GraphQL and throttled timeline paging.
      */
-    public partial class Server : BaseServerWithDB<Database>, IBindHandleProvider, IDisposable
+    public partial class Server : BaseServerWithBackgroundDB<Database>, IBindHandleProvider, IDisposable
     {
         // X Web 前端使用的公共 bearer，不是用户私有 API token。
         private const string PublicBearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
@@ -72,28 +72,15 @@ namespace PictureSpider.Twitter
 
         public override async Task Init()
         {
-            await database.Database.MigrateAsync();
-#if !DEBUG
+#if DEBUG
+            _ = Task.Run(() => RunSchedule(false));
+            await Task.CompletedTask;
+#else
             await LoadAuthAsync();
             if (string.IsNullOrWhiteSpace(authCookie))
                 LogError("Twitter auth is empty. Start PixivHelper in Chrome to send X/Twitter cookies first.");
-#pragma warning disable CS4014
-            Task.Run(RunSchedule);
-#pragma warning restore CS4014
+            _ = Task.Run(() => RunSchedule(true));
 #endif
-        }
-
-        public override Task SetReaded(ExplorerFileBase file)
-        {
-            var media = (file as ExplorerFile)?.media;
-            if (media is null)
-                return Task.CompletedTask;
-            var dbMedia = database.Medias.FirstOrDefault(x => x.id == media.id);
-            if (dbMedia is null)
-                return Task.CompletedTask;
-            dbMedia.readed = file.readed;
-            database.SaveChanges();
-            return Task.CompletedTask;
         }
 
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
@@ -103,7 +90,8 @@ namespace PictureSpider.Twitter
                 new ExplorerQueue(ExplorerQueue.QueueType.FavR, "0", "FavR"),
                 new ExplorerQueue(ExplorerQueue.QueueType.MainR, "0", "MainR")
             };
-            foreach (var user in await database.GetUsers(false, true))
+            using var db = NewDbContext(true);
+            foreach (var user in await db.GetUsers(false, true))
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.id, $"@{user.name}"));
             return ret;
         }
@@ -111,69 +99,82 @@ namespace PictureSpider.Twitter
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
             var medias = new List<Media>();
+            using var db = NewDbContext(true);
             if (queue.type == ExplorerQueue.QueueType.MainR)
-                medias = await database.GetFollowedUnreadMedia();
+                medias = await db.GetFollowedUnreadMedia();
             else if (queue.type == ExplorerQueue.QueueType.FavR)
-                medias = await database.GetBookmarkedMedia();
+                medias = await db.GetBookmarkedMedia();
             else
-                medias = await database.GetMediaByUserId(queue.id);
+                medias = await db.GetMediaByUserId(queue.id);
             return medias.Where(media => media.media_type == MediaType.Image)
                          .Select(media => (ExplorerFileBase)new ExplorerFile(media, download_dir_tmp))
                          .ToList();
         }
 
-        public override Task SetBookmarked(ExplorerFileBase file)
-        {
-            var media = (file as ExplorerFile)?.media;
-            if (media is null)
-                return Task.CompletedTask;
-            var dbMedia = database.Medias.FirstOrDefault(x => x.id == media.id);
-            if (dbMedia is null)
-                return Task.CompletedTask;
-            dbMedia.fav = file.bookmarked;
-            database.SaveChanges();
-            return Task.CompletedTask;
-        }
-
         public override BaseUser GetUserById(string id)
         {
-            var user = database.Users.FirstOrDefault(x => x.id == id);
+            using var db = NewDbContext(true);
+            var user = db.Users.AsNoTracking().FirstOrDefault(x => x.id == id);
             user?.InitDisplayText();
             return user;
         }
 
-        public override Task SetUserFollowOrQueue(BaseUser user)
+        protected override async Task<IHasReadFav> FindWorkGroupByDbKey(string key)
         {
-            if (user is not User twitterUser)
-                return Task.CompletedTask;
-            var dbUser = database.Users.FirstOrDefault(x => x.id == twitterUser.id);
-            if (dbUser is null)
-                return Task.CompletedTask;
-            dbUser.followed = twitterUser.followed;
-            dbUser.queued = twitterUser.queued;
-            database.SaveChanges();
-            return Task.CompletedTask;
+            return await database.Medias.FirstOrDefaultAsync(x => x.id == key);
         }
 
-        private async Task RunSchedule()
+        protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
+        {
+            if (operation.Kind == PendingUiOperationKind.SetUserFollowOrQueue)
+            {
+                var user = await database.Users.FirstOrDefaultAsync(x => x.id == operation.TargetKey || x.name == operation.TargetKey);
+                if (user is null)
+                {
+                    try
+                    {
+                        user = await FetchUserByName(operation.TargetKey);
+                    }
+                    catch
+                    {
+                        var screenName = NormalizeScreenName(operation.TargetKey);
+                        user = new User($"name:{screenName.ToLowerInvariant()}", screenName, screenName);
+                        database.Users.Add(user);
+                    }
+                }
+                if (user?.invalid == true)
+                {
+                    LogError($"Twitter user @{user.name} is invalid");
+                    return;
+                }
+                if (user is not null)
+                    user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
+                return;
+            }
+            await base.ApplyPendingUiOperation(operation);
+        }
+
+        private async Task RunSchedule(bool enableScheduleTasks)
         {
             int interval_ct = 0;
             // 抓取和下载分离：抓取每天一次，下载每小时一小批。
             var interval = new TimeSpan(1, 0, 0);
-            do
-            {
-                try
+            await RunPendingAndScheduleLoop(
+                ApplyPendingUiOperations,
+                async () =>
                 {
-                    await RunScheduleOnce(interval_ct);
-                }
-                catch (Exception e)
-                {
-                    LogError(FormatException(e));
-                }
-                await Task.Delay(interval);
-                interval_ct++;
-            }
-            while (true);
+                    try
+                    {
+                        await RunScheduleOnce(interval_ct);
+                    }
+                    catch (Exception e)
+                    {
+                        LogError(FormatException(e));
+                    }
+                    interval_ct++;
+                },
+                interval,
+                enableScheduleTasks);
         }
 
         private async Task RunScheduleOnce(int interval_ct)
@@ -853,16 +854,17 @@ namespace PictureSpider.Twitter
 
         private async Task SaveAuthState()
         {
-            var state = await database.AuthStates.FirstOrDefaultAsync(x => x.Id == "default");
+            using var db = NewDbContext();
+            var state = await db.AuthStates.FirstOrDefaultAsync(x => x.Id == "default");
             if (state is null)
             {
                 state = new AuthState { Id = "default" };
-                database.AuthStates.Add(state);
+                db.AuthStates.Add(state);
             }
             state.Cookie = authCookie;
             state.UserAgent = authUserAgent;
             state.UpdatedAt = DateTime.UtcNow;
-            await database.SaveChangesAsync();
+            await db.SaveChangesAsync();
         }
 
         private string ExtractCt0(string cookie)
@@ -909,36 +911,13 @@ namespace PictureSpider.Twitter
         private async Task<bool> AddQueuedUser(string screenName)
         {
             screenName = NormalizeScreenName(screenName);
-            var user = await database.Users.FirstOrDefaultAsync(x => x.name == screenName);
-            if (user is null)
+            await QueuePendingUiOperation(new PendingUiOperation
             {
-                try
-                {
-                    user = await FetchUserByName(screenName);
-                    if (user is null)
-                        return false;
-                }
-                catch
-                {
-                    // 凭据暂时不可用时仍保留用户名占位，后续调度拿到 cookie 后会补齐远端 id。
-                    user = new User($"name:{screenName.ToLowerInvariant()}", screenName, screenName);
-                    database.Users.Add(user);
-                    await database.SaveChangesAsync();
-                }
-            }
-            if (user.invalid)
-            {
-                LogError($"Twitter user @{user.name} is invalid");
-                return false;
-            }
-            if (user.followed || user.queued)
-            {
-                Log($"Twitter user already followed or queued @{user.name}");
-                return true;
-            }
-            user.queued = true;
-            await database.SaveChangesAsync();
-            Log($"Twitter user queued @{user.name}");
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
+                TargetKey = screenName,
+                Value = (int)UserFollowQueueStatus.Queued
+            });
+            Log($"Twitter user queue requested @{screenName}");
             return true;
         }
 

@@ -17,9 +17,10 @@ namespace PictureSpider.Twitter
      * 属性分为Base和Extra部分，Base是可以从远端直接/间接获取的属性，Extra是由我赋予的属性
      */
     [Table("user")]
-    public class User : BaseUser
+    public class User : BaseUserEx
     {
         [Key]
+        [DbKey]
         [MaxLength(64)]
         public virtual string id { get; set; } = "";//数字id
         [Required]
