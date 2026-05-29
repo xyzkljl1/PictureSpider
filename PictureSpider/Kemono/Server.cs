@@ -450,27 +450,19 @@ namespace PictureSpider.Kemono
             using var db = NewDbContext(true);
             return db.Users.AsNoTracking().FirstOrDefault(x => x.id == userId && x.service == service);
         }
+        protected override async Task<IHasReadFav> FindWorkGroupByDbKey(string key)
+        {
+            var pos = key.IndexOf('/');
+            if (pos < 0)
+                return null;
+            var service = key.Substring(0, pos);
+            var id = key.Substring(pos + 1);
+            return await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service);
+        }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
             switch (operation.Kind)
             {
-                case PendingUiOperationKind.SetReaded:
-                case PendingUiOperationKind.SetBookmarked:
-                    {
-                        var pos = operation.TargetKey.IndexOf('/');
-                        if (pos < 0)
-                            return;
-                        var service = operation.TargetKey.Substring(0, pos);
-                        var id = operation.TargetKey.Substring(pos + 1);
-                        var group = await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service);
-                        if (group is null)
-                            return;
-                        if (operation.Kind == PendingUiOperationKind.SetReaded)
-                            group.readed = operation.Value != 0;
-                        else
-                            group.fav = operation.Value != 0;
-                        break;
-                    }
                 case PendingUiOperationKind.SetPageExcluded:
                     {
                         var parts = operation.TargetKey.Split(new[] { '|' }, 3);
@@ -489,7 +481,7 @@ namespace PictureSpider.Kemono
                             if (work is not null)
                                 work.excluded = operation.Value != 0;
                         }
-                        break;
+                        return;
                     }
                 case PendingUiOperationKind.SetUserFollowOrQueue:
                     {
@@ -506,9 +498,10 @@ namespace PictureSpider.Kemono
                             database.Users.Add(user);
                         }
                         user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
-                        break;
+                        return;
                     }
             }
+            await base.ApplyPendingUiOperation(operation);
         }
         public async Task<string> HttpGet(string url)
         {

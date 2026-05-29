@@ -155,7 +155,7 @@ namespace PictureSpider.Kemono
     }
     [PrimaryKey(nameof(id), "userservice")]//userservice是自动生成的对user的外键
     [Table("WorkGroups")]
-    public class WorkGroup
+    public class WorkGroup : IHasReadFav
     {
         public string id { get; set; }
         public string title { get; set; }

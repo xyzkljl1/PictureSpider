@@ -26,6 +26,12 @@ namespace PictureSpider
         public int Value { get; set; }
     }
 
+    public interface IHasReadFav
+    {
+        bool readed { get; set; }
+        bool fav { get; set; }
+    }
+
     public class BaseBackgroundEFDatabase : BaseEFDatabase
     {
         public DbSet<PendingUiOperation> PendingUiOperations { get; set; }

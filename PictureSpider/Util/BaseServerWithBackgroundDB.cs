@@ -113,6 +113,22 @@ namespace PictureSpider
             }
         }
 
-        protected abstract Task ApplyPendingUiOperation(PendingUiOperation operation);
+        protected abstract Task<IHasReadFav> FindWorkGroupByDbKey(string key);
+
+        protected virtual async Task ApplyPendingUiOperation(PendingUiOperation operation)
+        {
+            if (operation.Kind != PendingUiOperationKind.SetReaded &&
+                operation.Kind != PendingUiOperationKind.SetBookmarked)
+                return;
+
+            var group = await FindWorkGroupByDbKey(operation.TargetKey);
+            if (group is null)
+                return;
+
+            if (operation.Kind == PendingUiOperationKind.SetReaded)
+                group.readed = operation.Value != 0;
+            else
+                group.fav = operation.Value != 0;
+        }
     }
 }

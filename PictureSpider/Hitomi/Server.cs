@@ -596,26 +596,16 @@ namespace PictureSpider.Hitomi
             using var db = NewDbContext(true);
             return db.Users.AsNoTracking().Where(x=>x.name==id).FirstOrDefault();
         }
+        protected override async Task<IHasReadFav> FindWorkGroupByDbKey(string key)
+        {
+            if (!int.TryParse(key, out var groupId))
+                return null;
+            return await database.IllustGroups.FirstOrDefaultAsync(x => x.Id == groupId);
+        }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
             switch (operation.Kind)
             {
-                case PendingUiOperationKind.SetReaded:
-                    if (int.TryParse(operation.TargetKey, out var readedGroupId))
-                    {
-                        var group = await database.IllustGroups.FirstOrDefaultAsync(x => x.Id == readedGroupId);
-                        if (group is not null)
-                            group.readed = operation.Value != 0;
-                    }
-                    break;
-                case PendingUiOperationKind.SetBookmarked:
-                    if (int.TryParse(operation.TargetKey, out var bookmarkedGroupId))
-                    {
-                        var group = await database.IllustGroups.FirstOrDefaultAsync(x => x.Id == bookmarkedGroupId);
-                        if (group is not null)
-                            group.fav = operation.Value != 0;
-                    }
-                    break;
                 case PendingUiOperationKind.SetPageExcluded:
                     if (int.TryParse(operation.TargetKey, out var illustId))
                     {
@@ -623,7 +613,7 @@ namespace PictureSpider.Hitomi
                         if (illust is not null)
                             illust.excluded = operation.Value != 0;
                     }
-                    break;
+                    return;
                 case PendingUiOperationKind.SetUserFollowOrQueue:
                     var user = await database.Users.FirstOrDefaultAsync(x => x.name == operation.TargetKey);
                     if (user is null)
@@ -636,8 +626,9 @@ namespace PictureSpider.Hitomi
                         database.Users.Add(user);
                     }
                     user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
-                    break;
+                    return;
             }
+            await base.ApplyPendingUiOperation(operation);
         }
         public async Task<string> HttpGet(string url)
         {

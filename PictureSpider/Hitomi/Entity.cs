@@ -43,7 +43,7 @@ namespace PictureSpider.Hitomi
         }
     }
     [Table("IllustGroups")]
-    public class IllustGroup
+    public class IllustGroup : IHasReadFav
     {
         [Key]
         public int Id { get; set; }
