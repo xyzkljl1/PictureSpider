@@ -8,6 +8,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Concurrent;
+using System.Drawing.Imaging;
 
 namespace PictureSpider
 {
@@ -148,6 +149,33 @@ namespace PictureSpider
             }
         }
         //载入某个Illust的一张图片
+        private static Bitmap LoadWebpWithWic(string path)
+        {
+            using var stream = File.OpenRead(path);
+            var frame = System.Windows.Media.Imaging.BitmapFrame.Create(stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            System.Windows.Media.Imaging.BitmapSource source = frame;
+            if (source.Format != System.Windows.Media.PixelFormats.Bgra32)
+            {
+                source = new System.Windows.Media.Imaging.FormatConvertedBitmap(source,
+                    System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            }
+
+            var bitmap = new Bitmap(source.PixelWidth, source.PixelHeight, PixelFormat.Format32bppArgb);
+            var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                ImageLockMode.WriteOnly, bitmap.PixelFormat);
+            try
+            {
+                source.CopyPixels(System.Windows.Int32Rect.Empty, data.Scan0, data.Stride * data.Height, data.Stride);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+            return bitmap;
+        }
+
         private ImageCache Load(ExplorerFileBase eFile,int i)
         {
             var path = eFile.FilePath(i);
@@ -164,12 +192,13 @@ namespace PictureSpider
                 //不检查i越界，由调用者保证
                 if ((!eFile.bookmarked) || eFile.isPageValid(i))
                 {
-                    if (File.Exists(path)
-                        && Path.GetExtension(path).ToLower() != ".webp")//自带Image读取webp会直接报out of memeory,此时可能是图片尚未转换，不删除原图
+                    if (File.Exists(path))
                     {
                         try
                         {
-                            Image img = Image.FromFile(path);
+                            Image img = Path.GetExtension(path).ToLower() == ".webp"
+                                ? LoadWebpWithWic(path)
+                                : Image.FromFile(path);
                             //我内存贼大，不用裁剪
                             img.Tag = i;//图片在illust中的原本index
                             cache.data = img;
