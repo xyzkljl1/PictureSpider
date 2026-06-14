@@ -525,14 +525,12 @@ namespace PictureSpider.Hitomi
                                          select illustGroup).ToList())
             {
                 await FetchIllustGroupById(illustGroup);
-                await Task.Delay(1 * 1000);
             }
             foreach (var user in (from user in database.Users
                                   where user.followed == true || user.queued == true
                                   select user).ToList())
             {
                 await FetchIllustGroupListByUser(user);
-                await Task.Delay(1 * 1000);
             }
             Log("Fetch User Done");
         }
