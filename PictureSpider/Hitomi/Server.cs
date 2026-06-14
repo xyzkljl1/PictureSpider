@@ -469,30 +469,30 @@ namespace PictureSpider.Hitomi
                 return;
             if (illustGroup.illusts is null)
             {
-                //why?
+                // Should never hit
                 LogError($"illustGroup.illusts{illustGroup.Id} is null.");
-                return;
+                throw new Exception("Unexpected");
             }
             using (var engine=new V8ScriptEngine())
             {
-                    engine.Execute(groupJS);
-                    //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
-                    var hashs = engine.Script.myhash;
-                    illustGroup.title = engine.Script.mytitle;
+                engine.Execute(groupJS);
+                //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
+                var hashs = engine.Script.myhash;
+                illustGroup.title = engine.Script.mytitle;
                 foreach(var illust in illustGroup.illusts)
                         database.Illusts.Remove(illust);
-                    illustGroup.illusts.Clear();//注意Clear并不会删除illust行
-                    for (var i = 0; i < hashs.length; ++i)
-                    {
-                        var illust = new Illust();
-                        //url随时间变化，下载时再计算
-                        illust.hash = hashs[i] as string;
-                        illust.index = i;//有序
-                        illust.fileName = $"{illustGroup.Id}_{i:000}";
-                        illustGroup.illusts.Add(illust);
-                    }
+                illustGroup.illusts.Clear();//注意Clear并不会删除illust行
+                for (var i = 0; i < hashs.length; ++i)
+                {
+                    var illust = new Illust();
+                    //url随时间变化，下载时再计算
+                    illust.hash = hashs[i] as string;
+                    illust.index = i;//有序
+                    illust.fileName = $"{illustGroup.Id}_{i:000}";
+                    illustGroup.illusts.Add(illust);
                 }
-                illustGroup.fetched = true;
+            }
+            illustGroup.fetched = true;
             await database.SaveChangesAsync();
             Log($"Fetch IllustGroup Done:{illustGroup.Id} {illustGroup.title}");
         }
@@ -520,18 +520,19 @@ namespace PictureSpider.Hitomi
             //获取follow/queue作者的作品
             // 增加延迟看能不能解决fetch失败的问题
             foreach (var illustGroup in (from illustGroup in database.IllustGroups
+                                             .Include(x => x.illusts)
                                          where illustGroup.fetched == false && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                          select illustGroup).ToList())
             {
                 await FetchIllustGroupById(illustGroup);
-                await Task.Delay(5 * 1000);
+                await Task.Delay(1 * 1000);
             }
             foreach (var user in (from user in database.Users
                                   where user.followed == true || user.queued == true
                                   select user).ToList())
             {
                 await FetchIllustGroupListByUser(user);
-                await Task.Delay(5 * 1000);
+                await Task.Delay(1 * 1000);
             }
             Log("Fetch User Done");
         }
@@ -582,6 +583,7 @@ namespace PictureSpider.Hitomi
                     {
                         illustGroup = new IllustGroup();
                         illustGroup.Id = id;
+                        illustGroup.illusts = new List<Illust>();
                         database.IllustGroups.Add(illustGroup);
                     }
                     illustGroup.user=user;
