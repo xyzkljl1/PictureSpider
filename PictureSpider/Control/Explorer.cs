@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Concurrent;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
 namespace PictureSpider
 {
@@ -149,31 +150,152 @@ namespace PictureSpider
             }
         }
         //载入某个Illust的一张图片
-        private static Bitmap LoadWebpWithWic(string path)
+        private static Bitmap LoadWebp(string path)
         {
-            using var stream = File.OpenRead(path);
-            var frame = System.Windows.Media.Imaging.BitmapFrame.Create(stream,
-                System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile,
-                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-            System.Windows.Media.Imaging.BitmapSource source = frame;
-            if (source.Format != System.Windows.Media.PixelFormats.Bgra32)
-            {
-                source = new System.Windows.Media.Imaging.FormatConvertedBitmap(source,
-                    System.Windows.Media.PixelFormats.Bgra32, null, 0);
-            }
-
-            var bitmap = new Bitmap(source.PixelWidth, source.PixelHeight, PixelFormat.Format32bppArgb);
-            var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
-                ImageLockMode.WriteOnly, bitmap.PixelFormat);
+            IWICBitmapDecoder decoder = null;
+            IWICBitmapFrameDecode frame = null;
+            IWICFormatConverter converter = null;
+            IWICImagingFactory factory = null;
+            IntPtr sourcePtr = IntPtr.Zero;
+            Bitmap bitmap = null;
             try
             {
-                source.CopyPixels(System.Windows.Int32Rect.Empty, data.Scan0, data.Stride * data.Height, data.Stride);
+                factory = (IWICImagingFactory)Activator.CreateInstance(Type.GetTypeFromCLSID(WicImagingFactoryClsid));
+                factory.CreateDecoderFromFilename(path, IntPtr.Zero, GenericRead, WICDecodeOptions.WICDecodeMetadataCacheOnLoad, out decoder);
+                decoder.GetFrame(0, out frame);
+                factory.CreateFormatConverter(out converter);
+                var pixelFormat = WicPixelFormat32bppBGRA;
+                sourcePtr = Marshal.GetComInterfaceForObject(frame, typeof(IWICBitmapSource));
+                converter.Initialize(sourcePtr, ref pixelFormat, WICBitmapDitherType.WICBitmapDitherTypeNone, IntPtr.Zero, 0, WICBitmapPaletteType.WICBitmapPaletteTypeCustom);
+
+                converter.GetSize(out var width, out var height);
+                bitmap = new Bitmap((int)width, (int)height, PixelFormat.Format32bppArgb);
+                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                    ImageLockMode.WriteOnly, bitmap.PixelFormat);
+                try
+                {
+                    converter.CopyPixels(IntPtr.Zero, (uint)data.Stride, (uint)(data.Stride * data.Height), data.Scan0);
+                }
+                finally
+                {
+                    bitmap.UnlockBits(data);
+                }
+                return bitmap;
+            }
+            catch
+            {
+                bitmap?.Dispose();
+                throw;
             }
             finally
             {
-                bitmap.UnlockBits(data);
+                if (sourcePtr != IntPtr.Zero)
+                    Marshal.Release(sourcePtr);
+                if (converter != null)
+                    Marshal.FinalReleaseComObject(converter);
+                if (frame != null)
+                    Marshal.FinalReleaseComObject(frame);
+                if (decoder != null)
+                    Marshal.FinalReleaseComObject(decoder);
+                if (factory != null)
+                    Marshal.FinalReleaseComObject(factory);
             }
-            return bitmap;
+        }
+
+        private const uint GenericRead = 0x80000000;
+        private static readonly Guid WicImagingFactoryClsid = new Guid("CACAF262-9370-4615-A13B-9F5539DA4C0A");
+        private static readonly Guid WicPixelFormat32bppBGRA = new Guid("6fddc324-4e03-4bfe-b185-3d77768dc90f");
+
+        private enum WICDecodeOptions
+        {
+            WICDecodeMetadataCacheOnDemand = 0,
+            WICDecodeMetadataCacheOnLoad = 1
+        }
+
+        private enum WICBitmapDitherType
+        {
+            WICBitmapDitherTypeNone = 0
+        }
+
+        private enum WICBitmapPaletteType
+        {
+            WICBitmapPaletteTypeCustom = 0
+        }
+
+        [ComImport]
+        [Guid("ec5ec8a9-c395-4314-9c77-54d7a935ff70")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IWICImagingFactory
+        {
+            void CreateDecoderFromFilename([MarshalAs(UnmanagedType.LPWStr)] string wzFilename, IntPtr pguidVendor,
+                uint dwDesiredAccess, WICDecodeOptions metadataOptions, out IWICBitmapDecoder ppIDecoder);
+            void CreateDecoderFromStream(IntPtr pIStream, IntPtr pguidVendor, WICDecodeOptions metadataOptions, IntPtr ppIDecoder);
+            void CreateDecoderFromFileHandle(IntPtr hFile, IntPtr pguidVendor, WICDecodeOptions metadataOptions, IntPtr ppIDecoder);
+            void CreateComponentInfo(ref Guid clsidComponent, IntPtr ppIInfo);
+            void CreateDecoder(ref Guid guidContainerFormat, IntPtr pguidVendor, IntPtr ppIDecoder);
+            void CreateEncoder(ref Guid guidContainerFormat, IntPtr pguidVendor, IntPtr ppIEncoder);
+            void CreatePalette(IntPtr ppIPalette);
+            void CreateFormatConverter(out IWICFormatConverter ppIFormatConverter);
+        }
+
+        [ComImport]
+        [Guid("9edde9e7-8dee-47ea-99df-e6faf2ed44bf")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IWICBitmapDecoder
+        {
+            void QueryCapability(IntPtr pIStream, IntPtr pdwCapability);
+            void Initialize(IntPtr pIStream, WICDecodeOptions cacheOptions);
+            void GetContainerFormat(IntPtr pguidContainerFormat);
+            void GetDecoderInfo(IntPtr ppIDecoderInfo);
+            void CopyPalette(IntPtr pIPalette);
+            void GetMetadataQueryReader(IntPtr ppIMetadataQueryReader);
+            void GetPreview(IntPtr ppIBitmapSource);
+            void GetColorContexts(uint cCount, IntPtr ppIColorContexts, IntPtr pcActualCount);
+            void GetThumbnail(IntPtr ppIThumbnail);
+            void GetFrameCount(out uint pCount);
+            void GetFrame(uint index, out IWICBitmapFrameDecode ppIBitmapFrame);
+        }
+
+        [ComImport]
+        [Guid("00000120-a8f2-4877-ba0a-fd2b6645fb94")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IWICBitmapSource
+        {
+            void GetSize(out uint puiWidth, out uint puiHeight);
+            void GetPixelFormat(out Guid pPixelFormat);
+            void GetResolution(out double pDpiX, out double pDpiY);
+            void CopyPalette(IntPtr pIPalette);
+            void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
+        }
+
+        [ComImport]
+        [Guid("3b16811b-6a43-4ec9-a813-3d930c13b940")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IWICBitmapFrameDecode
+        {
+            void GetSize(out uint puiWidth, out uint puiHeight);
+            void GetPixelFormat(out Guid pPixelFormat);
+            void GetResolution(out double pDpiX, out double pDpiY);
+            void CopyPalette(IntPtr pIPalette);
+            void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
+            void GetMetadataQueryReader(IntPtr ppIMetadataQueryReader);
+            void GetColorContexts(uint cCount, IntPtr ppIColorContexts, IntPtr pcActualCount);
+            void GetThumbnail(IntPtr ppIThumbnail);
+        }
+
+        [ComImport]
+        [Guid("00000301-a8f2-4877-ba0a-fd2b6645fb94")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IWICFormatConverter
+        {
+            void GetSize(out uint puiWidth, out uint puiHeight);
+            void GetPixelFormat(out Guid pPixelFormat);
+            void GetResolution(out double pDpiX, out double pDpiY);
+            void CopyPalette(IntPtr pIPalette);
+            void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
+            void Initialize(IntPtr pISource, ref Guid dstFormat, WICBitmapDitherType dither,
+                IntPtr pIPalette, double alphaThresholdPercent, WICBitmapPaletteType paletteTranslate);
+            void CanConvert(ref Guid srcPixelFormat, ref Guid dstPixelFormat, out bool pfCanConvert);
         }
 
         private ImageCache Load(ExplorerFileBase eFile,int i)
@@ -197,7 +319,7 @@ namespace PictureSpider
                         try
                         {
                             Image img = Path.GetExtension(path).ToLower() == ".webp"
-                                ? LoadWebpWithWic(path)
+                                ? LoadWebp(path)
                                 : Image.FromFile(path);
                             //我内存贼大，不用裁剪
                             img.Tag = i;//图片在illust中的原本index
