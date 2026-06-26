@@ -26,6 +26,10 @@
   "KemonoDownloadDir": "D:/PictureSpider/Kemono/",
   "KemonoConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=kemono;",
   "MyDownloadServerAddress": "http://127.0.0.1:4000",
+  "LMangaRootDirs": [
+    "D:\\PictureSpider\\Manga"
+  ],
+  "ManhuaguiDownloadDir": "D:\\PictureSpider\\Manga",
   "TypicalConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=",
   "TypicalDownloadDir": "D:\\PictureSpider"
 }

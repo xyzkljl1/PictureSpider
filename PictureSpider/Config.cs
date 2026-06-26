@@ -35,5 +35,7 @@ namespace PictureSpider
         public string KemonoConnectStr = "";
         public string KemonoDownloadDir = "./";
         public string MyDownloadServerAddress = "";
+        public List<String> LMangaRootDirs = new List<String>();
+        public string ManhuaguiDownloadDir = "./";
     }
 }

@@ -47,8 +47,10 @@ namespace PictureSpider
                             using (var lsfServer = new LocalSingleFile.Server(config))
                                 using (var tgServer = new Telegram.Server(config))
                                 using (var hentaieraServer = new Hentaiera.Server(config))
+                                using (var lmangaServer = new LManga.Server(config))
+                                using (var manhuaguiServer = new Manhuagui.Server(config))
                                 {
-                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer };
+                                    var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer, lmangaServer, manhuaguiServer };
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)
