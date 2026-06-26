@@ -37,5 +37,6 @@ namespace PictureSpider
         public string MyDownloadServerAddress = "";
         public List<String> LMangaRootDirs = new List<String>();
         public string ManhuaguiDownloadDir = "./";
+        public List<String> ManhuaguiComicUrls = new List<String>();
     }
 }
