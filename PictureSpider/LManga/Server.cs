@@ -38,10 +38,11 @@ namespace PictureSpider.LManga
                 return Task.FromResult(result);
 
             var mangaName = Path.GetFileName(queue.id);
-            foreach (var chapterDir in Directory.GetDirectories(queue.id).OrderBy(Path.GetFileName).Reverse())
+            var chapterDirs = Directory.GetDirectories(queue.id).OrderBy(Path.GetFileName).ToList();
+            int firstUnreadIndex = chapterDirs.FindLastIndex(chapterDir => File.Exists(Path.Combine(chapterDir, ExplorerFile.ReadedMarkerFileName))) + 1;
+            for (int i = Math.Max(0, firstUnreadIndex - 3); i < chapterDirs.Count; ++i)
             {
-                if (File.Exists(Path.Combine(chapterDir, ExplorerFile.ReadedMarkerFileName)))
-                    break;
+                var chapterDir = chapterDirs[i];
 
                 var pages = Directory.GetFiles(chapterDir)
                     .Where(path => Path.GetExtension(path).IsImage())
@@ -49,9 +50,8 @@ namespace PictureSpider.LManga
                     .Select(Path.GetFullPath)
                     .ToList();
                 if (pages.Count > 0)
-                    result.Add(new ExplorerFile(mangaName, Path.GetFullPath(chapterDir), pages));
+                    result.Add(new ExplorerFile(mangaName, Path.GetFullPath(chapterDir), pages, i == firstUnreadIndex));
             }
-            result.Reverse();
             return Task.FromResult(result);
         }
 

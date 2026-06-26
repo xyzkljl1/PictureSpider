@@ -136,7 +136,7 @@ namespace PictureSpider
             cache_pool.Clear();
             file_list = list;
             if (file_list.Count>0)
-                SlideTo(0,0,true);
+                SlideTo(Math.Max(0, file_list.FindIndex(x => x.startFromHere)),0,true);
             else
             {
                 index = sub_index = 0;

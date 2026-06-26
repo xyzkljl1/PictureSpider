@@ -8,11 +8,13 @@ namespace PictureSpider.LManga
         public const string ReadedMarkerFileName = ".lmanga.readed";
         public string chapterDir;
         public List<string> pages;
+        public override bool startFromHere { get; }
 
-        public ExplorerFile(string mangaName, string _chapterDir, List<string> _pages)
+        public ExplorerFile(string mangaName, string _chapterDir, List<string> _pages, bool _startFromHere = false)
         {
             chapterDir = _chapterDir;
             pages = _pages;
+            startFromHere = _startFromHere;
             var chapterName = Path.GetFileName(chapterDir);
             id = chapterDir;
             title = $"{mangaName} - {chapterName}";
