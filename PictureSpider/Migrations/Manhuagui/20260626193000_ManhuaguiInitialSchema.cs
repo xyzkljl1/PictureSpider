@@ -14,7 +14,7 @@ namespace PictureSpider.Migrations.Manhuagui
             migrationBuilder.Sql(@"CREATE TABLE IF NOT EXISTS `comic` (
                 `Id` int NOT NULL,
                 `Title` varchar(500) NOT NULL DEFAULT '',
-                `Enabled` tinyint(1) NOT NULL DEFAULT 1,
+                `Fav` tinyint(1) NOT NULL DEFAULT 1,
                 `UpdatedAt` datetime(6) NOT NULL,
                 `LastCheckedAt` datetime(6) NULL,
                 PRIMARY KEY (`Id`)

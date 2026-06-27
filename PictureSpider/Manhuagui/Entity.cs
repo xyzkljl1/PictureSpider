@@ -48,7 +48,7 @@ namespace PictureSpider.Manhuagui
         [Required]
         [MaxLength(500)]
         public virtual string Title { get; set; } = "";
-        public virtual bool Enabled { get; set; } = true;
+        public virtual bool Fav { get; set; } = true;
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public virtual DateTime? LastCheckedAt { get; set; }
         public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();

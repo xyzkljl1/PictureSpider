@@ -52,7 +52,7 @@ namespace PictureSpider.Manhuagui
             {
                 await Task.Delay(new TimeSpan(24, 0, 0));
                 var comics = await database.Comics
-                    .Where(x => x.Enabled)
+                    .Where(x => x.Fav)
                     .OrderBy(x => x.Id)
                     .ToListAsync();
                 foreach (var comic in comics)
@@ -98,8 +98,7 @@ namespace PictureSpider.Manhuagui
             {
                 comic = new Comic
                 {
-                    Id = comicInfo.Id,
-                    Enabled = true
+                    Id = comicInfo.Id
                 };
                 database.Comics.Add(comic);
             }
@@ -153,6 +152,26 @@ namespace PictureSpider.Manhuagui
                 .ToList();
 
             return new ComicInfo(comicId, title, chapters);
+        }
+
+        public override bool ListenerUtil_IsValidUrl(string url)
+        {
+            return ParseComicId(url) > 0;
+        }
+
+        public override async Task<bool> ListenerUtil_FollowUser(string url)
+        {
+            var comicId = ParseComicId(url);
+            if (comicId <= 0)
+                return false;
+
+            // ListenerServer 复用其它模块的 Follow 入口；Manhuagui 这里关注的是漫画本身，
+            // 并且触发的是 follow/fav，不是其它模块常见的 queued 作者抓取。
+            await FetchComic(comicId);
+            var comic = await database.Comics.FirstAsync(x => x.Id == comicId);
+            comic.Fav = true;
+            await database.SaveChangesAsync();
+            return true;
         }
 
         private async Task DownloadChapter(string comicDir, Chapter chapter)
@@ -391,6 +410,14 @@ namespace PictureSpider.Manhuagui
         private static string BuildChapterUrl(int comicId, int chapterId)
         {
             return $"https://www.manhuagui.com/comic/{comicId}/{chapterId}.html";
+        }
+
+        private static int ParseComicId(string url)
+        {
+            var match = Regex.Match(url ?? "", @"^https?://(?:www|m)\.manhuagui\.com/comic/(\d+)(?:/|/[\d]+\.html)?(?:[?#].*)?$");
+            if (!match.Success)
+                return 0;
+            return int.Parse(match.Groups[1].Value);
         }
 
         private static int ParseChapterId(string url)
