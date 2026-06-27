@@ -8,14 +8,13 @@ namespace PictureSpider.LManga
 {
     public class Server : BaseServer, IDisposable
     {
-        private readonly List<string> rootDirs;
+        private readonly string rootDir;
 
         public Server(Config config)
         {
             logPrefix = "LM";
-            rootDirs = config.LMangaRootDirs;
-            foreach (var dir in rootDirs)
-                Util.TouchDir(dir);
+            rootDir = config.LMangaRootDir;
+            Util.TouchDir(rootDir);
         }
 
         public void Dispose()
@@ -25,7 +24,7 @@ namespace PictureSpider.LManga
         public override Task<List<ExplorerQueue>> GetExplorerQueues()
         {
             var result = new List<ExplorerQueue>();
-            foreach (var rootDir in rootDirs.Where(Directory.Exists))
+            if (Directory.Exists(rootDir))
                 foreach (var mangaDir in Directory.GetDirectories(rootDir).OrderBy(Path.GetFileName))
                     result.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, Path.GetFullPath(mangaDir), $"LManga-{Path.GetFileName(mangaDir)}"));
             return Task.FromResult(result);

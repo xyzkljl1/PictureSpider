@@ -26,13 +26,8 @@
   "KemonoDownloadDir": "D:/PictureSpider/Kemono/",
   "KemonoConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=kemono;",
   "MyDownloadServerAddress": "http://127.0.0.1:4000",
-  "LMangaRootDirs": [
-    "D:\\PictureSpider\\Manga"
-  ],
-  "ManhuaguiDownloadDir": "D:\\PictureSpider\\Manga",
-  "ManhuaguiComicUrls": [
-    "https://www.manhuagui.com/comic/8645/"
-  ],
+  "LMangaRootDir": "D:\\PictureSpider\\Manga",
+  "ManhuaguiConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=manhuagui;",
   "TypicalConnectStr": "server=127.0.0.1;port=3306;UID=<db-user>;pwd=<db-password>;database=",
   "TypicalDownloadDir": "D:\\PictureSpider"
 }

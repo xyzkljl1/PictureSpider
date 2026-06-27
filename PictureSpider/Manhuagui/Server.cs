@@ -1,4 +1,5 @@
 using HtmlAgilityPack;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -12,18 +13,16 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Manhuagui
 {
-    public class Server : BaseServer, IDisposable
+    public class Server : BaseServerWithDB<Database>, IDisposable
     {
         private readonly string downloadDir;
-        private readonly List<string> comicUrls;
         private readonly HttpClient httpClient;
         private readonly string[] imageHosts = { "i", "eu", "eu1", "eu2", "us", "us1", "us2", "us3" };
 
-        public Server(Config config)
+        public Server(Config config) : base(config.ManhuaguiConnectStr)
         {
             logPrefix = "MG";
-            downloadDir = config.ManhuaguiDownloadDir;
-            comicUrls = config.ManhuaguiComicUrls;
+            downloadDir = config.LMangaRootDir;
             Util.TouchDir(downloadDir);
             httpClient = new HttpClient(new HttpClientHandler
             {
@@ -41,29 +40,99 @@ namespace PictureSpider.Manhuagui
 
         public override Task Init()
         {
+#if !DEBUG
+            _ = Task.Run(RunSchedule);
+#endif
             return Task.CompletedTask;
         }
 
-        public async Task DownloadTrackedComics()
+        private async Task RunSchedule()
         {
-            foreach (var comicUrl in comicUrls)
-                await DownloadComic(comicUrl);
+            while (true)
+            {
+                await Task.Delay(new TimeSpan(24, 0, 0));
+                var comics = await database.Comics
+                    .Where(x => x.Enabled)
+                    .OrderBy(x => x.Id)
+                    .ToListAsync();
+                foreach (var comic in comics)
+                    await DownloadComic(comic.Id);
+            }
         }
 
-        public async Task DownloadComic(string comicUrl)
+        public async Task DownloadComic(int comicId)
         {
-            var comic = await FetchComic(comicUrl);
+            await FetchComic(comicId);
+            await DownloadStoredComic(comicId);
+        }
+
+        private async Task DownloadStoredComic(int comicId)
+        {
+            var comic = await database.Comics.FirstAsync(x => x.Id == comicId);
+            var chapters = await database.Chapters
+                .Where(x => x.ComicId == comic.Id)
+                .OrderBy(x => x.Index)
+                .ToListAsync();
             var comicDir = Path.Combine(downloadDir, SafeName(comic.Title));
             Util.TouchDir(comicDir);
-            Log($"{comic.Title}: {comic.Chapters.Count} chapters");
+            Log($"{comic.Title}: {chapters.Count} chapters");
 
-            foreach (var chapter in comic.Chapters)
-                await DownloadChapter(comicDir, chapter);
+            foreach (var chapter in chapters)
+            {
+                try
+                {
+                    await DownloadChapter(comicDir, chapter);
+                }
+                catch (Exception ex)
+                {
+                    Log($"{chapter.Title} failed: {ex.Message}");
+                }
+            }
         }
 
-        private async Task<Comic> FetchComic(string comicUrl)
+        private async Task FetchComic(int comicId)
         {
-            var html = await httpClient.GetStringAsync(NormalizeUrl(comicUrl));
+            var comicInfo = await FetchComicInfo(comicId);
+            var comic = await database.Comics.FirstOrDefaultAsync(x => x.Id == comicInfo.Id);
+            if (comic == null)
+            {
+                comic = new Comic
+                {
+                    Id = comicInfo.Id,
+                    Enabled = true
+                };
+                database.Comics.Add(comic);
+            }
+            comic.Title = comicInfo.Title;
+            comic.UpdatedAt = DateTime.UtcNow;
+            comic.LastCheckedAt = DateTime.UtcNow;
+
+            var chapters = await database.Chapters
+                .Where(x => x.ComicId == comic.Id)
+                .ToDictionaryAsync(x => x.Id);
+            for (var i = 0; i < comicInfo.Chapters.Count; i++)
+            {
+                var chapterInfo = comicInfo.Chapters[i];
+                if (!chapters.TryGetValue(chapterInfo.Id, out var chapter))
+                {
+                    chapter = new Chapter
+                    {
+                        Id = chapterInfo.Id,
+                        ComicId = comic.Id
+                    };
+                    database.Chapters.Add(chapter);
+                }
+                chapter.Title = chapterInfo.Title;
+                chapter.Index = i;
+                chapter.UpdatedAt = DateTime.UtcNow;
+            }
+            await database.SaveChangesAsync();
+        }
+
+        private async Task<ComicInfo> FetchComicInfo(int comicId)
+        {
+            var comicUrl = BuildComicUrl(comicId);
+            var html = await httpClient.GetStringAsync(comicUrl);
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
 
@@ -76,32 +145,67 @@ namespace PictureSpider.Manhuagui
                 throw new InvalidOperationException($"No chapters found: {comicUrl}");
 
             var chapters = chapterNodes
-                .Select(x => new Chapter(
-                    WebUtility.HtmlDecode(x.GetAttributeValue("title", x.InnerText).Trim()),
-                    NormalizeUrl(x.GetAttributeValue("href", ""))))
-                .Where(x => Regex.IsMatch(x.Url, @"/comic/\d+/\d+\.html$"))
+                .Select(x => new ChapterInfo(
+                    ParseChapterId(x.GetAttributeValue("href", "")),
+                    WebUtility.HtmlDecode(x.GetAttributeValue("title", x.InnerText).Trim())))
+                .Where(x => x.Id > 0)
                 .Reverse()
                 .ToList();
 
-            return new Comic(title, chapters);
+            return new ComicInfo(comicId, title, chapters);
         }
 
         private async Task DownloadChapter(string comicDir, Chapter chapter)
         {
-            var data = await FetchChapter(chapter.Url);
-            var chapterDir = Path.Combine(comicDir, SafeName(data.Title));
+            var chapterUrl = BuildChapterUrl(chapter.ComicId, chapter.Id);
+            var data = await FetchChapter(chapterUrl);
+            chapter.Title = data.Title;
+            chapter.PageCount = data.Images.Count;
+            chapter.LastFetchedAt = DateTime.UtcNow;
+            var chapterDir = Path.Combine(comicDir, SafeNameWithIndex(chapter.Index + 1, chapter.Title));
             Util.TouchDir(chapterDir);
             Log($"{data.Title}: {data.Images.Count} pages");
 
+            var pages = await database.Pages
+                .Where(x => x.ChapterId == chapter.Id)
+                .ToDictionaryAsync(x => x.Index);
             for (var i = 0; i < data.Images.Count; i++)
             {
                 var imagePath = data.Images[i];
-                var output = Path.Combine(chapterDir, $"{i + 1:D4}{Path.GetExtension(imagePath)}");
+                if (!pages.TryGetValue(i, out var page))
+                {
+                    page = new Page
+                    {
+                        ChapterId = chapter.Id,
+                        Index = i
+                    };
+                    database.Pages.Add(page);
+                }
+                page.ImagePath = imagePath;
+                page.FileName = $"{i + 1:D4}{Path.GetExtension(imagePath)}";
+                var output = Path.Combine(chapterDir, page.FileName);
                 if (File.Exists(output))
+                {
+                    page.Downloaded = true;
+                    page.DownloadedAt ??= DateTime.UtcNow;
+                    page.LastError = "";
                     continue;
-                await DownloadImage(chapter.Url, imagePath, data.Query, output);
+                }
+                try
+                {
+                    await DownloadImage(chapterUrl, imagePath, data.Query, output);
+                    page.Downloaded = true;
+                    page.DownloadedAt = DateTime.UtcNow;
+                    page.LastError = "";
+                }
+                catch (Exception ex)
+                {
+                    page.LastError = ex.Message;
+                    Log($"{page.FileName} failed: {ex.Message}");
+                }
                 await Task.Delay(200);
             }
+            await database.SaveChangesAsync();
         }
 
         private async Task<ChapterData> FetchChapter(string chapterUrl)
@@ -279,19 +383,33 @@ namespace PictureSpider.Manhuagui
             return bits;
         }
 
-        private static string NormalizeUrl(string url)
+        private static string BuildComicUrl(int comicId)
         {
-            if (url.StartsWith("//"))
-                return "https:" + url;
-            if (url.StartsWith("/"))
-                return "https://www.manhuagui.com" + url;
-            return url;
+            return $"https://www.manhuagui.com/comic/{comicId}/";
+        }
+
+        private static string BuildChapterUrl(int comicId, int chapterId)
+        {
+            return $"https://www.manhuagui.com/comic/{comicId}/{chapterId}.html";
+        }
+
+        private static int ParseChapterId(string url)
+        {
+            var match = Regex.Match(url, @"/comic/\d+/(\d+)\.html");
+            if (!match.Success)
+                return 0;
+            return int.Parse(match.Groups[1].Value);
         }
 
         private static string SafeName(string name)
         {
             name = string.IsNullOrWhiteSpace(name) ? "untitled" : name;
             return name.ReplaceInvalidCharInFilenameWithReturnValue();
+        }
+
+        private static string SafeNameWithIndex(int index, string name)
+        {
+            return $"{index:D4}_{SafeName(name)}";
         }
 
         private class LzData
@@ -308,27 +426,29 @@ namespace PictureSpider.Manhuagui
             }
         }
 
-        private class Comic
+        private class ComicInfo
         {
+            public int Id { get; }
             public string Title { get; }
-            public List<Chapter> Chapters { get; }
+            public List<ChapterInfo> Chapters { get; }
 
-            public Comic(string title, List<Chapter> chapters)
+            public ComicInfo(int id, string title, List<ChapterInfo> chapters)
             {
+                Id = id;
                 Title = title;
                 Chapters = chapters;
             }
         }
 
-        private class Chapter
+        private class ChapterInfo
         {
+            public int Id { get; }
             public string Title { get; }
-            public string Url { get; }
 
-            public Chapter(string title, string url)
+            public ChapterInfo(int id, string title)
             {
+                Id = id;
                 Title = title;
-                Url = url;
             }
         }
 
