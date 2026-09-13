@@ -2,6 +2,7 @@
   "Proxy": "127.0.0.1:1196",
   "ProxySNI": "127.0.0.1:1200",
   "ProxyGo": "127.0.0.1:8000",
+  "GoogleDriveApiKey": "",
   "PixivDownloadDir": "D:/PictureSpider/Pixiv/",
   "PixivUserName": "",
   "PixivUserId": "0",

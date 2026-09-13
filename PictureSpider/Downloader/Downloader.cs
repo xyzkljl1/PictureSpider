@@ -29,6 +29,7 @@ namespace PictureSpider
         {
             Aria2DownloadQueue,
             MegaDownloadQueue,
+            GoogleDriveDownloadQueue,
         }
         public List<BaseDownloadQueue> downloaders=new List<BaseDownloadQueue>();
         public Downloader(params BaseDownloadQueue[] _downloaders)

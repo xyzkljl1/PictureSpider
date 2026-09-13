@@ -12,6 +12,7 @@ namespace PictureSpider
         public string Proxy = "127.0.0.1:1196";
         public string ProxySNI = "127.0.0.1:1200";//能实现绕过SNI的本地代理，目前使用Accesser
         public string ProxyGo = "127.0.0.1:8000";
+        public string GoogleDriveApiKey = "";
         public string PixivUserName = "Name";
         public string PixivUserId = "0";
         public string PixivDownloadDir = "./";
