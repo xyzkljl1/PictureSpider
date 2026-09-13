@@ -18,8 +18,10 @@ namespace PictureSpider
         private MegaApiClient mega;
         private List<Task> downloading = new List<Task>();
         private bool loginSuccessed = false;
-        public MegaDownloadQueue(string proxy_access,string proxy_download)
+        private readonly bool useTempFile;
+        public MegaDownloadQueue(string proxy_access,string proxy_download, bool useTempFile = false)
         {
+            this.useTempFile = useTempFile;
             //SNI可以访问网页，获得节点，但是无法下载(http://gfs262n333.userstorage.mega.co.nz/dl/*)
             //Go无法访问网页，在chrome上时不时可以下载，但是用curl及MegaApiClient无法下载
             mega = new MegaApiClient(new MegaWebClient(new WebProxy(proxy_access, false), new WebProxy(proxy_download, false)));
@@ -79,11 +81,19 @@ namespace PictureSpider
         public async Task DownloadTask(string url, string dir, string file_name)
         {
             var uri = new Uri(url);
+            var path = Path.Combine(dir, file_name);
+            var downloadPath = useTempFile ? path + ".mega.part" : path;
+            bool downloaded = false;
             try
             {
+                // 正式文件只在下载成功后出现，避免残缺文件被上层误判为已下载。
+                if (useTempFile)
+                    File.Delete(downloadPath);
                 if (uri.AbsolutePath.StartsWith("/file/"))//单个文件
-                    mega.DownloadFile(new Uri(url), Path.Combine(dir, file_name));
-                    //await mega.DownloadFileAsync(new Uri(url), Path.Combine(dir, file_name));
+                {
+                    mega.DownloadFile(uri, downloadPath);
+                    downloaded = true;
+                }
                 else if (uri.AbsolutePath.StartsWith("/folder/") && uri.Fragment.Contains("/file/"))
                 {
                     //形如https://mega.nz/folder/2NhyhAKQ#M-r20w5Zlo8UaFp2BBVcQg/file/DIQmGT7Z
@@ -92,20 +102,36 @@ namespace PictureSpider
                     foreach (var node in await mega.GetNodesFromLinkAsync(new Uri(url)))
                         if (node.Id == fileId)
                         {
-                            //await mega.DownloadFileAsync(node, Path.Combine(dir, file_name));
-                            mega.DownloadFile(node, Path.Combine(dir, file_name));
+                            mega.DownloadFile(node, downloadPath);
+                            downloaded = true;
                             break;
                         }
+                }
+                if (useTempFile)
+                {
+                    if (!downloaded)
+                        throw new TopLevelException($"Can't Resolve Download Link:{url}");
+                    File.Move(downloadPath, path);
                 }
                 return;
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"[Mega] Fail to download :{e.Message}/{url}");
+                if (useTempFile)
+                {
+                    try
+                    {
+                        File.Delete(downloadPath);
+                    }
+                    catch (Exception cleanupException)
+                    {
+                        Console.Error.WriteLine($"[Mega] Fail to remove temporary file:{cleanupException.Message}");
+                    }
+                }
                 throw;
             }
 
-            throw new TopLevelException($"Can't Resolve Downloaad Link:{url}");
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public override async Task<bool> Add(string url, string dir, string file_name)
