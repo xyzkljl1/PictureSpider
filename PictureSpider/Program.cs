@@ -41,6 +41,7 @@ namespace PictureSpider
                     //    return;
                     Util.SetMainThreadId();
                     using (var kemonoServer = new Kemono.Server(config))
+                    using (var pawchiveServer = string.IsNullOrWhiteSpace(config.PawchiveConnectStr) ? null : new Pawchive.Server(config))
                     using (var twitterServer = new Twitter.Server(config))
                     using (var hitomiServer = new Hitomi.Server(config))
                         using (var pixivServer = new Pixiv.Server(config))
@@ -51,6 +52,8 @@ namespace PictureSpider
                                 using (var manhuaguiServer = new Manhuagui.Server(config))
                                 {
                                     var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer, lmangaServer, manhuaguiServer };
+                                    if (pawchiveServer is not null)
+                                        commonServers.Add(pawchiveServer);
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)

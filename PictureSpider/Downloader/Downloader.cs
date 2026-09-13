@@ -23,6 +23,7 @@ namespace PictureSpider
             Telegram = 3,
             Kemono = 4,
             Hentaiera = 5,
+            Pawchive = 6,
         }
         public enum DownloaderType
         {

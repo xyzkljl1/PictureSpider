@@ -34,6 +34,8 @@ namespace PictureSpider
         public string TelegramConnectStr = "";
         public string KemonoConnectStr = "";
         public string KemonoDownloadDir = "./";
+        public string PawchiveConnectStr = "";
+        public string PawchiveDownloadDir = "./";
         public string MyDownloadServerAddress = "";
         public string LMangaRootDir = "./";
         public string ManhuaguiConnectStr = "";
