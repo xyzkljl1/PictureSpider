@@ -52,6 +52,8 @@ namespace PictureSpider.Hitomi
         public bool fav { get; set; } = false;
         //已经fetch过
         public bool fetched { get; set; } = false;
+        // 作者超过 5 位的合集不下载。
+        public bool isCollection { get; set; } = false;
         //一对多外键(导航属性),自动创建不需要显示声明[ForeignKey()]和UserId,必须是virtual
         public virtual User user { get; set; }
         //外键

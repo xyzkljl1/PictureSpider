@@ -72,6 +72,9 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("fetched")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("isCollection")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<bool>("readed")
                         .HasColumnType("tinyint(1)");
 

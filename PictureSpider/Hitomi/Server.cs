@@ -167,6 +167,7 @@ namespace PictureSpider.Hitomi
                 
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fetched == true
+                                           && !illustGroup.isCollection
                                            && (illustGroup.fav || !illustGroup.readed)
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                     select illustGroup).ToList();
@@ -269,6 +270,11 @@ namespace PictureSpider.Hitomi
                     //是否应当下载在外部判断
                     if (illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
+                    if (illust.illustGroup.isCollection)
+                    {
+                        illustList.Remove(illustId);
+                        continue;
+                    }
                     if (string.IsNullOrEmpty(illust.url) || !illust.ResetEXTByURL())//下载前重新获取ext，因为本地文件会被转换格式，如果下载后又丢失文件，ext就和url不符
                     {
                         LogError($"Skip download because url is empty:{illust.illustGroup.Id} {illust.fileName}");
@@ -358,6 +364,8 @@ namespace PictureSpider.Hitomi
         }
         public async Task CalcIllustURL(IllustGroup illustGroup)
         {
+            if (illustGroup.isCollection)
+                return;
             //从https://ltn.hitomi.la/galleries/2360191.js获取galleryInfo,在reader.js中解析，用到了common.js和gg.js
             //图片路径形如https://[子域名].hitomi.la/webp/[常数]/[根据hash计算]/[hash].[扩展名]
             //借用common.js/gg.js，加上一段自己的js计算出图片路径
@@ -370,6 +378,14 @@ namespace PictureSpider.Hitomi
                 //注意顺序。要用\n隔开
                 engine.Execute(groupJS);
                 var urls = engine.Script.myurl;
+                // 作者超过 5 位视为合集；复用下载元数据判断，不额外请求作者列表。
+                if (engine.Script.myartists.length > 5)
+                {
+                    illustGroup.isCollection = true;
+                    await database.SaveChangesAsync();
+                    Log($"Skip collection:{illustGroup.Id}, authors:{engine.Script.myartists.length}");
+                    return;
+                }
                 var illusts = illustGroup.illusts.ToList();
                 //同一个illustGroup里也可能有相同hash的图片,此处不能用hash查找要用index
                 illusts.Sort((l, r) =>l.index.CompareTo(r.index));
@@ -479,6 +495,7 @@ namespace PictureSpider.Hitomi
                 //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
                 var hashs = engine.Script.myhash;
                 illustGroup.title = engine.Script.mytitle;
+                illustGroup.isCollection = engine.Script.myartists.length > 5;
                 foreach(var illust in illustGroup.illusts)
                         database.Illusts.Remove(illust);
                 illustGroup.illusts.Clear();//注意Clear并不会删除illust行
