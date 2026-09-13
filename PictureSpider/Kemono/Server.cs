@@ -39,6 +39,7 @@ namespace PictureSpider.Kemono
         Downloader downloader;
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
+        GoogleDriveDownloadQueue googleDriveDownloader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.KemonoConnectStr)
         {
@@ -69,13 +70,15 @@ namespace PictureSpider.Kemono
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Kemono, config.ProxyGo, baseUrl),megaDownloader);
+            googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Kemono, config.ProxyGo, baseUrl),megaDownloader,googleDriveDownloader);
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
         public void Dispose()
         {
             httpClient.Dispose();
+            googleDriveDownloader.Dispose();
         }
         public override Task Init()
         {
@@ -90,16 +93,17 @@ namespace PictureSpider.Kemono
         private async Task ParseGroupContent(WorkGroup workGroup)
         {
             var doc = new HtmlDocument();
-            doc.LoadHtml(workGroup.desc);
-            var index = 1;
-            try
-            {
-                var anodes = doc.DocumentNode.SelectNodes("//a");
-                if (anodes is null)
-                    return;
-                foreach (var anode in anodes)
-                    //patreon/user/3659577/post/117461502/revision/9878902
-                    if (anode.Attributes["href"] is not null)
+            doc.LoadHtml(workGroup.desc ?? "");
+            // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
+            var index = (database.ExternalWorks.Where(x => x.workGroup.id == workGroup.id && x.workGroup.user.service == workGroup.service)
+                .Max(x => (int?)x.index) ?? 0) + 1;
+            var anodes = doc.DocumentNode.SelectNodes("//a");
+            if (anodes is null)
+                return;
+            foreach (var anode in anodes)
+                if (anode.Attributes["href"] is not null)
+                {
+                    try
                     {
                         //包含一个mega文件夹
                         //patreon/user/3659577/post/117461502/revision/9878902
@@ -129,6 +133,27 @@ namespace PictureSpider.Kemono
                                     }
                                 }
                         }
+                        else if (anode.Attributes["href"].Value.StartsWith("https://drive.google.com/"))
+                        {
+                            var url = HtmlEntity.DeEntitize(anode.Attributes["href"].Value);
+                            var file = await googleDriveDownloader.GetFileInfoAsync(url);
+                            if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
+                            {
+                                var work = new ExternalWork
+                                {
+                                    url = url,
+                                    id = file.id,
+                                    type = ExternalWork.ExternalWorkType.GoogleDrive,
+                                    name = file.name,
+                                    index = index++
+                                };
+                                if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
+                                    continue;
+                                work.workGroup = workGroup;
+                                database.ExternalWorks.Add(work);
+                                await database.SaveChangesAsync();
+                            }
+                        }
                         //单个mega文件 patreon/user/8693043/post/75248472
                         //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
                         else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
@@ -156,11 +181,12 @@ namespace PictureSpider.Kemono
                             }
                         }
                     }
-            }
-            catch (Exception e)
-            {
-                LogError($"Fail ParseGroupContent {workGroup.id}:{e.Message}");
-            }
+                    catch (Exception e)
+                    {
+                        LogError($"Fail ParseGroupContent {workGroup.id}: {e.Message}");
+                        throw;
+                    }
+                }
         }
         private Uri GetMegaLink(INode node,Uri root)
         {
@@ -184,7 +210,7 @@ namespace PictureSpider.Kemono
               "relation_id": null
             }}*/
             var doc =await HttpGetJson($"{baseAPIUrl}/{service}/user/{id}/profile");
-            if(doc is null||(!doc.ContainsKey("name"))||(!doc.ContainsKey("public_id")))//只会fetch已关注的作者，不应出现失败
+            if(doc is null||string.IsNullOrWhiteSpace(doc.Value<string>("name")))//只会fetch已关注的作者，不应出现失败
             {
                 LogError($"Can't Fetch User {service}/{id}");
                 return;
@@ -201,9 +227,9 @@ namespace PictureSpider.Kemono
             }
             user.displayId = doc.Value<string>("name");
             user.displayText = doc.Value<string>("public_id");
-            if (user.displayText is null)
+            if (string.IsNullOrWhiteSpace(user.displayText))
                 user.displayText = user.displayId;
-            if (user.displayText is null)
+            if (string.IsNullOrWhiteSpace(user.displayText))
                 user.displayText = user.id;
             user.displayText = user.displayText.ReplaceInvalidCharInFilenameWithReturnValue();//还用做目录名
             await database.SaveChangesAsync();
@@ -211,6 +237,9 @@ namespace PictureSpider.Kemono
         //获取该user的作品id并插入数据库
         public async Task FetchWorkGroupListByUser(User user)
         {
+            // 新用户先补全名称，避免等到每周更新，并在下载前确定作者目录。
+            if (string.IsNullOrWhiteSpace(user.displayId) || user.displayId == user.id)
+                await FetchUser(user.id, user.service);
             /*
              * {
                 "props": {
@@ -710,13 +739,15 @@ namespace PictureSpider.Kemono
                 Log($"Can't Fetch IllustGroup :{illustGroup.id} {illustGroup.service}");
                 return;
             }
-            illustGroup.fetched = true;
+            illustGroup.fetched = false;
             illustGroup.desc=doc["post"].Value<string>("content");
             if (doc["post"]["embed"].ToObject<JObject>().ContainsKey("url"))
                 illustGroup.embedUrl = doc["post"]["embed"].Value<string>("url");
             await database.SaveChangesAsync();
             if(illustGroup.user.dowloadExternalWorks)
                 await ParseGroupContent(illustGroup);
+            illustGroup.fetched = true;
+            await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
         public override bool ListenerUtil_IsValidUrl(string url)
@@ -778,20 +809,17 @@ namespace PictureSpider.Kemono
                 {
                     var works = new List<KemonoBaseWork>();
                     // 仅含Dettach类型的workGroup不会进入浏览队列，如果检测到所有work都是Dettach类型且已下载过，就标记为readed以避免重复扫描
-                    // 无视user.dowloadWorks/dowloadExternalWorks, 以防之后要变更下载的类型。
+                    // 无视下载类型开关, 以防之后要变更下载的类型。
                     if (workGroup.works.All(work => work.Dettached && work.DettachDownloaded)
                         && workGroup.externalWorks.All(work => work.Dettached && work.DettachDownloaded))                                
                     {
                         workGroup.DettachDownloaded = true;
                         continue;
                     }
-                    if (workGroup.user.dowloadWorks)
-                    {
-                        if (workGroup.user.dowloadVideoWorks)
-                            works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
-                        if (workGroup.user.dowloadImageWorks)
-                            works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
-                    }
+                    if (workGroup.user.downloadAttachmentVideos)
+                        works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
+                    if (workGroup.user.downloadAttachmentImages)
+                        works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
                     if (workGroup.user.dowloadExternalWorks)
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
@@ -913,7 +941,7 @@ namespace PictureSpider.Kemono
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
+                    if (illustGroup.user.downloadAttachmentImages&&illustGroup.works.Count>0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                         if (exploreFile.validPageCount() > 0)
@@ -965,7 +993,6 @@ namespace PictureSpider.Kemono
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
-            var day_of_week = DateTime.Now.DayOfWeek;
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
                 SyncLocalFile();
@@ -980,7 +1007,7 @@ namespace PictureSpider.Kemono
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
                         SyncLocalFile();
-                        if (day_of_week == DayOfWeek.Sunday) //每周一次
+                        if (DateTime.Now.DayOfWeek == DayOfWeek.Sunday) //每周一次
                         {
                             foreach (var user in database.Users.ToList())//更新作者
                                 await FetchUser(user.id, user.service);
@@ -1062,6 +1089,7 @@ namespace PictureSpider.Kemono
                 var download_illusts = new List<(string key, KemonoBaseWork work)>();
                 var ignore_illusts = new List<string>();
                 int download_ct = 0;
+                bool externalDownloadFailed = false;
                 foreach (var key in workList.ToList())
                 {
                     var work = await LoadDownloadQueueWork(key);
@@ -1087,7 +1115,10 @@ namespace PictureSpider.Kemono
                         await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsVideo() && work is ExternalWork)
-                        await downloader.Add(work, download_dir_tmp);
+                    {
+                        if (!File.Exists(path) && !await downloader.Add(work, download_dir_tmp))
+                            externalDownloadFailed = true;
+                    }
                     else if (ext.IsZip())
                     {
                         ignore_illusts.Add(key);//暂定：直接忽略压缩包
@@ -1109,6 +1140,12 @@ namespace PictureSpider.Kemono
 
                 //等待完成并查询状态
                 await downloader.WaitForAll();
+                // Mega 的等待函数不抛出下载异常，更新完成状态前统一检查外链文件。
+                foreach (var (key, illust) in download_illusts)
+                    if (illust is ExternalWork && !File.Exists(Path.Combine(download_dir_tmp, illust.TmpSubPath)))
+                        externalDownloadFailed = true;
+                if (externalDownloadFailed)
+                    throw new IOException("External work download failed.");
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;

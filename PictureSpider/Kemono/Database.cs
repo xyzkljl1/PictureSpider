@@ -9,6 +9,8 @@ namespace PictureSpider.Kemono
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            // 保持已有待执行操作表的时间精度，避免迁移时修改无关列。
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.CreatedAt).HasColumnType("datetime(6)");
             //级联删除
             modelBuilder
                 .Entity<Work>()

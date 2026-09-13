@@ -115,13 +115,10 @@ namespace PictureSpider.Migrations
                     b.Property<bool>("dowloadExternalWorks")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<bool>("dowloadImageWorks")
+                    b.Property<bool>("downloadAttachmentImages")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<bool>("dowloadVideoWorks")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<bool>("dowloadWorks")
+                    b.Property<bool>("downloadAttachmentVideos")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("fetchedTime")

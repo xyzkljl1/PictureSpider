@@ -39,6 +39,7 @@ namespace PictureSpider.Pawchive
         Downloader downloader;
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
+        GoogleDriveDownloadQueue googleDriveDownloader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.PawchiveConnectStr)
         {
@@ -69,13 +70,15 @@ namespace PictureSpider.Pawchive
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader);
+            googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader,googleDriveDownloader);
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
         public void Dispose()
         {
             httpClient.Dispose();
+            googleDriveDownloader.Dispose();
         }
         public override Task Init()
         {
@@ -89,16 +92,17 @@ namespace PictureSpider.Pawchive
         private async Task ParseGroupContent(WorkGroup workGroup)
         {
             var doc = new HtmlDocument();
-            doc.LoadHtml(workGroup.desc);
-            var index = 1;
-            try
-            {
-                var anodes = doc.DocumentNode.SelectNodes("//a");
-                if (anodes is null)
-                    return;
-                foreach (var anode in anodes)
-                    //patreon/user/3659577/post/117461502/revision/9878902
-                    if (anode.Attributes["href"] is not null)
+            doc.LoadHtml(workGroup.desc ?? "");
+            // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
+            var index = (database.ExternalWorks.Where(x => x.workGroup.id == workGroup.id && x.workGroup.user.service == workGroup.service)
+                .Max(x => (int?)x.index) ?? 0) + 1;
+            var anodes = doc.DocumentNode.SelectNodes("//a");
+            if (anodes is null)
+                return;
+            foreach (var anode in anodes)
+                if (anode.Attributes["href"] is not null)
+                {
+                    try
                     {
                         //包含一个mega文件夹
                         //patreon/user/3659577/post/117461502/revision/9878902
@@ -128,6 +132,27 @@ namespace PictureSpider.Pawchive
                                     }
                                 }
                         }
+                        else if (anode.Attributes["href"].Value.StartsWith("https://drive.google.com/"))
+                        {
+                            var url = HtmlEntity.DeEntitize(anode.Attributes["href"].Value);
+                            var file = await googleDriveDownloader.GetFileInfoAsync(url);
+                            if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
+                            {
+                                var work = new ExternalWork
+                                {
+                                    url = url,
+                                    id = file.id,
+                                    type = ExternalWork.ExternalWorkType.GoogleDrive,
+                                    name = file.name,
+                                    index = index++
+                                };
+                                if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
+                                    continue;
+                                work.workGroup = workGroup;
+                                database.ExternalWorks.Add(work);
+                                await database.SaveChangesAsync();
+                            }
+                        }
                         //单个mega文件 patreon/user/8693043/post/75248472
                         //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
                         else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
@@ -155,11 +180,12 @@ namespace PictureSpider.Pawchive
                             }
                         }
                     }
-            }
-            catch (Exception e)
-            {
-                LogError($"Fail ParseGroupContent {workGroup.id}:{e.Message}");
-            }
+                    catch (Exception e)
+                    {
+                        LogError($"Fail ParseGroupContent {workGroup.id}: {e.Message}");
+                        throw;
+                    }
+                }
         }
         private Uri GetMegaLink(INode node,Uri root)
         {
@@ -172,18 +198,8 @@ namespace PictureSpider.Pawchive
         //获取作者信息
         private async Task FetchUser(string id,string service)
         {
-            /*
-             {{
-              "id": "7349257",
-              "name": "kkkkk20",
-              "service": "fanbox",
-              "indexed": "2021-12-09T18:24:42.391068",
-              "updated": "2024-05-26T07:44:25.932852",
-              "public_id": "kkkkk20",
-              "relation_id": null
-            }}*/
             var doc =await HttpGetJson($"{baseAPIUrl}/{service}/user/{id}/profile");
-            if(doc is null||(!doc.ContainsKey("name"))||(!doc.ContainsKey("public_id")))//只会fetch已关注的作者，不应出现失败
+            if(doc is null||string.IsNullOrWhiteSpace(doc.Value<string>("name")))//只会fetch已关注的作者，不应出现失败
             {
                 LogError($"Can't Fetch User {service}/{id}");
                 return;
@@ -200,9 +216,9 @@ namespace PictureSpider.Pawchive
             }
             user.displayId = doc.Value<string>("name");
             user.displayText = doc.Value<string>("public_id");
-            if (user.displayText is null)
+            if (string.IsNullOrWhiteSpace(user.displayText))
                 user.displayText = user.displayId;
-            if (user.displayText is null)
+            if (string.IsNullOrWhiteSpace(user.displayText))
                 user.displayText = user.id;
             user.displayText = user.displayText.ReplaceInvalidCharInFilenameWithReturnValue();//还用做目录名
             await database.SaveChangesAsync();
@@ -210,111 +226,9 @@ namespace PictureSpider.Pawchive
         //获取该user的作品id并插入数据库
         public async Task FetchWorkGroupListByUser(User user)
         {
-            /*
-             * {
-                "props": {
-                    "currentPage": "posts",
-                    "id": "7349257",
-                    "service": "fanbox",
-                    "name": "kkkkk20",
-                    "count": 58,
-                    "limit": 50,
-                    "artist": {
-                        "id": "7349257",
-                        "name": "kkkkk20",
-                        "service": "fanbox",
-                        "indexed": "2021-12-09T18:24:42.391068",
-                        "updated": "2024-05-26T07:44:25.932852",
-                        "public_id": "kkkkk20",
-                        "relation_id": null
-                    },
-                    "display_data": {
-                        "service": "Pixiv Fanbox",
-                        "href": "https://www.pixiv.net/fanbox/creator/7349257"
-                    },
-                    "dm_count": 0,
-                    "share_count": 0,
-                    "has_links": "0"
-                },
-                "base": {
-                    "service": "fanbox",
-                    "artist_id": "7349257"
-                },
-                "results": [
-                    {
-                        "id": "7928265",
-                        "user": "7349257",
-                        "service": "fanbox",
-                        "title": "玩弄",
-                        "substring": "",
-                        "published": "2024-05-15T10:03:59",
-                        "file": {
-                            "name": "DH057ezDhsJktxnJgm0fjQRN.jpeg",
-                            "path": "/82/80/8280dffe6057e14100d2a302cbff7b76428cbc124cdafd9afc6c903c89960538.jpg"
-                        },
-                        "attachments": [
-                            {
-                                "name": "qytY0nn7ubMkRgIdAtPX0SGt.jpeg",
-                                "path": "/62/8d/628d86bd6cde8148943a81e5230825f0b9f339d42541a48371efbc58cc5787c5.jpg"
-                            }
-                        ]
-                    },
-                        //中略
-                        {
-                        "id": "3944351",
-                        "user": "7349257",
-                        "service": "fanbox",
-                        "title": "01-12-22",
-                        "substring": "",
-                        "published": "2022-06-05T14:38:02",
-                        "file": {
-                            "name": "xGPJ39yPVV4CCt1lwkVVJVKN.jpeg",
-                            "path": "/2d/a7/2da78096621e89e17fd27c70945cde7ff9a73d4d0c3175c1a35c3a9940739622.jpg"
-                        },
-                        "attachments": [
-                            {
-                                "name": "01-12-22玩弄赤炼-致幻香料.zip",
-                                "path": "/20/5f/205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475.zip"
-                            }
-                        ]
-                    },
-                ],
-                "result_previews": [
-                    [
-                        {
-                            "type": "thumbnail",
-                            "server": "https://n2.pawchive.pw",
-                            "name": "DH057ezDhsJktxnJgm0fjQRN.jpeg",
-                            "path": "/82/80/8280dffe6057e14100d2a302cbff7b76428cbc124cdafd9afc6c903c89960538.jpg"
-                        },
-                        {
-                            "type": "thumbnail",
-                            "name": "qytY0nn7ubMkRgIdAtPX0SGt.jpeg",
-                            "path": "/62/8d/628d86bd6cde8148943a81e5230825f0b9f339d42541a48371efbc58cc5787c5.jpg",
-                            "server": "https://n4.pawchive.pw"
-                        }
-                    ]
-                ],
-                //非图片附件会在这里再出现一遍，多了server值,图片附件不会出现
-                "result_attachments": [
-                    [],
-                    //中略
-                    [
-                        {
-                            "path": "/20/5f/205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475.zip",
-                            "name": "01-12-22玩弄赤炼-致幻香料.zip",
-                            "server": "https://n2.pawchive.pw"
-                        }
-                    ],
-                ],
-                //根据file(实际是封面)决定，和附件无关？
-                "result_is_image": [
-                    true,
-                    true,
-                ],
-                "disable_service_icons": true
-            }
-             */
+            // 新用户先补全名称，避免等到每周更新，并在下载前确定作者目录。
+            if (string.IsNullOrWhiteSpace(user.displayId) || user.displayId == user.id)
+                await FetchUser(user.id, user.service);
             //默认是按时间倒序
             var existedWorkGroupIds = new HashSet<string>();
             if (user.workGroups is not null)//减少查询次数
@@ -505,177 +419,6 @@ namespace PictureSpider.Pawchive
         //获取illustGroup的content以获取外链
         private async Task FetchWorkGroup(WorkGroup illustGroup)
         {
-            /*
-             {
-            "post": {
-                "id": "3944351",
-                "user": "7349257",
-                "service": "fanbox",
-                "title": "01-12-22",
-                "content": "",
-                "embed": {},
-                "shared_file": false,
-                "added": "2024-05-17T15:53:55.003267",
-                "published": "2022-06-05T14:38:02",
-                "edited": "2022-09-04T13:34:53",
-                "file": {
-                    "name": "xGPJ39yPVV4CCt1lwkVVJVKN.jpeg",
-                    "path": "/2d/a7/2da78096621e89e17fd27c70945cde7ff9a73d4d0c3175c1a35c3a9940739622.jpg"
-                },
-                "attachments": [
-                    {
-                        "name": "01-12-22玩弄赤炼-致幻香料.zip",
-                        "path": "/20/5f/205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475.zip"
-                    }
-                ],
-                "poll": null,
-                "captions": null,
-                "tags": null,
-                "next": "3809815",
-                "prev": "3944360"
-            },
-            "attachments": [
-                {
-                    "server": "https://n2.pawchive.pw",
-                    "name": "01-12-22玩弄赤炼-致幻香料.zip",
-                    "extension": ".zip",
-                    "name_extension": ".zip",
-                    "stem": "205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475",
-                    "path": "/20/5f/205fafece522b3af8aa879bc23acaf9cb32d0c1c911a15d7ad2cc436010e2475.zip"
-                }
-            ],
-            "previews": [
-                {
-                    "type": "thumbnail",
-                    "server": "https://n4.pawchive.pw",
-                    "name": "xGPJ39yPVV4CCt1lwkVVJVKN.jpeg",
-                    "path": "/2d/a7/2da78096621e89e17fd27c70945cde7ff9a73d4d0c3175c1a35c3a9940739622.jpg"
-                }
-            ],
-            "videos": [],
-            "props": {
-                "flagged": 0,
-            }
-        }*/
-            // 带有视频附件的，视频附件可能会同时出现在videos和attachments里
-            /*{
-              "post": {
-                "id": "139824726",
-                "user": "18156693",
-                "service": "patreon",
-                "title": "EVE - Doggy - 4K",
-                "content": "<p>Alt version of Tifa video<br>VA: <a href=\"https://twitter.com/PleasedByViolet\" rel=\"noopener noreferrer\">twitter.com/PleasedByViolet</a><br>Sound: <a href=\"https://twitter.com/lerico213\" rel=\"noopener noreferrer\">twitter.com/lerico213</a></p>",
-                "embed": {
-                },
-                "shared_file": false,
-                "added": "2025-10-15T05:51:39.108071",
-                "published": "2025-09-26T21:47:14",
-                "edited": "2025-09-26T21:47:14",
-                "file": {
-                  "name": "previewgif.gif",
-                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                },
-                "attachments": [
-                  {
-                    "name": "EVE_Doggy_09-25_4K.mp4",
-                    "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
-                  },
-                  {
-                    "name": "previewgif.gif",
-                    "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                  }
-
-                ],
-                "poll": null,
-                "captions": null,
-                "tags": null,
-                "incomplete_rewards": null,
-                "next": "139824621",
-                "prev": "140314992"
-              },
-              "attachments": [
-                {
-                  "server": "https://n1.pawchive.pw",
-                  "name": "EVE_Doggy_09-25_4K.mp4",
-                  "extension": ".mp4",
-                  "name_extension": ".mp4",
-                  "stem": "972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058",
-                  "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
-                }
-
-              ],
-              "previews": [
-                {
-                  "type": "thumbnail",
-                  "server": "https://n4.pawchive.pw",
-                  "name": "previewgif.gif",
-                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                },
-                {
-                  "type": "thumbnail",
-                  "server": "https://n4.pawchive.pw",
-                  "name": "previewgif.gif",
-                  "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                }
-
-              ],
-              "videos": [
-                {
-                  "index": 0,
-                  "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4",
-                  "name": "EVE_Doggy_09-25_4K.mp4",
-                  "extension": ".mp4",
-                  "name_extension": ".mp4",
-                  "server": "https://n1.pawchive.pw"
-                }
-
-              ],
-              "props": {
-                "flagged": null,
-                "revisions": [
-                  [
-                    0,
-                    {
-                      "id": "139824726",
-                      "user": "18156693",
-                      "service": "patreon",
-                      "title": "EVE - Doggy - 4K",
-                      "content": "<p>Alt version of Tifa video<br>VA: <a href=\"https://twitter.com/PleasedByViolet\" rel=\"noopener noreferrer\">twitter.com/PleasedByViolet</a><br>Sound: <a href=\"https://twitter.com/lerico213\" rel=\"noopener noreferrer\">twitter.com/lerico213</a></p>",
-                      "embed": {
-                      },
-                      "shared_file": false,
-                      "added": "2025-10-15T05:51:39.108071",
-                      "published": "2025-09-26T21:47:14",
-                      "edited": "2025-09-26T21:47:14",
-                      "file": {
-                        "name": "previewgif.gif",
-                        "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                      },
-                      "attachments": [
-                        {
-                          "name": "EVE_Doggy_09-25_4K.mp4",
-                          "path": "/97/2f/972f1bb7694ed6a29eef2fd45843fee590e03817205584d194f9d683bb06f058.mp4"
-                        },
-                        {
-                          "name": "previewgif.gif",
-                          "path": "/fa/2d/fa2ddfbbcc34b27732bd482f12d6c7cebc15d5dda94b6ffc76c30a4b3658e0aa.gif"
-                        }
-
-                      ],
-                      "poll": null,
-                      "captions": null,
-                      "tags": null,
-                      "incomplete_rewards": null,
-                      "next": "139824621",
-                      "prev": "140314992"
-                    }
-
-                  ]
-                ]
-              }
-            }
-
-             */
             var doc = await HttpGetJson($"{baseAPIUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}");
             if (doc is null || !doc.ContainsKey("id"))
             {
@@ -699,10 +442,10 @@ namespace PictureSpider.Pawchive
                 }
                 index++;
             }
-            illustGroup.fetched = true;
-            await database.SaveChangesAsync();
             if(illustGroup.user.dowloadExternalWorks)
                 await ParseGroupContent(illustGroup);
+            illustGroup.fetched = true;
+            await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
         public override bool ListenerUtil_IsValidUrl(string url)
@@ -764,20 +507,17 @@ namespace PictureSpider.Pawchive
                 {
                     var works = new List<PawchiveBaseWork>();
                     // 仅含Dettach类型的workGroup不会进入浏览队列，如果检测到所有work都是Dettach类型且已下载过，就标记为readed以避免重复扫描
-                    // 无视user.dowloadWorks/dowloadExternalWorks, 以防之后要变更下载的类型。
+                    // 无视下载类型开关, 以防之后要变更下载的类型。
                     if (workGroup.works.All(work => work.Dettached && work.DettachDownloaded)
                         && workGroup.externalWorks.All(work => work.Dettached && work.DettachDownloaded))                                
                     {
                         workGroup.DettachDownloaded = true;
                         continue;
                     }
-                    if (workGroup.user.dowloadWorks)
-                    {
-                        if (workGroup.user.dowloadVideoWorks)
-                            works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
-                        if (workGroup.user.dowloadImageWorks)
-                            works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
-                    }
+                    if (workGroup.user.downloadAttachmentVideos)
+                        works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
+                    if (workGroup.user.downloadAttachmentImages)
+                        works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
                     if (workGroup.user.dowloadExternalWorks)
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
@@ -899,7 +639,7 @@ namespace PictureSpider.Pawchive
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    if (illustGroup.user.dowloadWorks&&illustGroup.works.Count>0)
+                    if (illustGroup.user.downloadAttachmentImages&&illustGroup.works.Count>0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                         if (exploreFile.validPageCount() > 0)
@@ -951,7 +691,6 @@ namespace PictureSpider.Pawchive
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
-            var day_of_week = DateTime.Now.DayOfWeek;
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
                 SyncLocalFile();
@@ -966,7 +705,7 @@ namespace PictureSpider.Pawchive
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
                         SyncLocalFile();
-                        if (day_of_week == DayOfWeek.Sunday) //每周一次
+                        if (DateTime.Now.DayOfWeek == DayOfWeek.Sunday) //每周一次
                         {
                             foreach (var user in database.Users.ToList())//更新作者
                                 await FetchUser(user.id, user.service);
@@ -1002,6 +741,7 @@ namespace PictureSpider.Pawchive
                 var download_illusts = new List<(string key, PawchiveBaseWork work)>();
                 var ignore_illusts = new List<string>();
                 int download_ct = 0;
+                bool externalDownloadFailed = false;
                 foreach (var key in workList.ToList())
                 {
                     var work = await LoadDownloadQueueWork(key);
@@ -1029,7 +769,10 @@ namespace PictureSpider.Pawchive
                             });
                     }
                     else if (ext.IsVideo() && work is ExternalWork)
-                        await downloader.Add(work, download_dir_tmp);
+                    {
+                        if (!File.Exists(path) && !await downloader.Add(work, download_dir_tmp))
+                            externalDownloadFailed = true;
+                    }
                     else if (ext.IsZip())
                     {
                         ignore_illusts.Add(key);//暂定：直接忽略压缩包
@@ -1051,6 +794,12 @@ namespace PictureSpider.Pawchive
 
                 //等待完成并查询状态
                 await downloader.WaitForAll();
+                // Mega 的等待函数不抛出下载异常，更新完成状态前统一检查外链文件。
+                foreach (var (key, illust) in download_illusts)
+                    if (illust is ExternalWork && !File.Exists(Path.Combine(download_dir_tmp, illust.TmpSubPath)))
+                        externalDownloadFailed = true;
+                if (externalDownloadFailed)
+                    throw new IOException("External work download failed.");
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;

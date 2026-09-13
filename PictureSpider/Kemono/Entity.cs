@@ -107,6 +107,7 @@ namespace PictureSpider.Kemono
         public enum ExternalWorkType
         {
             Mega=0,
+            GoogleDrive=1,
         }
         public string id { get; set; }
         public string name { get; set; }
@@ -148,7 +149,12 @@ namespace PictureSpider.Kemono
         [NotMapped]
         public override string DownloadURL => url;
         [NotMapped]
-        public override Downloader.DownloaderType GetDownloader => Downloader.DownloaderType.MegaDownloadQueue;
+        public override Downloader.DownloaderType GetDownloader => type switch
+        {
+            ExternalWorkType.Mega => Downloader.DownloaderType.MegaDownloadQueue,
+            ExternalWorkType.GoogleDrive => Downloader.DownloaderType.GoogleDriveDownloadQueue,
+            _ => throw new NotSupportedException($"Unsupported external work type: {type}")
+        };
         //页号
         public int index { get; set; } = -1;
         public virtual WorkGroup workGroup { get; set; }
@@ -192,9 +198,8 @@ namespace PictureSpider.Kemono
         //public string relation_id { get; set; }//用途不明
         public bool dowloadExternalWorks { get; set; } = false;//未实现
         //public bool dowloadCover { get; set; } = false;
-        public bool dowloadWorks { get; set; } = true;
-        public bool dowloadVideoWorks { get; set; } = false;
-        public bool dowloadImageWorks { get; set; } = true;
+        public bool downloadAttachmentVideos { get; set; } = false;
+        public bool downloadAttachmentImages { get; set; } = true;
         public bool dowloadEmbed { get; set; } = true;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
