@@ -366,10 +366,6 @@ namespace PictureSpider.Pawchive
                         break;
                     }
                 }
-                // post查询改成了返回array，没有result_attachments了，不知道去哪里获取，暂时使用n1
-                // foreach (var arr in posts["result_attachments"])//非图片的附件会在result_attachments中指定server(但似乎不管用哪个域名都会重定向到正确的server)
-                //    foreach (var attachment in arr)
-                //        await UpdateWork(attachment, service);
             }
             while (offset < totalCount);
             await database.SaveChangesAsync();
@@ -383,21 +379,17 @@ namespace PictureSpider.Pawchive
             if (database.Works.Count(x => x.urlPath == path && x.service == service) > 0)
                 return null;
             var ret = database.Works.Add(new Work { urlPath = path, service = service }).Entity;
-            if (token.ToObject<JObject>().ContainsKey("server"))
-                ret.urlHost = token.Value<string>("server");
             ret.name = token.Value<string>("name");
             await database.SaveChangesAsync();
             return ret;
         }
-        //如果存在则更新server和name，否则什么都不做
+        //如果存在则更新name，否则什么都不做
         public async Task UpdateWork(JToken token, string service, bool without_save = true)
         {
             string path = token.Value<string>("path");
             Work ret = database.Works.Where(x => x.urlPath == path && x.service == service).ToList().FirstOrDefault();
             if (ret is null)
                 return;
-            if (token.ToObject<JObject>().ContainsKey("server"))
-                ret.urlHost = token.Value<string>("server");
             ret.name = token.Value<string>("name");
             if (!without_save)
                 await database.SaveChangesAsync();

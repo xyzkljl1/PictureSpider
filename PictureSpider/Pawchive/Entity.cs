@@ -39,9 +39,6 @@ namespace PictureSpider.Pawchive
         public string name { get; set; }//注意name可能是个文件名也可能是个带文件名的网址
         public string service { get; set; }//不确定service来自于coverGroup还是workGroup,需要存储一份
         public string urlPath { get; set; }
-        public string urlHost { get; set; }
-        [NotMapped]
-        public string tmpHost;
         [NotMapped]
         public WorkGroup GetGroup
         {
@@ -71,18 +68,7 @@ namespace PictureSpider.Pawchive
         }
 
         [NotMapped]
-        public override string DownloadURL
-        {
-            get
-            {
-                if (!string.IsNullOrEmpty(urlHost))
-                    return combineDownloadURL(urlHost, urlPath, name);
-                if(!string.IsNullOrEmpty(tmpHost))
-                    return combineDownloadURL(tmpHost, urlPath, name);
-
-                return combineDownloadURL($"https://file.{Server.baseHost}", urlPath, name);
-            }
-        }
+        public override string DownloadURL => $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
         //页号
         public int index { get; set; } = -1;
         //由于Work通过cover和works分别关联到WorkGroup，需要手动指定哪个外键对应哪个关联关系
@@ -92,10 +78,6 @@ namespace PictureSpider.Pawchive
         [AllowNull]
         public virtual WorkGroup coverGroup { get; set; }
         public Work() { }
-        public static string combineDownloadURL(string urlHost, string urlPath, string name)
-        {
-            return $"{urlHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
-        }
     }
     //desc中附带的外链
     //尚未实现
