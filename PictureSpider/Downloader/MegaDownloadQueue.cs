@@ -18,10 +18,8 @@ namespace PictureSpider
         private MegaApiClient mega;
         private List<Task> downloading = new List<Task>();
         private bool loginSuccessed = false;
-        private readonly bool useTempFile;
-        public MegaDownloadQueue(string proxy_access,string proxy_download, bool useTempFile = false)
+        public MegaDownloadQueue(string proxy_access,string proxy_download)
         {
-            this.useTempFile = useTempFile;
             //SNI可以访问网页，获得节点，但是无法下载(http://gfs262n333.userstorage.mega.co.nz/dl/*)
             //Go无法访问网页，在chrome上时不时可以下载，但是用curl及MegaApiClient无法下载
             mega = new MegaApiClient(new MegaWebClient(new WebProxy(proxy_access, false), new WebProxy(proxy_download, false)));
@@ -82,13 +80,12 @@ namespace PictureSpider
         {
             var uri = new Uri(url);
             var path = Path.Combine(dir, file_name);
-            var downloadPath = useTempFile ? path + ".mega.part" : path;
+            var downloadPath = path + ".mega.part";
             bool downloaded = false;
             try
             {
                 // 正式文件只在下载成功后出现，避免残缺文件被上层误判为已下载。
-                if (useTempFile)
-                    File.Delete(downloadPath);
+                File.Delete(downloadPath);
                 if (uri.AbsolutePath.StartsWith("/file/"))//单个文件
                 {
                     mega.DownloadFile(uri, downloadPath);
@@ -107,27 +104,21 @@ namespace PictureSpider
                             break;
                         }
                 }
-                if (useTempFile)
-                {
-                    if (!downloaded)
-                        throw new TopLevelException($"Can't Resolve Download Link:{url}");
-                    File.Move(downloadPath, path);
-                }
+                if (!downloaded)
+                    throw new TopLevelException($"Can't Resolve Download Link:{url}");
+                File.Move(downloadPath, path);
                 return;
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"[Mega] Fail to download :{e.Message}/{url}");
-                if (useTempFile)
+                try
                 {
-                    try
-                    {
-                        File.Delete(downloadPath);
-                    }
-                    catch (Exception cleanupException)
-                    {
-                        Console.Error.WriteLine($"[Mega] Fail to remove temporary file:{cleanupException.Message}");
-                    }
+                    File.Delete(downloadPath);
+                }
+                catch (Exception cleanupException)
+                {
+                    Console.Error.WriteLine($"[Mega] Fail to remove temporary file:{cleanupException.Message}");
                 }
                 throw;
             }

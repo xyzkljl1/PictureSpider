@@ -67,7 +67,7 @@ namespace PictureSpider.Pawchive
             download_dir_root = config.PawchiveDownloadDir;
             download_dir_fav = Path.Combine(download_dir_root, "fav");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
-            var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy, useTempFile: true);
+            var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
             downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader);
 
