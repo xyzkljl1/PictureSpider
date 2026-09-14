@@ -4,3 +4,6 @@
 3.Hitomi.la
 4.本地图片
 5.Kemono
+6.Pawchive
+7.Manhuagui
+8.Hentaiera
