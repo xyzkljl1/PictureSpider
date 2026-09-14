@@ -704,15 +704,15 @@ namespace PictureSpider.Pawchive
                         last_daily_task = DateTime.Now.Day;
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
-                        SyncLocalFile();
-                        if (DateTime.Now.DayOfWeek == DayOfWeek.Sunday) //每周一次
+                        if (DateTime.Now.DayOfWeek == DayOfWeek.Monday) //每周一次
                         {
                             foreach (var user in database.Users.ToList())//更新作者
                                 await FetchUser(user.id, user.service);
                         }
+                        SyncLocalFile();
                     }
                     //同时下载太多503
-                    await ProcessIllustDownloadQueue(downloadQueue, 5);
+                    await ProcessIllustDownloadQueue(downloadQueue, 40);
                 },
                 new TimeSpan(0, 30, 0),
                 enableScheduleTasks);
