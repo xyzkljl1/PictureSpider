@@ -172,6 +172,11 @@ namespace PictureSpider.Pawchive
     [PrimaryKey(nameof(id), nameof(service))]
     public class User : BaseUserEx
     {
+        public enum DownloadSpecialType
+        {
+            None=0,
+            KeyZipMega=1,
+        }
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理
         public string id { get;set; }
@@ -182,6 +187,7 @@ namespace PictureSpider.Pawchive
         public bool downloadAttachmentVideos { get; set; } = false;
         public bool downloadAttachmentImages { get; set; } = true;
         public bool dowloadEmbed { get; set; } = true;//未实现
+        public DownloadSpecialType downloadSpecial { get; set; } = DownloadSpecialType.None;
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
         [DbKey]
