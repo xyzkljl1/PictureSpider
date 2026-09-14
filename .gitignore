@@ -21,3 +21,5 @@
 /db_backups/*.sql
 /tmp
 /output
+/AGENTS.md
+/TODO.md
