@@ -9,10 +9,10 @@ namespace PictureSpider.Pawchive
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.Entity<User>().Property(x => x.downloadSpecial)
+            modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()
-                .HasColumnType("enum('None','KeyZipMega')")
-                .HasDefaultValue(User.DownloadSpecialType.None);
+                .HasColumnType("enum('None','DirectExternal','KeyZipMega')")
+                .HasDefaultValue(User.DownloadExternalWorkType.None);
             //级联删除
             modelBuilder
                 .Entity<Work>()

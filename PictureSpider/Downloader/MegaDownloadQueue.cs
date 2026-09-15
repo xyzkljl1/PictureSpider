@@ -88,7 +88,7 @@ namespace PictureSpider
                 File.Delete(downloadPath);
                 if (uri.AbsolutePath.StartsWith("/file/"))//单个文件
                 {
-                    mega.DownloadFile(uri, downloadPath);
+                    await mega.DownloadFileAsync(uri, downloadPath);
                     downloaded = true;
                 }
                 else if (uri.AbsolutePath.StartsWith("/folder/") && uri.Fragment.Contains("/file/"))
@@ -99,7 +99,7 @@ namespace PictureSpider
                     foreach (var node in await mega.GetNodesFromLinkAsync(new Uri(url)))
                         if (node.Id == fileId)
                         {
-                            mega.DownloadFile(node, downloadPath);
+                            await mega.DownloadFileAsync(node, downloadPath);
                             downloaded = true;
                             break;
                         }

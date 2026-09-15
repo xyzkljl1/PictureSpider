@@ -85,20 +85,17 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<bool>("dowloadEmbed")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<bool>("dowloadExternalWorks")
-                        .HasColumnType("tinyint(1)");
+                    b.Property<string>("dowloadExternalWorks")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("enum('None','DirectExternal','KeyZipMega')")
+                        .HasDefaultValue("None");
 
                     b.Property<bool>("downloadAttachmentImages")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("downloadAttachmentVideos")
                         .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("downloadSpecial")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("enum('None','KeyZipMega')")
-                        .HasDefaultValue("None");
 
                     b.Property<DateTime>("fetchedTime")
                         .HasColumnType("datetime");

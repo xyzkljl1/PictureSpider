@@ -40,6 +40,7 @@ namespace PictureSpider.Pawchive
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
         GoogleDriveDownloadQueue googleDriveDownloader;
+        HttpZipEntriesReader httpZipEntriesReader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config.PawchiveConnectStr)
         {
@@ -72,6 +73,7 @@ namespace PictureSpider.Pawchive
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
             downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader,googleDriveDownloader);
+            httpZipEntriesReader = new HttpZipEntriesReader(config.ProxyGo, $"file.{baseHost}");
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
@@ -79,6 +81,7 @@ namespace PictureSpider.Pawchive
         {
             httpClient.Dispose();
             googleDriveDownloader.Dispose();
+            httpZipEntriesReader.Dispose();
         }
         public override Task Init()
         {
@@ -179,6 +182,20 @@ namespace PictureSpider.Pawchive
                                 }
                             }
                         }
+                    }
+                    catch (GoogleDriveResourceUnavailableException e)
+                    {
+                        LogError($"Invalid ExternalWork {workGroup.service}/{workGroup.id}: {e.Message}");
+                    }
+                    catch (CG.Web.MegaApiClient.ApiException e) when (
+                        e.ApiResultCode == ApiResultCode.ResourceNotExists ||
+                        e.ApiResultCode == ApiResultCode.ResourceExpired ||
+                        e.ApiResultCode == ApiResultCode.AccessDenied ||
+                        e.ApiResultCode == ApiResultCode.CryptographicError ||
+                        e.ApiResultCode == ApiResultCode.ResourceAdministrativelyBlocked ||
+                        e.ApiResultCode == ApiResultCode.BadArguments)
+                    {
+                        LogError($"Invalid ExternalWork {workGroup.service}/{workGroup.id}: {e.Message}");
                     }
                     catch (Exception e)
                     {
@@ -432,7 +449,8 @@ namespace PictureSpider.Pawchive
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");
             // 预览帖子后来导入时，附件可能发生变化。
             int index = 1;
-            foreach (var attachment in doc["attachments"] ?? new JArray())
+            var attachments = (doc["attachments"] ?? new JArray()).ToList();
+            foreach (var attachment in attachments)
             {
                 var work = await TryAddWork(attachment, illustGroup.service);
                 if (work is not null)
@@ -442,11 +460,103 @@ namespace PictureSpider.Pawchive
                 }
                 index++;
             }
-            if(illustGroup.user.dowloadExternalWorks)
-                await ParseGroupContent(illustGroup);
+            try
+            {
+                if (illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
+                    await ParseKeyZipMega(illustGroup, attachments);
+                if(illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.DirectExternal)
+                    await ParseGroupContent(illustGroup);
+            }
+            catch (Exception e)
+            {
+                illustGroup.fetched = false;
+                LogError($"Fail ParseExternalWork {illustGroup.service}/{illustGroup.id}: {e.Message}");
+                return;
+            }
             illustGroup.fetched = true;
             await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
+        }
+        private async Task ParseKeyZipMega(WorkGroup workGroup, List<JToken> attachments)
+        {
+            var keyFiles = attachments
+                .Where(x => String.Equals(Path.GetFileName(x.Value<string>("name")), "key.zip", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (keyFiles.Count == 0)
+                return;
+            if (keyFiles.Count != 1 || String.IsNullOrWhiteSpace(keyFiles[0].Value<string>("path")))
+            {
+                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
+                return;
+            }
+
+            var keyWork = new Work
+            {
+                service = workGroup.service,
+                urlPath = keyFiles[0].Value<string>("path"),
+                name = keyFiles[0].Value<string>("name")
+            };
+            var (success, entries) = await httpZipEntriesReader.GetEntries(keyWork.DownloadURL);
+            if (!success)
+                return;
+            var files = entries.Where(x => !x.IsDirectory).ToList();
+            var entryName = files.Count == 1 ? files[0].FullName : null;
+            var token = Path.GetFileNameWithoutExtension(entryName);
+            if (String.IsNullOrWhiteSpace(entryName) || entryName.Contains('/') || entryName.Contains('\\') ||
+                !Path.GetExtension(entryName).IsImage() || !Regex.IsMatch(token, "^[A-Za-z0-9_-]{8}#[A-Za-z0-9_-]{43}$"))
+            {
+                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
+                return;
+            }
+            var megaUri = new Uri("https://mega.nz/file/" + token);
+            INode node;
+            try
+            {
+                node = await mega.GetNodeFromLinkAsync(megaUri);
+            }
+            catch (ApiException e) when (
+                e.ApiResultCode == ApiResultCode.ResourceNotExists ||
+                e.ApiResultCode == ApiResultCode.ResourceExpired ||
+                e.ApiResultCode == ApiResultCode.AccessDenied ||
+                e.ApiResultCode == ApiResultCode.CryptographicError ||
+                e.ApiResultCode == ApiResultCode.ResourceAdministrativelyBlocked ||
+                e.ApiResultCode == ApiResultCode.BadArguments)
+            {
+                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
+                return;
+            }
+            var name = node is null ? null : Path.GetFileName(node.Name);
+            if (node is null || node.Type != NodeType.File || node.Size <= 0 || node.Size > ArchiveExtractor.MaxArchiveBytes ||
+                !String.Equals(Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
+                return;
+            }
+            if (database.ExternalWorks.Count(x => x.id == node.Id && x.type == ExternalWork.ExternalWorkType.Mega) > 0)
+                return;
+            var index = (database.ExternalWorks.Where(x => x.workGroup.id == workGroup.id && x.workGroup.user.service == workGroup.service)
+                .Max(x => (int?)x.index) ?? 0) + 1;
+            database.ExternalWorks.Add(new ExternalWork
+            {
+                id = node.Id,
+                type = ExternalWork.ExternalWorkType.Mega,
+                name = name,
+                url = megaUri.AbsoluteUri,
+                index = index,
+                workGroup = workGroup
+            });
+            await database.SaveChangesAsync();
+            Log($"Parse KeyZipMega: {workGroup.service}/{workGroup.id} => {name} ({node.Size} bytes)");
+        }
+        private async Task<bool> PostProcessExternalZip(ExternalWork work, string archivePath)
+        {
+            var destinationDirectory = Path.Combine(Path.GetDirectoryName(archivePath),
+                Path.GetFileNameWithoutExtension(archivePath) + "_images");
+            var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory, Util.imageExtensions);
+            if (!success)
+                return false;
+            Log($"Extract ExternalWork: {work.workGroup.service}/{work.workGroup.id} {files.Count} images");
+            return true;
         }
         public override bool ListenerUtil_IsValidUrl(string url)
         {
@@ -518,15 +628,15 @@ namespace PictureSpider.Pawchive
                         works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
                     if (workGroup.user.downloadAttachmentImages)
                         works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
-                    if (workGroup.user.dowloadExternalWorks)
+                    if (workGroup.user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
                         works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
                     {
                         var key = GetDownloadQueueKey(work);
                         if (workGroup.fav == false || work.excluded == false)//没有排除
                             if (!downloadQueue.Contains(key)) //不在下载队列
-                                if (!File.Exists($"{download_dir_tmp}/{work.TmpSubPath}"))  // 不在本地
-                                    if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
+                                if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
+                                    if (work.Dettached || !File.Exists($"{download_dir_tmp}/{work.TmpSubPath}"))
                                         downloadQueue.Add(key);
                     } 
                 }
@@ -741,7 +851,6 @@ namespace PictureSpider.Pawchive
                 var download_illusts = new List<(string key, PawchiveBaseWork work)>();
                 var ignore_illusts = new List<string>();
                 int download_ct = 0;
-                bool externalDownloadFailed = false;
                 foreach (var key in workList.ToList())
                 {
                     var work = await LoadDownloadQueueWork(key);
@@ -768,10 +877,10 @@ namespace PictureSpider.Pawchive
                                 MaxConnectionPerServer = 1
                             });
                     }
-                    else if (ext.IsVideo() && work is ExternalWork)
+                    else if ((ext.IsVideo() || ext.IsZip()) && work is ExternalWork)
                     {
-                        if (!File.Exists(path) && !await downloader.Add(work, download_dir_tmp))
-                            externalDownloadFailed = true;
+                        if (!File.Exists(path))
+                            await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsZip())
                     {
@@ -794,12 +903,6 @@ namespace PictureSpider.Pawchive
 
                 //等待完成并查询状态
                 await downloader.WaitForAll();
-                // Mega 的等待函数不抛出下载异常，更新完成状态前统一检查外链文件。
-                foreach (var (key, illust) in download_illusts)
-                    if (illust is ExternalWork && !File.Exists(Path.Combine(download_dir_tmp, illust.TmpSubPath)))
-                        externalDownloadFailed = true;
-                if (externalDownloadFailed)
-                    throw new IOException("External work download failed.");
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;
@@ -807,7 +910,10 @@ namespace PictureSpider.Pawchive
                     foreach (var (key, illust) in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
-                        if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
+                        var localComplete = File.Exists(path);
+                        if (localComplete && illust.Ext.IsZip() && illust is ExternalWork externalWork)
+                            localComplete = await PostProcessExternalZip(externalWork, path);
+                        if (File.Exists(path + ".aria2") || !localComplete)//存在.aria2说明下载未完成
                         {
 //                            Log($"Download Fail: {illust.url}");
                             workList.Remove(key);//移到队末并重置url

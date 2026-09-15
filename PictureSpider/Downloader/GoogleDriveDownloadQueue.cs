@@ -1,16 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Web;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace PictureSpider
 {
+    public class GoogleDriveResourceUnavailableException : HttpRequestException
+    {
+        public GoogleDriveResourceUnavailableException(HttpStatusCode statusCode, string responseContent)
+            : base($"Google Drive HTTP {(int)statusCode}: {responseContent}", null, statusCode)
+        {
+        }
+    }
+
     public class GoogleDriveDownloadQueue:BaseDownloadQueue, IDisposable
     {
         private HttpClient httpClient;
@@ -79,7 +89,24 @@ namespace PictureSpider
             using var response = await httpClient.SendAsync(request).ConfigureAwait(false);
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
-                throw new HttpRequestException($"Google Drive HTTP {(int)response.StatusCode}: {content}", null, response.StatusCode);
+            {
+                try
+                {
+                    var error = JObject.Parse(content)["error"] as JObject;
+                    if (response.StatusCode == HttpStatusCode.NotFound &&
+                        error?.Value<int?>("code") == (int)HttpStatusCode.NotFound &&
+                        error.Value<string>("message")?.StartsWith("File not found:", StringComparison.Ordinal) == true &&
+                        error["errors"] is JArray errors && errors.Any(x =>
+                            x is JObject detail && detail.Value<string>("reason") == "notFound" &&
+                            detail.Value<string>("message")?.StartsWith("File not found:", StringComparison.Ordinal) == true))
+                        throw new GoogleDriveResourceUnavailableException(response.StatusCode, content);
+                }
+                catch (JsonException)
+                {
+                }
+                throw new HttpRequestException($"Google Drive HTTP {(int)response.StatusCode}: {content}",
+                    null, response.StatusCode);
+            }
             var file = JObject.Parse(content);
             var name = file.Value<string>("name");
             if (string.IsNullOrWhiteSpace(name) || file.Value<string>("id") != fileId)
@@ -94,8 +121,11 @@ namespace PictureSpider
                 tasks = downloading.ToArray();
             try
             {
-                // Await the downloads themselves so failures reach the caller.
                 await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch
+            {
+                // DownloadTask has already logged each failure.
             }
             finally
             {

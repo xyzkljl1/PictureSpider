@@ -172,22 +172,22 @@ namespace PictureSpider.Pawchive
     [PrimaryKey(nameof(id), nameof(service))]
     public class User : BaseUserEx
     {
-        public enum DownloadSpecialType
+        public enum DownloadExternalWorkType
         {
             None=0,
-            KeyZipMega=1,
+            DirectExternal=1,
+            KeyZipMega=2,
         }
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理
         public string id { get;set; }
         public string service { get; set; }
         //public string relation_id { get; set; }//用途不明
-        public bool dowloadExternalWorks { get; set; } = false;//未实现
+        public DownloadExternalWorkType dowloadExternalWorks { get; set; } = DownloadExternalWorkType.None;
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;
         public bool downloadAttachmentImages { get; set; } = true;
         public bool dowloadEmbed { get; set; } = true;//未实现
-        public DownloadSpecialType downloadSpecial { get; set; } = DownloadSpecialType.None;
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
         [DbKey]
