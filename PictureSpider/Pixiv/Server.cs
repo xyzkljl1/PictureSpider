@@ -854,9 +854,15 @@ namespace PictureSpider.Pixiv
             //.ForEach不会await到async函数执行完成再执行下一次！！！会导致队列限速失效
             //(await database.GetFollowedUser()).ForEach(async user => await queue.Add(RequestAllByUserId(user.userId)));
             foreach (var user in await database.GetFollowedUser())
+            {
                 await queue.Add(RequestAllByUserId(user.userId));
+                await Task.Delay(TimeSpan.FromSeconds(1.5));
+            }
             foreach (var user in await database.GetQueuedUser())
+            {
                 await queue.Add(RequestAllByUserId(user.userId));
+                await Task.Delay(TimeSpan.FromSeconds(1.5));
+            }
             return await queue.GetResultSet();
         }
         private async Task<HashSet<int>> RequestAllCurrentRankIllust()

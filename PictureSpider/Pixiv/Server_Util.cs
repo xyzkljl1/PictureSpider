@@ -28,7 +28,7 @@ namespace PictureSpider.Pixiv
         public async Task<string> RequestPixivAsyncGet(string url, Uri referer, bool anonymous = false)
         {
             HttpClient client=anonymous?httpClient_anonymous:httpClient;
-            for (int try_ct = 8; try_ct >= 0; --try_ct)
+            for (int try_ct = 2; try_ct >= 0; --try_ct)
             {
                 try
                 {
@@ -41,6 +41,11 @@ namespace PictureSpider.Pixiv
                         client.DefaultRequestHeaders.Referrer = referer;
                     using (HttpResponseMessage response = await client.GetAsync(url))
                     {
+                        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                        {
+                            LogError($"HTTP TooManyRequests: {url}");
+                            return null;
+                        }
                         //可能是作品已删除，此时仍然返回结果
                         if (response.StatusCode == HttpStatusCode.NotFound)
                             return await response.Content.ReadAsStringAsync();
@@ -55,6 +60,8 @@ namespace PictureSpider.Pixiv
                     string msg = e.Message;//e.InnerException.InnerException.Message;
                     if(try_ct<1)
                         Console.WriteLine(msg + "Re Try " + try_ct.ToString() + " On :" + url);
+                    if (try_ct > 0 && (e is HttpRequestException || e is TaskCanceledException || e is IOException))
+                        await Task.Delay(TimeSpan.FromSeconds(3));
                     //if (try_ct == 0)
                         //throw;
                 }

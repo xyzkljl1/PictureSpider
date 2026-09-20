@@ -936,8 +936,7 @@ namespace PictureSpider.Pawchive
             }
             catch (Exception e)
             {
-                LogError(e.Message);
-                throw;
+                LogError($"Download batch interrupted: {e}");
             }
         }
 
