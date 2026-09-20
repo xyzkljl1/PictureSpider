@@ -72,7 +72,7 @@ namespace PictureSpider.Pawchive
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader,googleDriveDownloader);
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1),megaDownloader,googleDriveDownloader);
             httpZipEntriesReader = new HttpZipEntriesReader(config.Proxy, $"file.{baseHost}");
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
