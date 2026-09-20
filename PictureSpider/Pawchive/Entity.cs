@@ -45,17 +45,18 @@ namespace PictureSpider.Pawchive
             get=> workGroup??coverGroup;
         }
         [NotMapped]
-        public override string Ext { get => Path.GetExtension(name).ToLower(); }//改成从name获取防止循环引用
+        public override string Ext { get => Path.GetExtension(name ?? "").ToLower(); }//改成从name获取防止循环引用
 
         [NotMapped]
         public override string TmpSubPath
         {
             get
             {
+                var group = GetGroup.ParentGroup;
                 // 视频类不通过此程序预览，需要用用户名作目录
                 if(Ext.IsVideo())
-                    return $"{GetGroup.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(GetGroup.user.displayText)}/{service}_{GetGroup.id}_{index}_{Path.GetFileName(name)}";
-                return $"{service}/{GetGroup.user.id}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
+                    return $"{group.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(group.user.displayText)}/{service}_{group.id}_{index}_{Path.GetFileName(name)}";
+                return $"{service}/{group.user.id}/{group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
         [NotMapped]
@@ -63,7 +64,8 @@ namespace PictureSpider.Pawchive
         {
             get
             {
-                return $"{GetGroup.user.displayText}/{service}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
+                var group = GetGroup.ParentGroup;
+                return $"{group.user.displayText}/{service}/{group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
 
@@ -105,16 +107,17 @@ namespace PictureSpider.Pawchive
         public ExternalWorkType type { get; set; }
 
         [NotMapped]
-        public override string Ext { get => Path.GetExtension(name).ToLower(); }//改成从name获取防止循环引用
+        public override string Ext { get => Path.GetExtension(name ?? "").ToLower(); }//改成从name获取防止循环引用
 
         [NotMapped]
         public override string TmpSubPath
         {
             get
             {
+                var group = workGroup.ParentGroup;
                 if(Ext.IsVideo())//目前客户端不能浏览视频，所以尽量放在同一级目录以便使用外部目录浏览
-                    return $"{workGroup.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(workGroup.user.displayText)}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
-                return $"{service}/{workGroup.user.id}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
+                    return $"{group.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(group.user.displayText)}/{service}_{group.id}_{index}_{Path.GetFileName(name)}";
+                return $"{service}/{group.user.id}/{group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
         [NotMapped]
@@ -122,9 +125,10 @@ namespace PictureSpider.Pawchive
         {
             get
             {
+                var group = workGroup.ParentGroup;
                 if(Ext.IsVideo())
-                    return $"{workGroup.user.displayText}/{service}_{workGroup.id}_{index}_{Path.GetFileName(name)}";
-                return $"{workGroup.user.displayText}/{service}/{workGroup.id}/{index}_{Path.GetFileName(name)}";
+                    return $"{group.user.displayText}/{service}_{group.id}_{index}_{Path.GetFileName(name)}";
+                return $"{group.user.displayText}/{service}/{group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
         [NotMapped]
@@ -146,7 +150,14 @@ namespace PictureSpider.Pawchive
     {
         public string id { get; set; }
         public string title { get; set; }
-        // 表示该group中所有work都是dettached且detachDownloaded,用readed实现
+        // 父组只包含图片；子组包含非图片文件
+        public string parentId { get; set; }
+        public virtual WorkGroup parent { get; set; }
+        public virtual WorkGroup child { get; set; }
+        [NotMapped]
+        public bool IsChild => parentId != null;
+        [NotMapped]
+        public WorkGroup ParentGroup => IsChild ? parent : this;
         [NotMapped]
         public bool DettachDownloaded
         {
@@ -165,8 +176,18 @@ namespace PictureSpider.Pawchive
         [ForeignKey("userid,userservice")]
         public virtual User user { get; set; }
         public virtual Work cover { get; set; }
-        public virtual ICollection<Work> works { get; set; }
-        public virtual ICollection<ExternalWork> externalWorks { get; set; }
+        public virtual ICollection<Work> works { get; set; } = new List<Work>();
+        public virtual ICollection<ExternalWork> externalWorks { get; set; } = new List<ExternalWork>();
+
+        public IEnumerable<PawchiveBaseWork> GetShouldDownloadWorks()
+        {
+            var selected = works.Where(work =>
+                (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
+                (user.downloadAttachmentImages && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
+            if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
+                selected = selected.Concat(externalWorks);
+            return selected.Where(work => !fav || !work.excluded);
+        }
     }
     [Table("Users")]
     [PrimaryKey(nameof(id), nameof(service))]

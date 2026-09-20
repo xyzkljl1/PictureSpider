@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using PictureSpider;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -42,6 +43,7 @@ namespace PictureSpider.Pawchive
         GoogleDriveDownloadQueue googleDriveDownloader;
         HttpZipEntriesReader httpZipEntriesReader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
+        private long? nextChildId;
         public Server(Config config):base(config.PawchiveConnectStr)
         {
             logPrefix = "Paw";
@@ -97,7 +99,8 @@ namespace PictureSpider.Pawchive
             var doc = new HtmlDocument();
             doc.LoadHtml(workGroup.desc ?? "");
             // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
-            var index = (database.ExternalWorks.Where(x => x.workGroup.id == workGroup.id && x.workGroup.user.service == workGroup.service)
+            var index = (database.ExternalWorks.Where(x => (x.workGroup.id == workGroup.id || x.workGroup.parentId == workGroup.id)
+                && x.workGroup.user.service == workGroup.service)
                 .Max(x => (int?)x.index) ?? 0) + 1;
             var anodes = doc.DocumentNode.SelectNodes("//a");
             if (anodes is null)
@@ -249,7 +252,7 @@ namespace PictureSpider.Pawchive
             //默认是按时间倒序
             var existedWorkGroupIds = new HashSet<string>();
             if (user.workGroups is not null)//减少查询次数
-                existedWorkGroupIds = user.workGroups.Select(x => x.id).ToHashSet();
+                existedWorkGroupIds = user.workGroups.Where(x => !x.IsChild).Select(x => x.id).ToHashSet();
             int offset = 0;
             int totalCount = int.MaxValue;
             string service = user.service;
@@ -290,6 +293,7 @@ namespace PictureSpider.Pawchive
                             work.index = index++;
                             work.workGroup = workGroup;
                         }
+                        await SplitNonImageWorks(workGroup);
                     }
                     else if (date<user.fetchedTime)
                     {
@@ -357,7 +361,7 @@ namespace PictureSpider.Pawchive
                 return null;
             var service = key.Substring(0, pos);
             var id = key.Substring(pos + 1);
-            return await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service);
+            return await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service && x.parentId == null);
         }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
@@ -433,6 +437,47 @@ namespace PictureSpider.Pawchive
             }
             return null;
         }
+        // 只由串行后台调用；不保存，由抓取调用方连同fetched状态一起提交。
+        private async Task SplitNonImageWorks(WorkGroup group)
+        {
+            database.ChangeTracker.DetectChanges();
+            var works = group.works.Where(x => x.Dettached).ToList();
+            var externalWorks = group.externalWorks.Where(x => x.Dettached).ToList();
+            var cover = group.cover;
+            var child = group.child;
+            if (works.Count == 0 && externalWorks.Count == 0 && !(cover?.Dettached ?? false))
+            {
+                if (child is not null)
+                    child.fetched = group.fetched;
+                return;
+            }
+            if (child is null)
+            {
+                if (nextChildId is null)
+                    nextChildId = await database.Database.SqlQueryRaw<long>(
+                        "SELECT COALESCE(MIN(CAST(id AS SIGNED)), 0) AS Value FROM WorkGroups WHERE id LIKE '-%'").SingleAsync();
+                nextChildId = checked(nextChildId.Value - 1);
+                child = database.WorkGroups.Add(new WorkGroup
+                {
+                    id = nextChildId.Value.ToString(CultureInfo.InvariantCulture),
+                    parent = group,
+                    user = group.user,
+                    title = group.title,
+                    desc = group.desc,
+                    embedUrl = group.embedUrl
+                }).Entity;
+            }
+            child.fetched = group.fetched;
+            foreach (var work in works)
+                work.workGroup = child;
+            foreach (var work in externalWorks)
+                work.workGroup = child;
+            if (cover?.Dettached == true)
+            {
+                group.cover = null;
+                child.cover = cover;
+            }
+        }
         //获取illustGroup的content以获取外链
         private async Task FetchWorkGroup(WorkGroup illustGroup)
         {
@@ -470,10 +515,13 @@ namespace PictureSpider.Pawchive
             catch (Exception e)
             {
                 illustGroup.fetched = false;
+                await SplitNonImageWorks(illustGroup);
+                await database.SaveChangesAsync();
                 LogError($"Fail ParseExternalWork {illustGroup.service}/{illustGroup.id}: {e.Message}");
                 return;
             }
             illustGroup.fetched = true;
+            await SplitNonImageWorks(illustGroup);
             await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
@@ -534,7 +582,8 @@ namespace PictureSpider.Pawchive
             }
             if (database.ExternalWorks.Count(x => x.id == node.Id && x.type == ExternalWork.ExternalWorkType.Mega) > 0)
                 return;
-            var index = (database.ExternalWorks.Where(x => x.workGroup.id == workGroup.id && x.workGroup.user.service == workGroup.service)
+            var index = (database.ExternalWorks.Where(x => (x.workGroup.id == workGroup.id || x.workGroup.parentId == workGroup.id)
+                && x.workGroup.user.service == workGroup.service)
                 .Max(x => (int?)x.index) ?? 0) + 1;
             database.ExternalWorks.Add(new ExternalWork
             {
@@ -615,21 +664,18 @@ namespace PictureSpider.Pawchive
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
-                    var works = new List<PawchiveBaseWork>();
-                    // 仅含Dettach类型的workGroup不会进入浏览队列，如果检测到所有work都是Dettach类型且已下载过，就标记为readed以避免重复扫描
-                    // 无视下载类型开关, 以防之后要变更下载的类型。
-                    if (workGroup.works.All(work => work.Dettached && work.DettachDownloaded)
-                        && workGroup.externalWorks.All(work => work.Dettached && work.DettachDownloaded))                                
+                    if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.child is null)
+                    {
+                        workGroup.readed = true;
+                        continue;
+                    }
+                    var works = workGroup.GetShouldDownloadWorks().ToList();
+                    // 子组的下载完成状态独立于父组的图片阅读状态。
+                    if (workGroup.IsChild && works.Count > 0 && works.All(work => work.DettachDownloaded))
                     {
                         workGroup.DettachDownloaded = true;
                         continue;
                     }
-                    if (workGroup.user.downloadAttachmentVideos)
-                        works.AddRange(workGroup.works.Where(work => work.Ext.IsVideo()));
-                    if (workGroup.user.downloadAttachmentImages)
-                        works.AddRange(workGroup.works.Where(work => work.Ext.IsImage()));
-                    if (workGroup.user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
-                        works.AddRange(workGroup.externalWorks);
                     foreach (var work in works)
                     {
                         var key = GetDownloadQueueKey(work);
@@ -650,7 +696,7 @@ namespace PictureSpider.Pawchive
                 //GetFullPath以统一斜杠格式
                 var existedFiles = Directory.GetFiles(Path.GetFullPath(download_dir_fav),"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.WorkGroups
-                                    where illustGroup.fav
+                                    where illustGroup.fav && illustGroup.parentId == null
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                     foreach (var illust in illustGroup.works)
@@ -674,7 +720,7 @@ namespace PictureSpider.Pawchive
             {
                 int ct = 0;
                 var workGroups = (from illustGroup in database.WorkGroups
-                                    where illustGroup.readed && illustGroup.fetched && !illustGroup.fav
+                                    where illustGroup.readed && illustGroup.fetched && !illustGroup.fav && illustGroup.parentId == null
                                     select illustGroup).ToList();
                 foreach (var workGroup in workGroups)
                 {
@@ -711,7 +757,9 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
+                                       && illustGroup.parentId == null
                                        && illustGroup.user.followed
+                                       && illustGroup.user.downloadAttachmentImages
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -726,7 +774,7 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && illustGroup.fav
+                                    where illustGroup.fetched && illustGroup.fav && illustGroup.parentId == null
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -745,6 +793,7 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false
+                                       && illustGroup.parentId == null
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
@@ -776,7 +825,8 @@ namespace PictureSpider.Pawchive
                 await FetchWorkGroupListByUser(user);
             Log("Fetch User Done");
             foreach (var illustGroup in (from illustGroup in database.WorkGroups
-                                         where illustGroup.fetched == false && (illustGroup.user.followed == true || illustGroup.user.queued == true)
+                                         where illustGroup.fetched == false && illustGroup.parentId == null
+                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                          select illustGroup).ToList())
                 await FetchWorkGroup(illustGroup);
             Log("Fetch Groups Done");

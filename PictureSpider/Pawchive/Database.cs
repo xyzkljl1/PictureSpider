@@ -13,6 +13,11 @@ namespace PictureSpider.Pawchive
                 .HasConversion<string>()
                 .HasColumnType("enum('None','DirectExternal','KeyZipMega')")
                 .HasDefaultValue(User.DownloadExternalWorkType.None);
+            modelBuilder.Entity<WorkGroup>()
+                .HasOne(x => x.parent)
+                .WithOne(x => x.child)
+                .HasForeignKey<WorkGroup>("parentId", "userservice")
+                .OnDelete(DeleteBehavior.Restrict);
             //级联删除
             modelBuilder
                 .Entity<Work>()
