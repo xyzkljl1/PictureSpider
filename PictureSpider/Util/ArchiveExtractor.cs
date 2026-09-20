@@ -28,8 +28,9 @@ namespace PictureSpider
             "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
         };
 
+        // flatFileName非空时，按原路径排序，以“页号_文件名.扩展名”平铺到目标目录。
         public static async Task<(bool success, List<string> files)> ExtractFiles(string archivePath, string destinationDirectory,
-            IEnumerable<string> allowedExtensions, CancellationToken cancellationToken = default)
+            IEnumerable<string> allowedExtensions, CancellationToken cancellationToken = default, string flatFileName = null)
         {
             string stagingRoot = null;
             try
@@ -40,12 +41,15 @@ namespace PictureSpider
                     throw new ArgumentException("At least one allowed extension is required.", nameof(allowedExtensions));
                 bool IsAllowedFile(string path) => extensions.Contains(Path.GetExtension(path));
 
-                if (File.Exists(Path.Combine(destinationDirectory, CompleteMarker)))
+                if (flatFileName != null && (String.IsNullOrWhiteSpace(flatFileName)
+                    || flatFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+                    throw new ArgumentException("Invalid flat file name.", nameof(flatFileName));
+                if (flatFileName == null && File.Exists(Path.Combine(destinationDirectory, CompleteMarker)))
                     return (true, Directory.GetFiles(destinationDirectory, "*",
                         new EnumerationOptions { RecurseSubdirectories = true }).Where(IsAllowedFile).ToList());
                 if (!File.Exists(archivePath))
                     throw new FileNotFoundException("Archive file does not exist.", archivePath);
-                if (Directory.Exists(destinationDirectory))
+                if (flatFileName == null && Directory.Exists(destinationDirectory))
                     throw new IOException("Incomplete archive extraction directory already exists.");
                 var archiveLength = new FileInfo(archivePath).Length;
                 if (archiveLength <= 0 || archiveLength > MaxArchiveBytes)
@@ -109,6 +113,21 @@ namespace PictureSpider
                 }
                 if (extractedFiles.Count == 0)
                     throw new InvalidDataException("Archive does not contain supported files.");
+                if (flatFileName != null)
+                {
+                    extractedFiles.Sort(StringComparer.OrdinalIgnoreCase);
+                    var targets = extractedFiles.Select((file, index) => GetSafeDestinationPath(destinationRoot,
+                        $"{index + 1}_{flatFileName}{Path.GetExtension(file)}")).ToList();
+                    Directory.CreateDirectory(destinationRoot);
+                    for (int i = 0; i < extractedFiles.Count; i++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        // 重试使用相同的目标文件名，不依赖上次部分移动后的目录内容。
+                        File.Move(extractedFiles[i], targets[i], true);
+                    }
+                    Directory.Delete(stagingRoot, true);
+                    return (true, targets);
+                }
                 await File.WriteAllTextAsync(Path.Combine(stagingRoot, CompleteMarker), DateTime.UtcNow.ToString("O"), cancellationToken);
                 Directory.Move(stagingRoot, destinationRoot);
                 return (true, extractedFiles.Select(x =>

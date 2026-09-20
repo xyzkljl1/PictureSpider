@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.Pawchive;
 
@@ -11,9 +12,11 @@ using PictureSpider.Pawchive;
 namespace PictureSpider.Migrations.Pawchive
 {
     [DbContext(typeof(Database))]
-    partial class PawchiveDatabaseModelSnapshot : ModelSnapshot
+    [Migration("20260920055533_AddPawchiveArchiveImageGroups")]
+    partial class AddPawchiveArchiveImageGroups
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -114,8 +117,7 @@ namespace PictureSpider.Migrations.Pawchive
             modelBuilder.Entity("PictureSpider.Pawchive.Work", b =>
                 {
                     b.Property<string>("urlPath")
-                        .HasMaxLength(512)
-                        .HasColumnType("varchar(512)");
+                        .HasColumnType("varchar(95)");
 
                     b.Property<string>("service")
                         .HasColumnType("varchar(95)");
@@ -134,6 +136,9 @@ namespace PictureSpider.Migrations.Pawchive
 
                     b.Property<int>("index")
                         .HasColumnType("int");
+
+                    b.Property<string>("localPath")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("name")
                         .HasColumnType("longtext");
@@ -177,17 +182,26 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<bool>("fetched")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<bool>("isNonImage")
-                        .HasColumnType("tinyint(1)");
-
                     b.Property<string>("parentId")
                         .HasColumnType("varchar(95)");
 
                     b.Property<bool>("readed")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("sourceArchiveId")
+                        .HasColumnType("varchar(95)");
+
+                    b.Property<int?>("sourceArchiveType")
+                        .HasColumnType("int");
+
                     b.Property<string>("title")
                         .HasColumnType("longtext");
+
+                    b.Property<string>("type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("enum('Images','NonImages')")
+                        .HasDefaultValue("Images");
 
                     b.Property<string>("userid")
                         .HasColumnType("varchar(95)");
@@ -195,6 +209,9 @@ namespace PictureSpider.Migrations.Pawchive
                     b.HasKey("id", "userservice");
 
                     b.HasIndex("parentId", "userservice");
+
+                    b.HasIndex("sourceArchiveId", "sourceArchiveType")
+                        .IsUnique();
 
                     b.HasIndex("userid", "userservice");
 
@@ -260,13 +277,25 @@ namespace PictureSpider.Migrations.Pawchive
                         .HasForeignKey("parentId", "userservice")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("PictureSpider.Pawchive.ExternalWork", "sourceArchive")
+                        .WithOne("imageGroup")
+                        .HasForeignKey("PictureSpider.Pawchive.WorkGroup", "sourceArchiveId", "sourceArchiveType")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PictureSpider.Pawchive.User", "user")
                         .WithMany("workGroups")
                         .HasForeignKey("userid", "userservice");
 
                     b.Navigation("parent");
 
+                    b.Navigation("sourceArchive");
+
                     b.Navigation("user");
+                });
+
+            modelBuilder.Entity("PictureSpider.Pawchive.ExternalWork", b =>
+                {
+                    b.Navigation("imageGroup");
                 });
 
             modelBuilder.Entity("PictureSpider.Pawchive.User", b =>

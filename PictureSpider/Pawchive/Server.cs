@@ -7,7 +7,6 @@ using Newtonsoft.Json.Linq;
 using PictureSpider;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -43,7 +42,6 @@ namespace PictureSpider.Pawchive
         GoogleDriveDownloadQueue googleDriveDownloader;
         HttpZipEntriesReader httpZipEntriesReader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
-        private long? nextChildId;
         public Server(Config config):base(config.PawchiveConnectStr)
         {
             logPrefix = "Paw";
@@ -75,7 +73,7 @@ namespace PictureSpider.Pawchive
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
             downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, 30),megaDownloader,googleDriveDownloader);
-            httpZipEntriesReader = new HttpZipEntriesReader(config.ProxyGo, $"file.{baseHost}");
+            httpZipEntriesReader = new HttpZipEntriesReader(config.Proxy, $"file.{baseHost}");
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
@@ -361,7 +359,7 @@ namespace PictureSpider.Pawchive
                 return null;
             var service = key.Substring(0, pos);
             var id = key.Substring(pos + 1);
-            return await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service && x.parentId == null);
+            return await database.WorkGroups.FirstOrDefaultAsync(x => x.id == id && x.user.service == service && !x.isNonImage);
         }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
@@ -444,7 +442,7 @@ namespace PictureSpider.Pawchive
             var works = group.works.Where(x => x.Dettached).ToList();
             var externalWorks = group.externalWorks.Where(x => x.Dettached).ToList();
             var cover = group.cover;
-            var child = group.child;
+            var child = group.children.SingleOrDefault(x => x.isNonImage);
             if (works.Count == 0 && externalWorks.Count == 0 && !(cover?.Dettached ?? false))
             {
                 if (child is not null)
@@ -453,13 +451,10 @@ namespace PictureSpider.Pawchive
             }
             if (child is null)
             {
-                if (nextChildId is null)
-                    nextChildId = await database.Database.SqlQueryRaw<long>(
-                        "SELECT COALESCE(MIN(CAST(id AS SIGNED)), 0) AS Value FROM WorkGroups WHERE id LIKE '-%'").SingleAsync();
-                nextChildId = checked(nextChildId.Value - 1);
                 child = database.WorkGroups.Add(new WorkGroup
                 {
-                    id = nextChildId.Value.ToString(CultureInfo.InvariantCulture),
+                    id = await database.GetNextChildId(),
+                    isNonImage = true,
                     parent = group,
                     user = group.user,
                     title = group.title,
@@ -599,11 +594,56 @@ namespace PictureSpider.Pawchive
         }
         private async Task<bool> PostProcessExternalZip(ExternalWork work, string archivePath)
         {
+            bool createImageGroup = work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
             var destinationDirectory = Path.Combine(Path.GetDirectoryName(archivePath),
                 Path.GetFileNameWithoutExtension(archivePath) + "_images");
-            var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory, Util.imageExtensions);
+            string archiveId = null;
+            if (createImageGroup)
+            {
+                destinationDirectory = Path.GetDirectoryName(archivePath);
+                archiveId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    Encoding.UTF8.GetBytes($"{work.type}/{work.id}")));
+            }
+            var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory,
+                Util.imageExtensions, flatFileName: archiveId);
             if (!success)
                 return false;
+            if (createImageGroup && files.Count > 0)
+            {
+                try
+                {
+                    File.Delete(archivePath);
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    LogError($"Archive cleanup failed {work.service}/{work.id}: {e.Message}");
+                    return false;
+                }
+                var parent = work.workGroup.ParentGroup;
+                var imageGroup = new WorkGroup
+                {
+                    id = await database.GetNextChildId(),
+                    parent = parent,
+                    parentId = parent.id,
+                    user = parent.user,
+                    title = $"{parent.title} [{Path.GetFileNameWithoutExtension(work.name)}]",
+                    fetched = true
+                };
+                int index = 1;
+                foreach (var file in files)
+                {
+                    imageGroup.works.Add(new Work
+                    {
+                        service = work.service,
+                        urlPath = $"{work.type}/{work.id}/{index}",
+                        name = archiveId + Path.GetExtension(file),
+                        index = index++,
+                        workGroup = imageGroup
+                    });
+                }
+                database.WorkGroups.Add(imageGroup);
+                // 调用方将图片组、图片和压缩包下载完成标记在同一次SaveChanges中提交。
+            }
             Log($"Extract ExternalWork: {work.workGroup.service}/{work.workGroup.id} {files.Count} images");
             return true;
         }
@@ -664,18 +704,20 @@ namespace PictureSpider.Pawchive
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
-                    if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.child is null)
+                    if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.children.Count == 0)
                     {
                         workGroup.readed = true;
                         continue;
                     }
                     var works = workGroup.GetShouldDownloadWorks().ToList();
                     // 子组的下载完成状态独立于父组的图片阅读状态。
-                    if (workGroup.IsChild && works.Count > 0 && works.All(work => work.DettachDownloaded))
+                    if (workGroup.isNonImage && works.Count > 0 && works.All(work => work.DettachDownloaded))
                     {
                         workGroup.DettachDownloaded = true;
                         continue;
                     }
+                    if (workGroup.IsChild && !workGroup.isNonImage)
+                        continue;
                     foreach (var work in works)
                     {
                         var key = GetDownloadQueueKey(work);
@@ -696,7 +738,7 @@ namespace PictureSpider.Pawchive
                 //GetFullPath以统一斜杠格式
                 var existedFiles = Directory.GetFiles(Path.GetFullPath(download_dir_fav),"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
                 var illustGroups = (from illustGroup in database.WorkGroups
-                                    where illustGroup.fav && illustGroup.parentId == null
+                                    where illustGroup.fav && !illustGroup.isNonImage
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                     foreach (var illust in illustGroup.works)
@@ -720,7 +762,7 @@ namespace PictureSpider.Pawchive
             {
                 int ct = 0;
                 var workGroups = (from illustGroup in database.WorkGroups
-                                    where illustGroup.readed && illustGroup.fetched && !illustGroup.fav && illustGroup.parentId == null
+                                    where illustGroup.readed && illustGroup.fetched && !illustGroup.fav && !illustGroup.isNonImage
                                     select illustGroup).ToList();
                 foreach (var workGroup in workGroups)
                 {
@@ -757,9 +799,10 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
-                                       && illustGroup.parentId == null
+                                       && !illustGroup.isNonImage
                                        && illustGroup.user.followed
-                                       && illustGroup.user.downloadAttachmentImages
+                                       && (illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages
+                                            : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -774,7 +817,7 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && illustGroup.fav && illustGroup.parentId == null
+                                    where illustGroup.fetched && illustGroup.fav && !illustGroup.isNonImage
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -793,12 +836,13 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false
-                                       && illustGroup.parentId == null
+                                       && !illustGroup.isNonImage
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    if (illustGroup.user.downloadAttachmentImages&&illustGroup.works.Count>0)
+                    if ((illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages
+                        : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega) && illustGroup.works.Count > 0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                         if (exploreFile.validPageCount() > 0)
@@ -960,7 +1004,7 @@ namespace PictureSpider.Pawchive
                     foreach (var (key, illust) in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
-                        var localComplete = File.Exists(path);
+                        var localComplete = File.Exists(path) && !File.Exists(path + ".aria2");
                         if (localComplete && illust.Ext.IsZip() && illust is ExternalWork externalWork)
                             localComplete = await PostProcessExternalZip(externalWork, path);
                         if (File.Exists(path + ".aria2") || !localComplete)//存在.aria2说明下载未完成
@@ -986,6 +1030,8 @@ namespace PictureSpider.Pawchive
             }
             catch (Exception e)
             {
+                // 丢弃本批未保存的状态，避免后续任务误提交；下次启动重新扫描未完成任务。
+                database.ChangeTracker.Clear();
                 LogError($"Download batch interrupted: {e}");
             }
         }

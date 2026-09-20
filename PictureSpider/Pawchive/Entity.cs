@@ -38,7 +38,8 @@ namespace PictureSpider.Pawchive
     {
         public string name { get; set; }//注意name可能是个文件名也可能是个带文件名的网址
         public string service { get; set; }//不确定service来自于coverGroup还是workGroup,需要存储一份
-        public string urlPath { get; set; }
+        [MaxLength(512)]
+        public string urlPath { get; set; }//普通附件为远端路径，解压图片为外链和页号组成的唯一标识
         [NotMapped]
         public WorkGroup GetGroup
         {
@@ -52,11 +53,11 @@ namespace PictureSpider.Pawchive
         {
             get
             {
-                var group = GetGroup.ParentGroup;
+                var group = GetGroup;
                 // 视频类不通过此程序预览，需要用用户名作目录
                 if(Ext.IsVideo())
-                    return $"{group.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(group.user.displayText)}/{service}_{group.id}_{index}_{Path.GetFileName(name)}";
-                return $"{service}/{group.user.id}/{group.id}/{index}_{Path.GetFileName(name)}";
+                    return $"{group.user.id}_{Util.ReplaceInvalidCharInFilenameWithReturnValue(group.user.displayText)}/{service}_{group.parentId ?? group.id}_{index}_{Path.GetFileName(name)}";
+                return $"{service}/{group.user.id}/{group.parentId ?? group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
         [NotMapped]
@@ -64,13 +65,13 @@ namespace PictureSpider.Pawchive
         {
             get
             {
-                var group = GetGroup.ParentGroup;
-                return $"{group.user.displayText}/{service}/{group.id}/{index}_{Path.GetFileName(name)}";
+                var group = GetGroup;
+                return $"{group.user.displayText}/{service}/{group.parentId ?? group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
 
         [NotMapped]
-        public override string DownloadURL => $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
+        public override string DownloadURL => GetGroup is { IsChild: true, isNonImage: false } ? null : $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
         //页号
         public int index { get; set; } = -1;
         //由于Work通过cover和works分别关联到WorkGroup，需要手动指定哪个外键对应哪个关联关系
@@ -150,10 +151,11 @@ namespace PictureSpider.Pawchive
     {
         public string id { get; set; }
         public string title { get; set; }
-        // 父组只包含图片；子组包含非图片文件
+        public bool isNonImage { get; set; } = false;
+        // 子组可以是非图片文件组，也可以是完整解压后生成的图片组。
         public string parentId { get; set; }
         public virtual WorkGroup parent { get; set; }
-        public virtual WorkGroup child { get; set; }
+        public virtual ICollection<WorkGroup> children { get; set; } = new List<WorkGroup>();
         [NotMapped]
         public bool IsChild => parentId != null;
         [NotMapped]
@@ -183,7 +185,8 @@ namespace PictureSpider.Pawchive
         {
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
-                (user.downloadAttachmentImages && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
+                ((IsChild && !isNonImage ? user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega : user.downloadAttachmentImages)
+                    && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
             if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
                 selected = selected.Concat(externalWorks);
             return selected.Where(work => !fav || !work.excluded);
@@ -208,7 +211,7 @@ namespace PictureSpider.Pawchive
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;
         public bool downloadAttachmentImages { get; set; } = true;
-        public bool dowloadEmbed { get; set; } = true;//未实现
+        public bool dowloadEmbed { get; set; } = false;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
         [DbKey]
@@ -250,7 +253,7 @@ namespace PictureSpider.Pawchive
 
         public override int pageCount() { return sortedIllusts.Count; }
 
-        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
+        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.parentId ?? illustGroup.id}"; }
 
         public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 
@@ -297,7 +300,7 @@ namespace PictureSpider.Pawchive
 
         public override int pageCount() { return sortedIllusts.Count; }
 
-        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}"; }
+        public override string WebsiteURL(int page) { return $"{Server.baseUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.parentId ?? illustGroup.id}"; }
 
         public override int validPageCount() { return sortedIllusts.Count(x => !x.excluded); }
 
