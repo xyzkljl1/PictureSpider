@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PictureSpider.Pawchive;
 
@@ -11,9 +12,11 @@ using PictureSpider.Pawchive;
 namespace PictureSpider.Migrations.Pawchive
 {
     [DbContext(typeof(Database))]
-    partial class PawchiveDatabaseModelSnapshot : ModelSnapshot
+    [Migration("20260920080607_AddPawchivePreviewOnly")]
+    partial class AddPawchivePreviewOnly
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

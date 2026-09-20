@@ -482,9 +482,7 @@ namespace PictureSpider.Pawchive
                 Log($"Can't Fetch IllustGroup :{illustGroup.id} {illustGroup.service}");
                 return;
             }
-            // 只有预览的帖子没有原图，保留 fetched=false，之后定期重新检查。
-            if (doc.Value<bool?>("has_full") == false)
-                return;
+            illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
             illustGroup.desc = doc.Value<string>("content");
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");
             // 预览帖子后来导入时，附件可能发生变化。
@@ -724,8 +722,13 @@ namespace PictureSpider.Pawchive
                         if (workGroup.fav == false || work.excluded == false)//没有排除
                             if (!downloadQueue.Contains(key)) //不在下载队列
                                 if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
-                                    if (work.Dettached || !File.Exists($"{download_dir_tmp}/{work.TmpSubPath}"))
+                                {
+                                    var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
+                                    if (work is Work preview && preview.DownloadPreview && preview.GetLocalPath(download_dir_tmp) != "")
+                                        continue;
+                                    if (work.Dettached || !File.Exists(path) || File.Exists(path + ".aria2"))
                                         downloadQueue.Add(key);
+                                }
                     } 
                 }
                 if (downloadQueue.Count > tmp)
@@ -744,14 +747,17 @@ namespace PictureSpider.Pawchive
                     foreach (var illust in illustGroup.works)
                         if (!illust.Dettached) // 一个group中可能同时存在图片和dettach类型
                         {
-                            var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
+                            var tmp_path = illust.GetLocalPath(download_dir_tmp);
                             var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
                             if (!illust.excluded)
                             {
+                                var preview_path = Work.GetPreviewPath(fav_path);
+                                if (!existedFiles.Contains(fav_path) && tmp_path == Path.Combine(download_dir_tmp, Work.GetPreviewPath(illust.TmpSubPath)))
+                                    fav_path = preview_path;
                                 if (existedFiles.Contains(fav_path))
                                     existedFiles.Remove(fav_path);
-                                else
-                                    CopyFile(tmp_path, fav_path);
+                                else if (CopyFile(tmp_path, fav_path) == 0)
+                                    existedFiles.Remove(preview_path);//原图未就绪或复制失败时保留已有预览图
                             }
                         }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
@@ -768,7 +774,10 @@ namespace PictureSpider.Pawchive
                 {
                     foreach (var work in workGroup.works)
                         if (!work.Dettached)
+                        {
                             ct += DeleteFile($"{download_dir_tmp}/{work.TmpSubPath}");
+                            ct += DeleteFile(Path.Combine(download_dir_tmp, Work.GetPreviewPath(work.TmpSubPath)));
+                        }
                 }
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
@@ -953,7 +962,7 @@ namespace PictureSpider.Pawchive
                         ignore_illusts.Add(key);
                         continue;
                     }
-                    var path = Path.Combine(download_dir_tmp, work.TmpSubPath);
+                    var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
                     var ext = work.Ext;
@@ -1003,7 +1012,7 @@ namespace PictureSpider.Pawchive
                     //var fail_illustGroup=new HashSet<WorkGroup>();
                     foreach (var (key, illust) in download_illusts)
                     {
-                        var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
+                        var path = Path.Combine(download_dir_tmp, illust is Work attachment ? attachment.DownloadSubPath : illust.TmpSubPath);
                         var localComplete = File.Exists(path) && !File.Exists(path + ".aria2");
                         if (localComplete && illust.Ext.IsZip() && illust is ExternalWork externalWork)
                             localComplete = await PostProcessExternalZip(externalWork, path);

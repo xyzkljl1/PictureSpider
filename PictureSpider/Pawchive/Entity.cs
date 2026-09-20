@@ -12,7 +12,6 @@ using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using static TdLib.TdApi;
 
 namespace PictureSpider.Pawchive
 {
@@ -71,7 +70,27 @@ namespace PictureSpider.Pawchive
         }
 
         [NotMapped]
-        public override string DownloadURL => GetGroup is { IsChild: true, isNonImage: false } ? null : $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
+        public bool DownloadPreview => Ext.IsImage() && GetGroup is { previewOnly: true, IsChild: false };
+        [NotMapped]
+        public string DownloadSubPath => DownloadPreview ? GetPreviewPath(TmpSubPath) : TmpSubPath;
+        public static string GetPreviewPath(string path)
+        {
+            return Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path) + "_preview" + Path.GetExtension(path));
+        }
+        // 不能将 aria2 尚未下载完整的文件交给浏览器或复制到收藏目录。
+        public string GetLocalPath(string directory)
+        {
+            var path = Path.Combine(directory, TmpSubPath);
+            // TODO 优化，避免 entity 调用 File.Exists。
+            if (File.Exists(path) && !File.Exists(path + ".aria2"))
+                return path;
+            path = GetPreviewPath(path);
+            return File.Exists(path) && !File.Exists(path + ".aria2") ? path : "";
+        }
+        [NotMapped]
+        public override string DownloadURL => GetGroup is { IsChild: true, isNonImage: false } ? null
+            : DownloadPreview ? $"https://img.{Server.baseHost}/thumbnail/data{urlPath}"
+            : $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
         //页号
         public int index { get; set; } = -1;
         //由于Work通过cover和works分别关联到WorkGroup，需要手动指定哪个外键对应哪个关联关系
@@ -174,6 +193,7 @@ namespace PictureSpider.Pawchive
         public bool fav { get; set; } = false;
         //已经fetch过
         public bool fetched { get; set; } = false;
+        public bool previewOnly { get; set; } = false;//网站只有预览图，与本地下载完成状态无关
 
         [ForeignKey("userid,userservice")]
         public virtual User user { get; set; }
@@ -248,7 +268,7 @@ namespace PictureSpider.Pawchive
         }
         public override string FilePath(int page)
         {
-            return Path.Combine(download_dir_tmp, sortedIllusts[page].TmpSubPath);
+            return sortedIllusts[page].GetLocalPath(download_dir_tmp);
         }
 
         public override int pageCount() { return sortedIllusts.Count; }
