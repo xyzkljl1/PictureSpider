@@ -8,6 +8,10 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using CG.Web.MegaApiClient;
 using System.Security.Authentication;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.WebUtilities;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace PictureSpider
 {
@@ -38,7 +42,43 @@ namespace PictureSpider
         {
             using MemoryStream dataStream = new MemoryStream(Encoding.UTF8.GetBytes(jsonData));
             using Stream stream = PostRequest(url, dataStream, "application/json");
-            return StreamToString(stream);
+            var result = StreamToString(stream);
+            var request = JArray.Parse(jsonData);
+            if (!QueryHelpers.ParseQuery(url.Query).ContainsKey("n") || request.Count != 1 || request[0]["a"]?.ToString() != "f")
+                return result;
+
+            var response = JArray.Parse(result);
+            if (response.Count != 1 || response[0] is not JObject responseObject || responseObject["f"] is not JArray nodes)
+                return result;
+
+            // MegaApiClient只使用第一份节点密钥；嵌套分享可能把旧的父分享密钥放在前面。
+            var nodeIds = new HashSet<string>();
+            foreach (JObject node in nodes)
+                nodeIds.Add(node.Value<string>("h"));
+            string rootId = null;
+            foreach (JObject node in nodes)
+                if (node.Value<int>("t") == 1 && !nodeIds.Contains(node.Value<string>("p")))
+                {
+                    rootId = node.Value<string>("h");
+                    break;
+                }
+            if (string.IsNullOrEmpty(rootId))
+                return result;
+
+            foreach (JObject node in nodes)
+            {
+                var keys = node.Value<string>("k")?.Split('/');
+                if (keys is null || keys.Length < 2)
+                    continue;
+                var rootKeyIndex = Array.FindIndex(keys, x => x.StartsWith(rootId + ":", StringComparison.Ordinal));
+                if (rootKeyIndex <= 0)
+                    continue;
+                var rootKey = keys[rootKeyIndex];
+                Array.Copy(keys, 0, keys, 1, rootKeyIndex);
+                keys[0] = rootKey;
+                node["k"] = string.Join("/", keys);
+            }
+            return response.ToString(Formatting.None);
         }
 
         public string PostRequestRaw(Uri url, Stream dataStream)
