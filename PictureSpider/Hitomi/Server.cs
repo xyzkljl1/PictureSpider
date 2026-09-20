@@ -93,6 +93,7 @@ namespace PictureSpider.Hitomi
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
+            bool forceRefreshUrl = false;
 
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
@@ -111,7 +112,8 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
                 await ApplyPendingUiOperations();
-                await ProcessIllustDownloadQueue(downloadQueue, 25);
+                await ProcessIllustDownloadQueue(downloadQueue, 25, forceRefreshUrl);
+                forceRefreshUrl = !forceRefreshUrl;
             }, new TimeSpan(0, 40, 0), enableScheduleTasks);
         }
         private async Task WEBP2JPGorGIF(Illust illust)
@@ -238,13 +240,14 @@ namespace PictureSpider.Hitomi
                     Log($"Delete from tmp:{ct}");
             }
         }
-        private async Task ProcessIllustDownloadQueue(List<int> illustList, int limit = -1)
+        private async Task ProcessIllustDownloadQueue(List<int> illustList, int limit = -1, bool forceRefreshUrl = false)
         {
             try
             {
                 //移除临时文件
                 downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<Illust>();
+                var refreshedIllustGroups = new HashSet<int>();
                 int download_ct = 0;
                 foreach (var illustId in illustList.ToList())
                 {
@@ -268,7 +271,7 @@ namespace PictureSpider.Hitomi
                         continue;
                     }
                     //是否应当下载在外部判断
-                    if (illust.url == "")//重新计算url
+                    if ((forceRefreshUrl && refreshedIllustGroups.Add(illust.illustGroup.Id)) || illust.url == "")//重新计算url
                         await CalcIllustURL(illust.illustGroup);
                     if (illust.illustGroup.isCollection)
                     {
