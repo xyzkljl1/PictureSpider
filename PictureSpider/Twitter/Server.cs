@@ -41,8 +41,8 @@ namespace PictureSpider.Twitter
         private string authUserAgent = "";
         private string csrfToken = "";
         private DateTime nextXRequestAt = DateTime.MinValue;
-        private string userByScreenNameQueryId = "IGgvgiOx4QZndDHuD3x9TQ";
-        private string userMediaQueryId = "9EovraBTXJYGSEQXZqlLmQ";
+        private string userByScreenNameQueryId = "KybxDj9RrADIITXlGG8kpw";
+        private string userMediaQueryId = "TwLiEVUhRjjjKVc98IT0TQ";
 
         public Server(Config config) : base(config.TwitterConnectStr)
         {
