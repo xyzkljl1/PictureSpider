@@ -970,12 +970,14 @@ namespace PictureSpider.Pawchive
                     {
                         await Task.Delay(TimeSpan.FromSeconds(2));
                         Util.TouchDir(dir);
-                        await downloader.Add(Downloader.DownloaderType.Aria2DownloadQueue, work.DownloadURL, dir, filename);
+                        if (await downloader.Add(Downloader.DownloaderType.Aria2DownloadQueue, work.DownloadURL, dir, filename) == DownloadAddResult.TryLater)
+                            continue;
                     }
                     else if ((ext.IsVideo() || ext.IsZip()) && work is ExternalWork)
                     {
                         if (!File.Exists(path))
-                            await downloader.Add(work, download_dir_tmp);
+                            if (await downloader.Add(work, download_dir_tmp) == DownloadAddResult.TryLater)
+                                continue;
                     }
                     else if (ext.IsZip())
                     {

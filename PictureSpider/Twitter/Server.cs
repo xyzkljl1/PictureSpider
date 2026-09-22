@@ -806,10 +806,7 @@ namespace PictureSpider.Twitter
                     Split = 1,
                     MaxConnectionPerServer = 1
                 };
-                var added = await downloader.Add(url, dir, fileName, options);
-                if (!added)
-                    LogError($"Aria2 add download task failed {fileName}");
-                return added;
+                return await downloader.Add(url, dir, fileName, options) == DownloadAddResult.Added;
             }
             catch (Exception e)
             {

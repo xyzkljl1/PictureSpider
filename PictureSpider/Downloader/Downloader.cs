@@ -44,18 +44,18 @@ namespace PictureSpider
         {
             downloaders.Add(_downloaders);
         }
-        public async Task<bool> Add(DownloaderType downloaderType, string url, string _dir, string _filename)
+        public async Task<DownloadAddResult> Add(DownloaderType downloaderType, string url, string _dir, string _filename)
         {
             var downloader = GetDownloader(downloaderType);
             if (downloader == null)
-                return false;
+                return DownloadAddResult.Failed;
             var path = Path.Combine(_dir, _filename);//防止filename中有/
             var dir = Path.GetDirectoryName(path);
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
             return await downloader.Add(url,dir, Path.GetFileName(path));
         }
-        public async Task<bool> Add(BaseWork work,string root_dir)
+        public async Task<DownloadAddResult> Add(BaseWork work,string root_dir)
         {
             var path = Path.GetFullPath(Path.Combine(root_dir, work.TmpSubPath));
             return await Add(work.GetDownloader, work.DownloadURL, Path.GetDirectoryName(path) ,Path.GetFileName(path));

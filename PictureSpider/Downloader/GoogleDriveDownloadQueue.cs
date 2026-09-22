@@ -38,7 +38,7 @@ namespace PictureSpider
             httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
         }
 
-        public override Task<bool> Add(string url, string dir, string file_name)
+        public override Task<DownloadAddResult> Add(string url, string dir, string file_name)
         {
             try
             {
@@ -47,12 +47,12 @@ namespace PictureSpider
                 var path = Path.GetFullPath(Path.Combine(dir, file_name));
                 lock (downloading)
                     downloading.Add(DownloadTask(fileId, path, resourceKey));
-                return Task.FromResult(true);
+                return Task.FromResult(DownloadAddResult.Added);
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"[GoogleDrive] Fail to queue: {e.Message}");
-                return Task.FromResult(false);
+                return Task.FromResult(DownloadAddResult.Failed);
             }
         }
 

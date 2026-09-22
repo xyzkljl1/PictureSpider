@@ -43,12 +43,12 @@ namespace PictureSpider
             foreach (var file in Directory.GetFiles(dir, "*.aria2"))//下载临时文件
                 File.Delete(file);
         }
-        public async override Task<bool> Add(string url, string dir, string file_name)
+        public async override Task<DownloadAddResult> Add(string url, string dir, string file_name)
         {
             return await Add(url, dir, file_name, null);
         }
 
-        public async override Task<bool> Add(string url, string dir, string file_name, DownloadRequestOptions options)
+        public async override Task<DownloadAddResult> Add(string url, string dir, string file_name, DownloadRequestOptions options)
         {
             //用/以避免转义
             dir = dir.Replace('\\', '/');
@@ -88,9 +88,9 @@ namespace PictureSpider
             catch (Exception e)
             {
                 Console.Error.WriteLine(e.Message);
-                return false;
+                return DownloadAddResult.Failed;
             }
-            return true;
+            return DownloadAddResult.Added;
         }
 
         private void ApplyRequestOptions(JObject ariaOptions, DownloadRequestOptions options)

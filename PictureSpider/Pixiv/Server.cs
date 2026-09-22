@@ -560,7 +560,7 @@ namespace PictureSpider.Pixiv
                 var download_illusts = new List<Illust>();
                 var processed_illusts = new List<int>();
                 int download_ct = 0;
-                var queue = new TaskQueue<bool>(3000);
+                var queue = new TaskQueue<DownloadAddResult>(3000);
                 foreach (var illust in illustList)
                 {
                     bool downloaded = false;
@@ -586,7 +586,7 @@ namespace PictureSpider.Pixiv
                 }
                 await queue.Done();
                 int ct = 0;
-                queue.done_task_list.ForEach(task => ct += task.Result ? 1 : 0);
+                queue.done_task_list.ForEach(task => ct += task.Result == DownloadAddResult.Added ? 1 : 0);
                 Log(String.Format("Download Begin {0}(pages)", ct));
                 //等待完成并查询状态
                 await downloader.WaitForAll();

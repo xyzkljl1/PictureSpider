@@ -1102,22 +1102,27 @@ namespace PictureSpider.Kemono
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
                     var ext = work.Ext;
+                    var addResult = DownloadAddResult.Added;
                     if(ext.IsImage() && work is Work)
                     {
                         if(!await ElectWorkURLHost(work as Work))
                             LogError($"Fail to find valid host1 from n1~n4:work {(work as Work).urlPath}");
-                        await downloader.Add(work, download_dir_tmp);
+                        addResult = await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsVideo() && work is Work)
                     {
                         if (!await ElectWorkURLHost(work as Work))
                             LogError($"Fail to find valid host2 from n1~n4:work {(work as Work).urlPath}");
-                        await downloader.Add(work, download_dir_tmp);
+                        addResult = await downloader.Add(work, download_dir_tmp);
                     }
                     else if (ext.IsVideo() && work is ExternalWork)
                     {
-                        if (!File.Exists(path) && !await downloader.Add(work, download_dir_tmp))
-                            externalDownloadFailed = true;
+                        if (!File.Exists(path))
+                        {
+                            addResult = await downloader.Add(work, download_dir_tmp);
+                            if (addResult == DownloadAddResult.Failed)
+                                externalDownloadFailed = true;
+                        }
                     }
                     else if (ext.IsZip())
                     {
@@ -1129,6 +1134,8 @@ namespace PictureSpider.Kemono
                         ignore_illusts.Add(key);
                         continue;
                     }
+                    if (addResult == DownloadAddResult.TryLater)
+                        continue;
                     download_ct++;
                     download_illusts.Add((key, work));
                     if (limit >= 0 && download_ct >= limit)

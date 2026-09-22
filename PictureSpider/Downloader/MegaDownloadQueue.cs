@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Security.Policy;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using static Microsoft.ClearScript.V8.V8CpuProfile;
 using static Org.BouncyCastle.Math.EC.ECCurve;
@@ -17,12 +19,14 @@ namespace PictureSpider
         public MegaApiClient MegaClient=>mega;
         private MegaApiClient mega;
         private List<Task> downloading = new List<Task>();
+        private readonly SemaphoreSlim availableSlots = new SemaphoreSlim(10, 10);
+        private long retryAfterTicks;
         private bool loginSuccessed = false;
         public MegaDownloadQueue(string proxy_access,string proxy_download)
         {
             //SNI可以访问网页，获得节点，但是无法下载(http://gfs262n333.userstorage.mega.co.nz/dl/*)
             //Go无法访问网页，在chrome上时不时可以下载，但是用curl及MegaApiClient无法下载
-            mega = new MegaApiClient(new MegaWebClient(new WebProxy(proxy_access, false), new WebProxy(proxy_download, false)));
+            mega = new MegaApiClient(new MegaWebClient(new WebProxy(proxy_access, false), new WebProxy(proxy_download, false), PauseDownloads));
             Task.Run(()=>{
                 try
                 {
@@ -78,12 +82,13 @@ namespace PictureSpider
         }
         public async Task DownloadTask(string url, string dir, string file_name)
         {
-            var uri = new Uri(url);
-            var path = Path.Combine(dir, file_name);
-            var downloadPath = path + ".mega.part";
-            bool downloaded = false;
+            string downloadPath = null;
             try
             {
+                var uri = new Uri(url);
+                var path = Path.Combine(dir, file_name);
+                downloadPath = path + ".mega.part";
+                bool downloaded = false;
                 // 正式文件只在下载成功后出现，避免残缺文件被上层误判为已下载。
                 File.Delete(downloadPath);
                 if (uri.AbsolutePath.StartsWith("/file/"))//单个文件
@@ -109,32 +114,74 @@ namespace PictureSpider
                 File.Move(downloadPath, path);
                 return;
             }
+            // 已取得下载地址，文件存储服务器在传输数据时返回带宽限流。
+            catch (HttpRequestException e) when ((int?)e.StatusCode == 509)
+            {
+                return;
+            }
+            // 获取下载地址等信息时，MEGA API直接返回带宽配额已耗尽。
+            catch (ApiException e) when (e.ApiResultCode == ApiResultCode.QuotaExceeded)
+            {
+                PauseDownloads(null);
+                return;
+            }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"[Mega] Fail to download :{e.Message}/{url}");
+                throw;
+            }
+            finally
+            {
                 try
                 {
-                    File.Delete(downloadPath);
+                    if (downloadPath is not null)
+                        File.Delete(downloadPath);
                 }
                 catch (Exception cleanupException)
                 {
                     Console.Error.WriteLine($"[Mega] Fail to remove temporary file:{cleanupException.Message}");
                 }
-                throw;
+                availableSlots.Release();
             }
-
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
-        public override async Task<bool> Add(string url, string dir, string file_name)
+        public override async Task<DownloadAddResult> Add(string url, string dir, string file_name)
         {
             if (!loginSuccessed)
             {
                 Console.WriteLine($"[Mega] login fail,can't download");
-                return false;
+                return DownloadAddResult.Failed;
+            }
+            if (!availableSlots.Wait(0))
+                return DownloadAddResult.TryLater;
+            if (Interlocked.Read(ref retryAfterTicks) > DateTime.UtcNow.Ticks)
+            {
+                availableSlots.Release();
+                return DownloadAddResult.TryLater;
             }
             downloading.Add(DownloadTask(url, dir, file_name));
-            return true;
+            return DownloadAddResult.Added;
         }
 #pragma warning restore CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
+
+        private void PauseDownloads(TimeSpan? retryAfter)
+        {
+            var now = DateTime.UtcNow;
+            var current = Interlocked.Read(ref retryAfterTicks);
+            if (!retryAfter.HasValue && current > now.Ticks)
+                return;
+            var retryAt = now.Add(retryAfter ?? TimeSpan.FromHours(1)).Ticks;
+            while (retryAt > current)
+            {
+                var original = Interlocked.CompareExchange(ref retryAfterTicks, retryAt, current);
+                if (original == current)
+                {
+                    if (current <= now.Ticks)
+                        Console.Error.WriteLine($"[Mega] Bandwidth limit exceeded. Retry after {new DateTime(retryAt, DateTimeKind.Utc):O}");
+                    return;
+                }
+                current = original;
+            }
+        }
     }
 }

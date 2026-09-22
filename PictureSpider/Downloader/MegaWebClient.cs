@@ -22,16 +22,18 @@ namespace PictureSpider
 
         private readonly HttpClient _httpClient;
         private readonly HttpClient _httpClientDownload;
+        private readonly Action<TimeSpan?> bandwidthLimitExceeded;
         public static CookieContainer cookieContainer = new CookieContainer();
 
         public int BufferSize { get; set; } = 65536;
 
-        public MegaWebClient(WebProxy proxy, WebProxy proxy_download)
+        public MegaWebClient(WebProxy proxy, WebProxy proxy_download, Action<TimeSpan?> _bandwidthLimitExceeded)
         {
             //CG.Web.MegaApiClient.WebClient
             _httpClient = CreateHttpClient(-1, GenerateUserAgent(), proxy);
             //_httpClientDownload = _httpClient;
             _httpClientDownload = CreateHttpClient(-1, GenerateUserAgent(), proxy_download);
+            bandwidthLimitExceeded = _bandwidthLimitExceeded;
         }
         public bool isDownloadURL(Uri url)
         {
@@ -44,10 +46,18 @@ namespace PictureSpider
             using Stream stream = PostRequest(url, dataStream, "application/json");
             var result = StreamToString(stream);
             var request = JArray.Parse(jsonData);
+            var response = JArray.Parse(result);
+            if (request.Count == 1 && request[0]["a"]?.ToString() == "g" &&
+                response.Count == 1 && response[0] is JObject error &&
+                error.Value<int?>("e") == (int)ApiResultCode.QuotaExceeded)
+            {
+                var seconds = error.Value<int?>("tl");
+                bandwidthLimitExceeded?.Invoke(seconds > 0 ? TimeSpan.FromSeconds(seconds.Value) : null);
+                return $"[{(int)ApiResultCode.QuotaExceeded}]";
+            }
             if (!QueryHelpers.ParseQuery(url.Query).ContainsKey("n") || request.Count != 1 || request[0]["a"]?.ToString() != "f")
                 return result;
 
-            var response = JArray.Parse(result);
             if (response.Count != 1 || response[0] is not JObject responseObject || responseObject["f"] is not JArray nodes)
                 return result;
 
@@ -94,10 +104,33 @@ namespace PictureSpider
 
         public Stream GetRequestRaw(Uri url)
         {
-            if (isDownloadURL(url))
-                return _httpClientDownload.GetStreamAsync(url).Result;
-            else
-                return _httpClient.GetStreamAsync(url).Result;
+            var client = isDownloadURL(url) ? _httpClientDownload : _httpClient;
+            var response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult();
+            if ((int)response.StatusCode == 509)
+            {
+                TimeSpan? retryAfter = null;
+                if (response.Headers.TryGetValues("X-MEGA-Time-Left", out var values))
+                    foreach (var value in values)
+                        if (int.TryParse(value, out var seconds) && seconds > 0)
+                        {
+                            retryAfter = TimeSpan.FromSeconds(seconds);
+                            break;
+                        }
+                if (!retryAfter.HasValue && response.Headers.RetryAfter?.Delta is TimeSpan delta && delta > TimeSpan.Zero)
+                    retryAfter = delta;
+                if (!retryAfter.HasValue && response.Headers.RetryAfter?.Date is DateTimeOffset date && date > DateTimeOffset.UtcNow)
+                    retryAfter = date - DateTimeOffset.UtcNow;
+                bandwidthLimitExceeded?.Invoke(retryAfter);
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                var exception = new HttpRequestException(
+                    $"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                    null, response.StatusCode);
+                response.Dispose();
+                throw exception;
+            }
+            return response.Content.ReadAsStream();
         }
 
         private Stream PostRequest(Uri url, Stream dataStream, string contentType)
