@@ -119,6 +119,12 @@ namespace PictureSpider
             {
                 return;
             }
+            // 已确认处于带宽限流冷却期时，忽略仍在途任务返回的临时服务不可用。
+            catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.ServiceUnavailable
+                && Interlocked.Read(ref retryAfterTicks) > DateTime.UtcNow.Ticks)
+            {
+                return;
+            }
             // 获取下载地址等信息时，MEGA API直接返回带宽配额已耗尽。
             catch (ApiException e) when (e.ApiResultCode == ApiResultCode.QuotaExceeded)
             {
