@@ -426,9 +426,9 @@ namespace PictureSpider.Pixiv
         }
         private async Task GenerateExplorerQueue(bool force=false)
         {
-            const int UpdateInterval = 7;//单位:天，每超过这个时间才刷新,
+            const int UpdateInterval = 7;//单位:天，达到这个时间才刷新,
             const int MaxSize = 10000;
-            if (force||(await database.GetQueueUpdateInterval())>UpdateInterval||(await database.GetQueue()).Length<2)
+            if (force||(await database.GetQueueUpdateInterval())>=UpdateInterval||(await database.GetQueue()).Length<2)
             {
                 var list_nonprivate = new List<Illust>();
                 var list_private = new List<Illust>();
@@ -474,11 +474,11 @@ namespace PictureSpider.Pixiv
                     }
                     illust_list.Sort((l, r) => r.score.CompareTo(l.score));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
-                     * 根据每张图所具有的最弱势已关注标签对分数进行乘算加成，标准是每个标签下非关注作者的第一名至少能超过无补偿队列中非关注作者的第500名
+                     * 根据每张图所具有的最弱势已关注标签对分数进行乘算加成，标准是每个标签下非关注作者的第一名至少能超过无补偿队列中非关注作者的第200名
                     */
-                    if(illust_list.Count>1000&&illust_list.Count> follow_ct+501)
+                    if(illust_list.Count>1000&&illust_list.Count> follow_ct+201)
                     {
-                        int baseline = illust_list[follow_ct+500].score;
+                        int baseline = illust_list[follow_ct+200].score;
                         var addition_in_tag = new Dictionary<string, float>();
                         foreach (var tag in followed_tags)
                             addition_in_tag.Add(tag, 1.0f);
