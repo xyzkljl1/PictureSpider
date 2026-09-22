@@ -72,7 +72,7 @@ namespace PictureSpider.Pawchive
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1),megaDownloader,googleDriveDownloader);
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, _user_agent: "aria2/1.33.0"),megaDownloader,googleDriveDownloader);
             httpZipEntriesReader = new HttpZipEntriesReader(config.Proxy, $"file.{baseHost}");
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
@@ -968,17 +968,9 @@ namespace PictureSpider.Pawchive
                     var ext = work.Ext;
                     if ((ext.IsImage() || ext.IsVideo()) && work is Work)
                     {
-                        // 站点禁止下载工具伪装浏览器，使用随模块附带的 aria2 原生标识。
                         await Task.Delay(TimeSpan.FromSeconds(2));
                         Util.TouchDir(dir);
-                        await downloader.GetDownloader(Downloader.DownloaderType.Aria2DownloadQueue)
-                            .Add(work.DownloadURL, dir, filename, new DownloadRequestOptions
-                            {
-                                UserAgent = "aria2/1.33.0",
-                                Referer = baseUrl + "/",
-                                Split = 1,
-                                MaxConnectionPerServer = 1
-                            });
+                        await downloader.Add(Downloader.DownloaderType.Aria2DownloadQueue, work.DownloadURL, dir, filename);
                     }
                     else if ((ext.IsVideo() || ext.IsZip()) && work is ExternalWork)
                     {

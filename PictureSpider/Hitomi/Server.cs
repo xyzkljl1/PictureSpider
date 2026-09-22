@@ -112,7 +112,7 @@ namespace PictureSpider.Hitomi
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
                 await ApplyPendingUiOperations();
-                await ProcessIllustDownloadQueue(downloadQueue, 28, forceRefreshUrl);
+                await ProcessIllustDownloadQueue(downloadQueue, 32, forceRefreshUrl);
                 forceRefreshUrl = !forceRefreshUrl;
             }, new TimeSpan(0,30, 0), enableScheduleTasks);
         }

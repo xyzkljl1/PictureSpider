@@ -24,14 +24,16 @@ namespace PictureSpider
         private string process_name = "";
         private Process process=null;
         private string referer = "";
+        private string userAgent = "";
         private int threads = 16;
         private int waitPollSeconds = 600;
-        public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer,int _threads=16,int _wait_poll_seconds=600)
+        public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer,int _threads=16,int _wait_poll_seconds=600,string _user_agent="")
         {
             aria2_rpc_secret=Guid.NewGuid().ToString();
             process_name = $"aria2c_{postfix.ToString()}";
             proxy = _proxy;
             referer = _referer;
+            userAgent = _user_agent;
             httpClient = new HttpClient();
             threads = _threads;
             waitPollSeconds = _wait_poll_seconds;
@@ -147,6 +149,8 @@ namespace PictureSpider
                     //不要带cookie，会收到警告信
                     process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --rpc-secret={2} --rpc-listen-port={1} --all-proxy=""{0}"" --referer={3} -x {4} --stop-with-process={5}",
                                                                 proxy, port, aria2_rpc_secret,referer,threads,Environment.ProcessId);
+                    if (!String.IsNullOrWhiteSpace(userAgent))
+                        process.StartInfo.Arguments += $" --user-agent=\"{userAgent}\"";
                     process.Start();
                     Console.WriteLine($"{process_name} Restart");
                 }

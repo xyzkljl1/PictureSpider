@@ -61,7 +61,7 @@ namespace PictureSpider
             return await Add(work.GetDownloader, work.DownloadURL, Path.GetDirectoryName(path) ,Path.GetFileName(path));
         }
 
-        public BaseDownloadQueue GetDownloader(DownloaderType downloaderType)
+        private BaseDownloadQueue GetDownloader(DownloaderType downloaderType)
         {
             return downloaders.Where(downloader => downloader.GetType().Name == downloaderType.ToString()).FirstOrDefault();
         }
