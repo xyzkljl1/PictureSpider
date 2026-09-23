@@ -183,7 +183,7 @@ namespace PictureSpider
                 if (original == current)
                 {
                     if (current <= now.Ticks)
-                        Console.Error.WriteLine($"[Mega] Bandwidth limit exceeded. Retry after {new DateTime(retryAt, DateTimeKind.Utc):O}");
+                        Console.WriteLine($"[Mega] Bandwidth limit exceeded. Retry after {new DateTime(retryAt, DateTimeKind.Utc):O}");
                     return;
                 }
                 current = original;
