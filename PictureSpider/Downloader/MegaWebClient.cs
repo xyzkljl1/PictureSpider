@@ -106,6 +106,14 @@ namespace PictureSpider
         {
             var client = isDownloadURL(url) ? _httpClientDownload : _httpClient;
             var response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult();
+            EnsureSuccessResponse(response);
+            if (isDownloadURL(url))
+                return new ResumableDownloadStream(this, url, response);
+            return response.Content.ReadAsStream();
+        }
+
+        private void EnsureSuccessResponse(HttpResponseMessage response)
+        {
             if ((int)response.StatusCode == 509)
             {
                 TimeSpan? retryAfter = null;
@@ -130,7 +138,156 @@ namespace PictureSpider
                 response.Dispose();
                 throw exception;
             }
-            return response.Content.ReadAsStream();
+        }
+
+        private sealed class ResumableDownloadStream : Stream
+        {
+            private readonly MegaWebClient webClient;
+            private readonly Uri url;
+            private HttpResponseMessage response;
+            private Stream stream;
+            private long position;
+            private long? length;
+            private bool disposed;
+
+            public ResumableDownloadStream(MegaWebClient _webClient, Uri _url, HttpResponseMessage _response)
+            {
+                webClient = _webClient;
+                url = _url;
+                response = _response;
+                stream = response.Content.ReadAsStream();
+                length = response.Content.Headers.ContentLength;
+            }
+
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => length ?? throw new NotSupportedException();
+            public override long Position
+            {
+                get => position;
+                set => throw new NotSupportedException();
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                ObjectDisposedException.ThrowIf(disposed, this);
+                if (count == 0)
+                    return 0;
+
+                while (true)
+                {
+                    Exception interruption;
+                    try
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                        var read = stream.ReadAsync(buffer, offset, count, timeout.Token).GetAwaiter().GetResult();
+                        if (read > 0)
+                        {
+                            position += read;
+                            return read;
+                        }
+                        if (!length.HasValue || position >= length.Value)
+                            return 0;
+                        interruption = new EndOfStreamException($"MEGA response ended at {position} of {length.Value} bytes.");
+                    }
+                    catch (OperationCanceledException e)
+                    {
+                        interruption = e;
+                    }
+                    catch (HttpRequestException e) when (!e.StatusCode.HasValue)
+                    {
+                        interruption = e;
+                    }
+                    catch (IOException e)
+                    {
+                        interruption = e;
+                    }
+
+                    if (!Reconnect())
+                        throw new IOException($"MEGA download could not resume at byte {position}.", interruption);
+                }
+            }
+
+            private bool Reconnect()
+            {
+                stream.Dispose();
+                response.Dispose();
+                stream = null;
+                response = null;
+
+                for (var attempt = 1; attempt <= 5; attempt++)
+                {
+                    HttpResponseMessage newResponse = null;
+                    try
+                    {
+                        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                        request.Headers.Range = new RangeHeaderValue(position, null);
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                        newResponse = webClient._httpClientDownload.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).GetAwaiter().GetResult();
+                        webClient.EnsureSuccessResponse(newResponse);
+                        var contentRange = newResponse.Content.Headers.ContentRange;
+                        if (newResponse.StatusCode != HttpStatusCode.PartialContent ||
+                            contentRange?.From != position || !contentRange.Length.HasValue ||
+                            length.HasValue && contentRange.Length.Value != length.Value)
+                            throw new InvalidDataException("MEGA server returned an invalid range response.");
+
+                        length = contentRange.Length.Value;
+                        stream = newResponse.Content.ReadAsStream();
+                        response = newResponse;
+                        newResponse = null;
+                        Console.WriteLine($"[Mega] Resume download at byte {position}.");
+                        return true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (HttpRequestException e) when (!e.StatusCode.HasValue)
+                    {
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    finally
+                    {
+                        newResponse?.Dispose();
+                    }
+
+                    if (attempt < 5)
+                        Thread.Sleep(TimeSpan.FromSeconds(attempt * 2));
+                }
+                return false;
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (!disposed && disposing)
+                {
+                    disposed = true;
+                    stream?.Dispose();
+                    response?.Dispose();
+                }
+                base.Dispose(disposing);
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
+            }
         }
 
         private Stream PostRequest(Uri url, Stream dataStream, string contentType)
