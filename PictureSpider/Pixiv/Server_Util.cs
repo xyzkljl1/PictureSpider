@@ -314,9 +314,9 @@ namespace PictureSpider.Pixiv
             {
                 string ugoira_url = String.Format("{0}/ugoira_meta?lang=zh", url);
                 JObject ugoira_json = await RequestJsonAsync(ugoira_url, "", false);//需要非匿名
-                if (json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
+                if (ugoira_json.Value<Boolean>("NetError"))//因网络原因获取不到时，不认为是无效的
                     return null;
-                if (json.Value<Boolean>("error"))//能获取到图片信息但获取不到动图信息时报错
+                if (ugoira_json.Value<Boolean>("error"))//能获取到图片信息但获取不到动图信息时报错
                     throw new TopLevelException("Get Ugoira Error");
                 return new Illust(json.Value<JObject>("body"), ugoira_json.Value<JObject>("body"));
             }
