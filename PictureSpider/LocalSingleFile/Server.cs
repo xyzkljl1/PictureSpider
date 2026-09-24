@@ -12,6 +12,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp;
@@ -22,6 +23,19 @@ namespace PictureSpider.LocalSingleFile
 {
     public partial class Server : BaseServerWithDB<Database>, IDisposable
     {
+        private sealed class NaturalStringComparer : IComparer<string>
+        {
+            public static readonly NaturalStringComparer Instance = new NaturalStringComparer();
+
+            [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+            private static extern int StrCmpLogicalW(string x, string y);
+
+            public int Compare(string x, string y)
+            {
+                return StrCmpLogicalW(x, y);
+            }
+        }
+
         private string FavDir;
         private List<string> TmpDirs;
         public static HashSet<string> valid_exts = new HashSet<string>{".jpg",".png",".webp",".gif", ".jpeg" };
@@ -127,7 +141,7 @@ namespace PictureSpider.LocalSingleFile
             if (queue.type == ExplorerQueue.QueueType.Fav)
             {
                 var existedFiles = GetFiles(FavDir);
-                foreach (var path in existedFiles)
+                foreach (var path in existedFiles.OrderBy(x => Path.GetRelativePath(FavDir, x), NaturalStringComparer.Instance))
                     result.Add(new ExplorerFile(Path.GetFullPath(path),FavDir, true));
             }
             else if (queue.type == ExplorerQueue.QueueType.Folder)
@@ -135,7 +149,7 @@ namespace PictureSpider.LocalSingleFile
                 var readed=database.Waited.Select(x => x.path).ToHashSet<String>();
                 var dir = queue.id;
                 var existedFiles = GetFiles(dir);
-                foreach (var path in existedFiles)
+                foreach (var path in existedFiles.OrderBy(x => Path.GetRelativePath(dir, x), NaturalStringComparer.Instance))
                     if(!readed.Contains(path))
                         result.Add(new ExplorerFile(Path.GetFullPath(path),dir, false));
                     }
