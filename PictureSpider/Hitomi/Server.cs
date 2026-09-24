@@ -287,6 +287,7 @@ namespace PictureSpider.Hitomi
                     }
                     await database.SaveChangesAsync();
                     await downloader.Add(illust.url, download_dir_tmp, $"{illust.fileName}{illust.ext}");
+                    await Task.Delay(500);
                     download_ct++;
                     download_illusts.Add(illust);
                     if (limit >= 0 && download_ct >= limit)
