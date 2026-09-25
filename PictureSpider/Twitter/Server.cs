@@ -193,7 +193,9 @@ namespace PictureSpider.Twitter
                 Log($"Twitter fetch users count={users.Count}");
                 foreach (var user in users)
                 {
-                    await FetchTweetsByUserWeb(user.name, user.api_latest_tweet_id);
+                    long.TryParse(user.api_latest_tweet_id, out var apiLatestTweetId);
+                    long.TryParse(user.search_latest_tweet_id, out var searchLatestTweetId);
+                    await FetchTweetsByUserWeb(user.name, Math.Max(apiLatestTweetId, searchLatestTweetId).ToString());
                     await Task.Delay(TimeSpan.FromSeconds(random.Next(20, 45)));
                 }
                 Log("Twitter sync bookmark directory");
@@ -217,12 +219,17 @@ namespace PictureSpider.Twitter
             var cursor = "";
             var complete = false;
             var page = 0;
+            var consecutiveEmptyPages = 0;
+            var emptyPageLimit = sinceTweetId > 0 ? 1 : 3;
+            var seenCursors = new HashSet<string>();
+            var stopReason = "";
 
             while (!complete && page < MaxPagesPerUserRun)
             {
                 page++;
                 var json = await FetchUserMediaPage(user.id, cursor);
                 var pageTweets = ExtractTweetsAndMedia(json, user.id, user.name).ToList();
+                consecutiveEmptyPages = pageTweets.Count == 0 ? consecutiveEmptyPages + 1 : 0;
                 foreach (var item in pageTweets)
                 {
                     if (long.TryParse(item.Tweet.id, out var tweetId))
@@ -245,9 +252,20 @@ namespace PictureSpider.Twitter
                 tweets.Clear();
                 medias.Clear();
 
-                cursor = FindBottomCursor(json);
-                if (string.IsNullOrWhiteSpace(cursor))
+                if (consecutiveEmptyPages >= emptyPageLimit)
+                {
+                    stopReason = $"Stopped emptyPages={consecutiveEmptyPages}";
+                    break;
+                }
+                var nextCursor = FindBottomCursor(json);
+                if (string.IsNullOrWhiteSpace(nextCursor))
                     complete = true;
+                else if (!seenCursors.Add(nextCursor))
+                {
+                    stopReason = "Stopped repeatedCursor";
+                    break;
+                }
+                cursor = nextCursor;
             }
 
             if (maxTweetId > sinceTweetId)
@@ -259,7 +277,8 @@ namespace PictureSpider.Twitter
                     await database.SaveChangesAsync();
                 }
             }
-            Log($"Fetch User(Web) @{user.name} {(complete ? "Complete" : "Paused")} pages={page} latest={maxTweetId}");
+            var status = complete ? "Complete" : string.IsNullOrWhiteSpace(stopReason) ? "Paused" : stopReason;
+            Log($"Fetch User(Web) @{user.name} {status} pages={page} latest={maxTweetId}");
         }
 
         private async Task<User> FetchUserByName(string user_name)
