@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -27,6 +28,7 @@ namespace PictureSpider
         private string userAgent = "";
         private int threads = 16;
         private int waitPollSeconds = 600;
+        private ConcurrentDictionary<string, (string temporaryPath, string path)> downloads = new ConcurrentDictionary<string, (string temporaryPath, string path)>();
         public Aria2DownloadQueue(DownloaderPostfix postfix,string _proxy,string _referer,int _threads=16,int _wait_poll_seconds=600,string _user_agent="")
         {
             aria2_rpc_secret=Guid.NewGuid().ToString();
@@ -59,8 +61,13 @@ namespace PictureSpider
                     throw new ArgumentNullException("url");
                 CheckIfProcessRunning();
                 string path = $"{dir}/{file_name}";
+                string temporaryPath = path + ".part";
                 if (File.Exists(path))
                     File.Delete(path);
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+                if (File.Exists(temporaryPath + ".aria2"))
+                    File.Delete(temporaryPath + ".aria2");
                 /*id必须有，值可以随便填
                  * 虽然url是数组但是并不能一次下载多个
                  * token(rpc secret)和其它参数的格式不一样
@@ -70,7 +77,7 @@ namespace PictureSpider
                 var ariaOptions = new JObject
                 {
                     ["dir"] = dir,
-                    ["out"] = file_name
+                    ["out"] = file_name + ".part"
                 };
                 ApplyRequestOptions(ariaOptions, options);
                 var data = new JObject
@@ -83,7 +90,11 @@ namespace PictureSpider
                         new JArray(url),
                         ariaOptions)
                 };
-                await RequestAria2Async(data.ToString(Formatting.None));
+                var ret = JsonConvert.DeserializeObject<JObject>(await RequestAria2Async(data.ToString(Formatting.None)));
+                var gid = ret.Value<string>("result");
+                if (string.IsNullOrEmpty(gid))
+                    throw new InvalidOperationException(ret.Value<JObject>("error")?.Value<string>("message") ?? "aria2.addUri did not return a GID.");
+                downloads[gid] = (temporaryPath, path);
             }
             catch (Exception e)
             {
@@ -119,6 +130,33 @@ namespace PictureSpider
         public async override Task WaitForAll()
         {
             while (!await CheckIfDownloadDone()) await Task.Delay(TimeSpan.FromSeconds(waitPollSeconds));
+            foreach (var download in downloads.ToArray())
+            {
+                var data = new JObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = "PixivAss",
+                    ["method"] = "aria2.tellStatus",
+                    ["params"] = new JArray(
+                        $"token:{aria2_rpc_secret}",
+                        download.Key,
+                        new JArray("status", "errorCode", "errorMessage"))
+                };
+                var ret = JsonConvert.DeserializeObject<JObject>(await RequestAria2Async(data.ToString(Formatting.None)));
+                var result = ret.Value<JObject>("result");
+                if (result?.Value<string>("status") == "complete" && File.Exists(download.Value.temporaryPath))
+                    File.Move(download.Value.temporaryPath, download.Value.path, true);
+                else
+                {
+                    var message = result?.Value<string>("errorMessage")
+                        ?? ret.Value<JObject>("error")?.Value<string>("message")
+                        ?? "Download did not complete.";
+                    Console.Error.WriteLine($"{process_name} Download Fail:{message}/{download.Value.path}");
+                    File.Delete(download.Value.temporaryPath);
+                }
+                File.Delete(download.Value.temporaryPath + ".aria2");
+                downloads.TryRemove(download.Key, out _);
+            }
         }
         private void CheckIfProcessRunning()
         {
@@ -149,6 +187,7 @@ namespace PictureSpider
                     //不要带cookie，会收到警告信
                     process.StartInfo.Arguments = String.Format(@"--conf-path=aria2.conf --rpc-secret={2} --rpc-listen-port={1} --all-proxy=""{0}"" --referer={3} -x {4} --stop-with-process={5}",
                                                                 proxy, port, aria2_rpc_secret,referer,threads,Environment.ProcessId);
+                    process.StartInfo.Arguments += " --max-download-result=100000";
                     if (!String.IsNullOrWhiteSpace(userAgent))
                         process.StartInfo.Arguments += $" --user-agent=\"{userAgent}\"";
                     process.Start();
