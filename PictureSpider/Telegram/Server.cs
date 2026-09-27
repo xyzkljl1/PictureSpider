@@ -120,6 +120,7 @@ namespace PictureSpider.Telegram
             try
             {
                 var ok = await tgClient.SetTdlibParametersAsync(apiId: apiId, apiHash: apiHash, systemLanguageCode: "zh-hans", deviceModel: "Desktop", applicationVersion: "5.6.2",
+                                databaseDirectory: Path.Combine(AppContext.BaseDirectory, ".telegram"),
                                 useChatInfoDatabase: true, useFileDatabase: true, useMessageDatabase: true, useSecretChats: true);
                 // 似乎必须设置代理
                 // 出于某种神秘原因，release运行时，即使不AddProxyAsync也不设置系统代理，client还是会自动使用一个代理,从而正常连接
