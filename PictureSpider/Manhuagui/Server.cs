@@ -79,6 +79,8 @@ namespace PictureSpider.Manhuagui
 
             foreach (var chapter in chapters)
             {
+                if (chapter.Downloaded)
+                    continue;
                 try
                 {
                     await DownloadChapter(comicDir, chapter);
@@ -188,6 +190,7 @@ namespace PictureSpider.Manhuagui
             var pages = await database.Pages
                 .Where(x => x.ChapterId == chapter.Id)
                 .ToDictionaryAsync(x => x.Index);
+            var downloaded = data.Images.Count > 0;
             for (var i = 0; i < data.Images.Count; i++)
             {
                 var imagePath = data.Images[i];
@@ -205,25 +208,23 @@ namespace PictureSpider.Manhuagui
                 var output = Path.Combine(chapterDir, page.FileName);
                 if (File.Exists(output))
                 {
-                    page.Downloaded = true;
-                    page.DownloadedAt ??= DateTime.UtcNow;
                     page.LastError = "";
                     continue;
                 }
                 try
                 {
                     await DownloadImage(chapterUrl, imagePath, data.Query, output);
-                    page.Downloaded = true;
-                    page.DownloadedAt = DateTime.UtcNow;
                     page.LastError = "";
                 }
                 catch (Exception ex)
                 {
+                    downloaded = false;
                     page.LastError = ex.Message;
                     Log($"{page.FileName} failed: {ex.Message}");
                 }
                 await Task.Delay(200);
             }
+            chapter.Downloaded = downloaded;
             await database.SaveChangesAsync();
         }
 
@@ -250,6 +251,7 @@ namespace PictureSpider.Manhuagui
         private async Task DownloadImage(string chapterUrl, string imagePath, Dictionary<string, string> query, string output)
         {
             Exception lastException = null;
+            var temporaryOutput = output + ".tmp";
             foreach (var host in imageHosts)
             {
                 var url = BuildImageUrl(host, imagePath, query);
@@ -262,15 +264,18 @@ namespace PictureSpider.Manhuagui
                         {
                             response.EnsureSuccessStatusCode();
                             using (var stream = await response.Content.ReadAsStreamAsync())
-                            using (var file = File.Create(output))
+                            using (var file = File.Create(temporaryOutput))
                                 await stream.CopyToAsync(file);
                         }
                     }
+                    File.Move(temporaryOutput, output);
                     return;
                 }
                 catch (Exception ex)
                 {
                     lastException = ex;
+                    if (File.Exists(temporaryOutput))
+                        File.Delete(temporaryOutput);
                 }
             }
             throw new InvalidOperationException($"Download failed: {imagePath}", lastException);

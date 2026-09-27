@@ -65,6 +65,7 @@ namespace PictureSpider.Manhuagui
         public virtual string Title { get; set; } = "";
         public virtual int Index { get; set; }
         public virtual int PageCount { get; set; }
+        public virtual bool Downloaded { get; set; }
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public virtual DateTime? LastFetchedAt { get; set; }
         public virtual Comic Comic { get; set; }
@@ -84,8 +85,6 @@ namespace PictureSpider.Manhuagui
         [Required]
         [MaxLength(260)]
         public virtual string FileName { get; set; } = "";
-        public virtual bool Downloaded { get; set; }
-        public virtual DateTime? DownloadedAt { get; set; }
         [Column(TypeName = "text")]
         public virtual string LastError { get; set; } = "";
         public virtual Chapter Chapter { get; set; }
