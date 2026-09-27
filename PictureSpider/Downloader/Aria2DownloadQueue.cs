@@ -151,7 +151,7 @@ namespace PictureSpider
                     var message = result?.Value<string>("errorMessage")
                         ?? ret.Value<JObject>("error")?.Value<string>("message")
                         ?? "Download did not complete.";
-                    Console.Error.WriteLine($"{process_name} Download Fail:{message}/{download.Value.path}");
+                    Console.WriteLine($"{process_name} Download Fail:{message}/{download.Value.path}");
                     File.Delete(download.Value.temporaryPath);
                 }
                 File.Delete(download.Value.temporaryPath + ".aria2");
