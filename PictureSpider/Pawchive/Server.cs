@@ -881,7 +881,18 @@ namespace PictureSpider.Pawchive
                                          where illustGroup.fetched == false && illustGroup.parentId == null
                                             && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                          select illustGroup).ToList())
+            {
+                // 等待重抓期间可能被收藏，不能再清空其旧作品。
+                if (illustGroup.fav && illustGroup.works.Count > 0)
+                {
+                    LogError($"Can't refetch favorite group: {illustGroup.service}/{illustGroup.id}");
+                    continue;
+                }
+                database.Works.RemoveRange(illustGroup.works.ToList());
+                illustGroup.works.Clear();
+                await database.SaveChangesAsync();
                 await FetchWorkGroup(illustGroup);
+            }
             Log("Fetch Groups Done");
         }
         public async Task AddQueuedUser(string id, string service)
@@ -944,6 +955,76 @@ namespace PictureSpider.Pawchive
             return false;
         }
 
+        private async Task ResetFailedImageGroups(List<Work> failedWorks, List<string> workList)
+        {
+            foreach (var failedGroup in failedWorks.GroupBy(x => x.GetGroup))
+            {
+                var group = failedGroup.Key;
+                var groupKey = $"{group.service}/{group.id}";
+                try
+                {
+                    bool notFound = false;
+                    foreach (var work in failedGroup)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2));
+                        using var request = new HttpRequestMessage(HttpMethod.Head, work.DownloadURL);
+                        request.Headers.UserAgent.ParseAdd("aria2/1.33.0");
+                        request.Headers.Accept.ParseAdd("*/*");
+                        request.Headers.Referrer = new Uri(baseUrl);
+                        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            notFound = true;
+                            break;
+                        }
+                        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                            break;
+                    }
+                    if (notFound)
+                    {
+                        if (group.fav)
+                        {
+                            LogError($"Image URL returned 404 in favorite group: {groupKey}");
+                            continue;
+                        }
+                        // 父组目录也存放子组解压的图片，只删除本组登记的图片及其临时文件。
+                        var root = Path.GetFullPath(download_dir_tmp).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                        var paths = group.works.Where(x => x.Ext.IsImage())
+                            .SelectMany(x => new[] { Path.Combine(download_dir_tmp, x.TmpSubPath), Path.Combine(download_dir_tmp, Work.GetPreviewPath(x.TmpSubPath)) })
+                            .SelectMany(x => new[] { x, x + ".aria2", x + ".part", x + ".part.aria2" })
+                            .Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                        if (paths.Any(x => !x.StartsWith(root, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            LogError($"Can't reset group outside download directory: {groupKey}");
+                            continue;
+                        }
+                        foreach (var path in paths)
+                            DeleteFile(path);
+                        group.fetched = false;
+                        await database.SaveChangesAsync();
+                        var keys = group.works.Select(GetDownloadQueueKey).Concat(group.externalWorks.Select(GetDownloadQueueKey)).ToHashSet();
+                        workList.RemoveAll(keys.Contains);
+                        Log($"Image URL returned 404: {groupKey}, queued for scheduled fetch");
+                        continue;
+                    }
+                }
+                catch (HttpRequestException e)
+                {
+                    Log($"Can't check image URLs {groupKey}: {e.Message}");
+                }
+                catch (TaskCanceledException e)
+                {
+                    Log($"Can't check image URLs {groupKey}: {e.Message}");
+                }
+                foreach (var work in failedGroup)
+                {
+                    var key = GetDownloadQueueKey(work);
+                    workList.Remove(key);
+                    workList.Add(key);
+                }
+            }
+        }
+
         private async Task ProcessIllustDownloadQueue(List<string> workList, int limit = -1)
         {
             try
@@ -957,7 +1038,7 @@ namespace PictureSpider.Pawchive
                 foreach (var key in workList.ToList())
                 {
                     var work = await LoadDownloadQueueWork(key);
-                    if (work is null)
+                    if (work is null || (work is Work queuedWork && !queuedWork.GetGroup.fetched))
                     {
                         ignore_illusts.Add(key);
                         continue;
@@ -1003,6 +1084,7 @@ namespace PictureSpider.Pawchive
                 //检查结果，以本地文件为准，无视aria2和函数的返回
                 {
                     int success_ct = 0;
+                    var failedImages = new List<Work>();
                     //var fail_illustGroup=new HashSet<WorkGroup>();
                     foreach (var (key, illust) in download_illusts)
                     {
@@ -1013,8 +1095,13 @@ namespace PictureSpider.Pawchive
                         if (File.Exists(path + ".aria2") || !localComplete)//存在.aria2说明下载未完成
                         {
 //                            Log($"Download Fail: {illust.url}");
-                            workList.Remove(key);//移到队末并重置url
-                            workList.Add(key);
+                            if (illust is Work failed && failed.Ext.IsImage() && !failed.GetGroup.IsChild)
+                                failedImages.Add(failed);
+                            else
+                            {
+                                workList.Remove(key);//移到队末
+                                workList.Add(key);
+                            }
                             //fail_illustGroup.Add(illust.workGroup);
                             //throw new Exception("debug");
                         }
@@ -1028,6 +1115,7 @@ namespace PictureSpider.Pawchive
                         }
                     }
                     await database.SaveChangesAsync();
+                    await ResetFailedImageGroups(failedImages, workList);
                     Log($"Process Download Queue: {success_ct}/{download_illusts.Count} Success, {downloadQueue.Count} Left.");
                 }
             }
