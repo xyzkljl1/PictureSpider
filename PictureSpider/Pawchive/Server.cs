@@ -877,7 +877,12 @@ namespace PictureSpider.Pawchive
                     //    result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
                 }
             }
-            result.Sort((l, r) => (l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
+            if (queue.type == ExplorerQueue.QueueType.User)
+                result = result.OrderByDescending(x => long.Parse(((ExplorerFile)x).illustGroup.parentId ?? x.id))
+                    .ThenBy(x => ((ExplorerFile)x).illustGroup.IsChild)
+                    .ThenByDescending(x => long.Parse(x.id)).ToList();
+            else
+                result.Sort((l, r) => (l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;
         }
 
