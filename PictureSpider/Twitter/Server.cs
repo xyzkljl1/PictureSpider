@@ -103,7 +103,13 @@ namespace PictureSpider.Twitter
             if (queue.type == ExplorerQueue.QueueType.MainR)
                 medias = await db.GetFollowedUnreadMedia();
             else if (queue.type == ExplorerQueue.QueueType.FavR)
+            {
                 medias = await db.GetBookmarkedMedia();
+                var userNames = await db.Users.ToDictionaryAsync(user => user.id, user => user.name);
+                medias = medias.OrderBy(media => userNames.GetValueOrDefault(media.user_id, media.user_id))
+                               .ThenBy(media => long.Parse(media.tweet_id))
+                               .ThenBy(media => media.id).ToList();
+            }
             else
                 medias = await db.GetMediaByUserId(queue.id);
             return medias.Where(media => media.media_type == MediaType.Image)

@@ -462,7 +462,11 @@ namespace PictureSpider.Hitomi
                     result.Add(exploreFile);
                 }
             }
-            result.Sort((l, r) =>l.title.CompareTo(r.title));
+            if (queue.type == ExplorerQueue.QueueType.Fav)
+                result = result.OrderBy(x => ((ExplorerFile)x).illustGroup.user.displayText)
+                    .ThenBy(x => ((ExplorerFile)x).illustGroup.Id).ToList();
+            else
+                result.Sort((l, r) =>l.title.CompareTo(r.title));
             return result;
         }
         //type只影响illust的下载地址，不取下载地址时可以用任意type
