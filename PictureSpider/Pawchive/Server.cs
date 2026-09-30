@@ -392,7 +392,8 @@ namespace PictureSpider.Pawchive
                             return;
                         var service = operation.TargetKey.Substring(0, pos);
                         var id = operation.TargetKey.Substring(pos + 1);
-                        var user = await database.Users.FirstOrDefaultAsync(x => x.id == id && x.service == service);
+                        var user = database.Users.Local.FirstOrDefault(x => x.id == id && x.service == service)
+                            ?? await database.Users.FirstOrDefaultAsync(x => x.id == id && x.service == service);
                         if (user is null)
                         {
                             user = new User { id = id, service = service };
