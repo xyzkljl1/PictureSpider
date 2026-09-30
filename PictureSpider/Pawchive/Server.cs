@@ -884,6 +884,9 @@ namespace PictureSpider.Pawchive
                 result = result.OrderByDescending(x => long.Parse(((ExplorerFile)x).illustGroup.parentId ?? x.id))
                     .ThenBy(x => ((ExplorerFile)x).illustGroup.IsChild)
                     .ThenByDescending(x => long.Parse(x.id)).ToList();
+            else if (queue.type == ExplorerQueue.QueueType.Fav)
+                result = result.OrderBy(x => ((ExplorerFile)x).illustGroup.user.displayText)
+                    .ThenBy(x => long.Parse(x.id)).ToList();
             else
                 result.Sort((l, r) => (l as ExplorerFile).illustGroup.title.CompareTo((r as ExplorerFile).illustGroup.title));
             return result;
