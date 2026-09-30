@@ -486,6 +486,20 @@ namespace PictureSpider.Pawchive
             illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
             illustGroup.desc = doc.Value<string>("content");
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");
+            // 图片封面也作为第一页，复用附件的下载和浏览逻辑。
+            var file = doc["file"];
+            if (!String.IsNullOrWhiteSpace(file?.Value<string>("path")) && Path.GetExtension(file.Value<string>("name") ?? "").ToLower().IsImage())
+            {
+                var cover = illustGroup.cover;
+                if (cover is null || cover.urlPath != file.Value<string>("path"))
+                    cover = await TryAddWork(file, illustGroup.service);
+                if (cover is not null)
+                {
+                    cover.index = 0;
+                    cover.workGroup = illustGroup;
+                    illustGroup.cover = cover;
+                }
+            }
             // 预览帖子后来导入时，附件可能发生变化。
             int index = 1;
             var attachments = (doc["attachments"] ?? new JArray()).ToList();
@@ -845,7 +859,7 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && illustGroup.readed == false
+                                    where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
