@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PictureSpider.Manhuagui
@@ -17,6 +18,8 @@ namespace PictureSpider.Manhuagui
     {
         private readonly string downloadDir;
         private readonly HttpClient httpClient;
+        private readonly SemaphoreSlim requestLock = new SemaphoreSlim(1, 1);
+        private DateTime requestsBlockedUntil;
         private readonly string[] imageHosts = { "i", "eu", "eu1", "eu2", "us", "us1", "us2", "us3" };
 
         public Server(Config config) : base(config.ManhuaguiConnectStr)
@@ -57,13 +60,18 @@ namespace PictureSpider.Manhuagui
                     .OrderBy(x => x.Id)
                     .ToListAsync();
                 foreach (var comic in comics)
+                {
                     await DownloadComic(comic.Id);
+                    if (DateTime.UtcNow < requestsBlockedUntil)
+                        break;
+                }
             }
         }
 
         public async Task DownloadComic(int comicId)
         {
-            await FetchComic(comicId);
+            if (!await FetchComic(comicId))
+                return;
             await DownloadStoredComic(comicId);
         }
 
@@ -90,12 +98,16 @@ namespace PictureSpider.Manhuagui
                 {
                     Log($"{chapter.Title} failed: {ex.Message}");
                 }
+                if (DateTime.UtcNow < requestsBlockedUntil)
+                    break;
             }
         }
 
-        private async Task FetchComic(int comicId)
+        private async Task<bool> FetchComic(int comicId)
         {
             var comicInfo = await FetchComicInfo(comicId);
+            if (comicInfo == null)
+                return false;
             var comic = await database.Comics.FirstOrDefaultAsync(x => x.Id == comicInfo.Id);
             if (comic == null)
             {
@@ -129,12 +141,54 @@ namespace PictureSpider.Manhuagui
                 chapter.UpdatedAt = DateTime.UtcNow;
             }
             await database.SaveChangesAsync();
+            return true;
+        }
+
+        private async Task<HttpResponseMessage> SendRequest(HttpRequestMessage request)
+        {
+            await requestLock.WaitAsync();
+            try
+            {
+                if (DateTime.UtcNow < requestsBlockedUntil)
+                    return null;
+                // 页面、图片和备用域名请求共用间隔，响应读取完成后才允许下一次请求。
+                await Task.Delay(1000);
+                string error;
+                try
+                {
+                    var response = await httpClient.SendAsync(request);
+                    if (response.StatusCode != HttpStatusCode.TooManyRequests && response.StatusCode != HttpStatusCode.ServiceUnavailable)
+                        return response;
+                    error = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+                    response.Dispose();
+                }
+                catch (HttpRequestException ex)
+                {
+                    error = ex.ToString();
+                }
+                catch (TaskCanceledException ex)
+                {
+                    error = ex.ToString();
+                }
+                requestsBlockedUntil = DateTime.UtcNow.AddHours(24);
+                Log($"Stop Manhuagui requests for 24 hours: {request.RequestUri}: {error}");
+                return null;
+            }
+            finally
+            {
+                requestLock.Release();
+            }
         }
 
         private async Task<ComicInfo> FetchComicInfo(int comicId)
         {
             var comicUrl = BuildComicUrl(comicId);
-            var html = await httpClient.GetStringAsync(comicUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, comicUrl);
+            using var response = await SendRequest(request);
+            if (response == null)
+                return null;
+            response.EnsureSuccessStatusCode();
+            var html = await response.Content.ReadAsStringAsync();
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
 
@@ -170,7 +224,8 @@ namespace PictureSpider.Manhuagui
 
             // ListenerServer 复用其它模块的 Follow 入口；Manhuagui 这里关注的是漫画本身，
             // 并且触发的是 follow/fav，不是其它模块常见的 queued 作者抓取。
-            await FetchComic(comicId);
+            if (!await FetchComic(comicId))
+                return false;
             var comic = await database.Comics.FirstAsync(x => x.Id == comicId);
             comic.Fav = true;
             await database.SaveChangesAsync();
@@ -181,6 +236,8 @@ namespace PictureSpider.Manhuagui
         {
             var chapterUrl = BuildChapterUrl(chapter.ComicId, chapter.Id);
             var data = await FetchChapter(chapterUrl);
+            if (data == null)
+                return;
             chapter.Title = data.Title;
             chapter.PageCount = data.Images.Count;
             chapter.LastFetchedAt = DateTime.UtcNow;
@@ -214,7 +271,12 @@ namespace PictureSpider.Manhuagui
                 }
                 try
                 {
-                    await DownloadImage(chapterUrl, imagePath, data.Query, output);
+                    if (!await DownloadImage(chapterUrl, imagePath, data.Query, output))
+                    {
+                        downloaded = false;
+                        page.LastError = "Manhuagui requests paused for 24 hours after a network failure.";
+                        break;
+                    }
                     page.LastError = "";
                 }
                 catch (Exception ex)
@@ -223,7 +285,6 @@ namespace PictureSpider.Manhuagui
                     page.LastError = ex.Message;
                     Log($"{page.FileName} failed: {ex.Message}");
                 }
-                await Task.Delay(200);
             }
             chapter.Downloaded = downloaded;
             await database.SaveChangesAsync();
@@ -232,7 +293,12 @@ namespace PictureSpider.Manhuagui
         private async Task<ChapterData> FetchChapter(string chapterUrl)
         {
             var mobileUrl = chapterUrl.Replace("://www.manhuagui.com/", "://m.manhuagui.com/");
-            var html = await httpClient.GetStringAsync(mobileUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, mobileUrl);
+            using var response = await SendRequest(request);
+            if (response == null)
+                return null;
+            response.EnsureSuccessStatusCode();
+            var html = await response.Content.ReadAsStringAsync();
             var script = UnpackReaderScript(html);
             var jsonText = Regex.Match(script, @"SMH\.(?:reader|imgData)\((\{.*\})\)\.(?:preInit|init)\(\);").Groups[1].Value;
             if (string.IsNullOrWhiteSpace(jsonText))
@@ -249,7 +315,7 @@ namespace PictureSpider.Manhuagui
             return new ChapterData(title, images, query);
         }
 
-        private async Task DownloadImage(string chapterUrl, string imagePath, Dictionary<string, string> query, string output)
+        private async Task<bool> DownloadImage(string chapterUrl, string imagePath, Dictionary<string, string> query, string output)
         {
             Exception lastException = null;
             var temporaryOutput = output + ".tmp";
@@ -261,8 +327,10 @@ namespace PictureSpider.Manhuagui
                     using (var request = new HttpRequestMessage(HttpMethod.Get, url))
                     {
                         request.Headers.Referrer = new Uri(chapterUrl.Replace("://www.manhuagui.com/", "://m.manhuagui.com/"));
-                        using (var response = await httpClient.SendAsync(request))
+                        using (var response = await SendRequest(request))
                         {
+                            if (response == null)
+                                return false;
                             response.EnsureSuccessStatusCode();
                             using (var stream = await response.Content.ReadAsStreamAsync())
                             using (var file = File.Create(temporaryOutput))
@@ -270,7 +338,7 @@ namespace PictureSpider.Manhuagui
                         }
                     }
                     File.Move(temporaryOutput, output);
-                    return;
+                    return true;
                 }
                 catch (Exception ex)
                 {
