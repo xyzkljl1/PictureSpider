@@ -318,7 +318,15 @@ namespace PictureSpider
                     {
                         try
                         {
-                            Image img = Path.GetExtension(path).ToLower() == ".webp"
+                            // 预览文件可能沿用原图扩展名，按文件头识别实际格式。
+                            Span<byte> header = stackalloc byte[12];
+                            int headerLength;
+                            using (var stream = File.OpenRead(path))
+                                headerLength = stream.ReadAtLeast(header, header.Length, false);
+                            bool isWebp = headerLength == header.Length
+                                && header.Slice(0, 4).SequenceEqual("RIFF"u8)
+                                && header.Slice(8, 4).SequenceEqual("WEBP"u8);
+                            Image img = isWebp
                                 ? LoadWebp(path)
                                 : Image.FromFile(path);
                             //我内存贼大，不用裁剪

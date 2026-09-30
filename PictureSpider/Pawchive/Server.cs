@@ -1044,6 +1044,7 @@ namespace PictureSpider.Pawchive
                         ignore_illusts.Add(key);
                         continue;
                     }
+                    // 下载预览图时，此处后缀名可能不正确，队列里通过解析文件头确定正确格式。
                     var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');
                     var filename = Path.GetFileName(path);
