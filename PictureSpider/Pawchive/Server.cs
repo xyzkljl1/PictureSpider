@@ -718,6 +718,8 @@ namespace PictureSpider.Pawchive
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
+                    if (workGroup.IsWip)
+                        continue;
                     if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.children.Count == 0)
                     {
                         workGroup.readed = true;
@@ -1060,6 +1062,12 @@ namespace PictureSpider.Pawchive
                 {
                     var work = await LoadDownloadQueueWork(key);
                     if (work is null || (work is Work queuedWork && !queuedWork.GetGroup.fetched))
+                    {
+                        ignore_illusts.Add(key);
+                        continue;
+                    }
+                    var group = work is Work imageWork ? imageWork.GetGroup : ((ExternalWork)work).workGroup;
+                    if (group.IsWip)
                     {
                         ignore_illusts.Add(key);
                         continue;
