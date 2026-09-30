@@ -41,7 +41,8 @@ namespace PictureSpider.Manhuagui
         public override Task Init()
         {
 #if !DEBUG
-            _ = Task.Run(RunSchedule);
+            // 暂停定时抓取和下载，保留手动入口。
+            // _ = Task.Run(RunSchedule);
 #endif
             return Task.CompletedTask;
         }
