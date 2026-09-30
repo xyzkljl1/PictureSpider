@@ -482,6 +482,7 @@ namespace PictureSpider.Pawchive
                 Log($"Can't Fetch IllustGroup :{illustGroup.id} {illustGroup.service}");
                 return;
             }
+            illustGroup.fetchedTime = DateTime.Now;
             illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
             illustGroup.desc = doc.Value<string>("content");
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");

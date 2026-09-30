@@ -193,6 +193,8 @@ namespace PictureSpider.Pawchive
         public bool fav { get; set; } = false;
         //已经fetch过
         public bool fetched { get; set; } = false;
+        [Column(TypeName = "datetime(6)")]
+        public DateTime? fetchedTime { get; set; }
         public bool previewOnly { get; set; } = false;//网站只有预览图，与本地下载完成状态无关
 
         [ForeignKey("userid,userservice")]
