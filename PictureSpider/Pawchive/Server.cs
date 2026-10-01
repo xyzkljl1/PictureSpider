@@ -556,15 +556,16 @@ namespace PictureSpider.Pawchive
             var (success, entries) = await httpZipEntriesReader.GetEntries(keyWork.DownloadURL);
             if (!success)
                 return;
-            var files = entries.Where(x => !x.IsDirectory).ToList();
-            var entryName = files.Count == 1 ? files[0].FullName : null;
-            var token = Path.GetFileNameWithoutExtension(entryName);
-            if (String.IsNullOrWhiteSpace(entryName) || entryName.Contains('/') || entryName.Contains('\\') ||
-                !Path.GetExtension(entryName).IsImage() || !Regex.IsMatch(token, "^[A-Za-z0-9_-]{8}#[A-Za-z0-9_-]{43}$"))
+            var files = entries.Where(x => !x.IsDirectory && !String.IsNullOrWhiteSpace(x.FullName)
+                && !x.FullName.Contains('/') && !x.FullName.Contains('\\')
+                && Path.GetExtension(x.FullName).IsImage()
+                && Regex.IsMatch(Path.GetFileNameWithoutExtension(x.FullName), "^[A-Za-z0-9_-]{8}#[A-Za-z0-9_-]{43}$")).ToList();
+            if (files.Count != 1)
             {
                 LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
                 return;
             }
+            var token = Path.GetFileNameWithoutExtension(files[0].FullName);
             var megaUri = new Uri("https://mega.nz/file/" + token);
             INode node;
             try
@@ -584,7 +585,7 @@ namespace PictureSpider.Pawchive
             }
             var name = node is null ? null : Path.GetFileName(node.Name);
             if (node is null || node.Type != NodeType.File || node.Size <= 0 || node.Size > ArchiveExtractor.MaxArchiveBytes ||
-                !String.Equals(Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase))
+                Path.GetExtension(name).ToLowerInvariant() is not (".zip" or ".rar" or ".7z"))
             {
                 LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
                 return;
