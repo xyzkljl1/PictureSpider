@@ -46,7 +46,8 @@ namespace PictureSpider
             using Stream stream = PostRequest(url, dataStream, "application/json");
             var result = StreamToString(stream);
             var request = JArray.Parse(jsonData);
-            var response = JArray.Parse(result);
+            if (string.IsNullOrWhiteSpace(result) || JToken.Parse(result) is not JArray response)
+                return result;
             if (request.Count == 1 && request[0]["a"]?.ToString() == "g" &&
                 response.Count == 1 && response[0] is JObject error &&
                 error.Value<int?>("e") == (int)ApiResultCode.QuotaExceeded)
