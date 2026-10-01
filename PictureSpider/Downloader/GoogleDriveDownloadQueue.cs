@@ -42,7 +42,7 @@ namespace PictureSpider
         {
             try
             {
-                var (fileId, resourceKey) = ParseFileLink(url);
+                var (fileId, resourceKey) = ParseLink(url);
                 ArgumentException.ThrowIfNullOrWhiteSpace(file_name);
                 var path = Path.GetFullPath(Path.Combine(dir, file_name));
                 lock (downloading)
@@ -56,7 +56,7 @@ namespace PictureSpider
             }
         }
 
-        private static (string fileId, string resourceKey) ParseFileLink(string url)
+        private static (string fileId, string resourceKey) ParseLink(string url)
         {
             string fileId = url;
             string resourceKey = null;
@@ -72,7 +72,12 @@ namespace PictureSpider
                 else if (uri.AbsolutePath == "/open" || uri.AbsolutePath == "/uc")
                     fileId = query["id"];
                 else
-                    throw new ArgumentException("Only individual Google Drive files are supported.");
+                {
+                    var folder = Regex.Match(uri.AbsolutePath, @"\A/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)/?\z");
+                    if (!folder.Success)
+                        throw new ArgumentException("Unsupported Google Drive URL.");
+                    fileId = folder.Groups[1].Value;
+                }
             }
             if (string.IsNullOrWhiteSpace(fileId) || !Regex.IsMatch(fileId, @"\A[A-Za-z0-9_-]+\z"))
                 throw new ArgumentException("Invalid Google Drive file ID.");
@@ -81,9 +86,75 @@ namespace PictureSpider
 
         public async Task<(string id, string name)> GetFileInfoAsync(string url)
         {
-            var (fileId, resourceKey) = ParseFileLink(url);
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(fileId)}?fields=id,name&supportsAllDrives=true");
+            var (fileId, resourceKey) = ParseLink(url);
+            var file = await RequestMetadataAsync(
+                $"/{Uri.EscapeDataString(fileId)}?fields=id,name&supportsAllDrives=true", fileId, resourceKey).ConfigureAwait(false);
+            var name = file.Value<string>("name");
+            if (string.IsNullOrWhiteSpace(name) || file.Value<string>("id") != fileId)
+                throw new IOException("Invalid Google Drive file metadata.");
+            return (fileId, name);
+        }
+
+        public async Task<List<(string id, string name, string url, long? size)>> GetFilesAsync(string url)
+        {
+            var (fileId, resourceKey) = ParseLink(url);
+            var root = await RequestMetadataAsync(
+                $"/{Uri.EscapeDataString(fileId)}?fields=id,name,mimeType,resourceKey,size&supportsAllDrives=true",
+                fileId, resourceKey).ConfigureAwait(false);
+            if (root.Value<string>("id") != fileId)
+                throw new IOException("Invalid Google Drive file metadata.");
+            root["resourceKey"] = root.Value<string>("resourceKey") ?? resourceKey;
+            var pending = new Queue<JObject>();
+            pending.Enqueue(root);
+            var visited = new HashSet<string>();
+            var files = new List<(string id, string name, string url, long? size)>();
+            while (pending.Count > 0)
+            {
+                var file = pending.Dequeue();
+                var id = file.Value<string>("id");
+                var name = file.Value<string>("name");
+                var mimeType = file.Value<string>("mimeType");
+                var key = file.Value<string>("resourceKey");
+                if (string.IsNullOrWhiteSpace(id) || !Regex.IsMatch(id, @"\A[A-Za-z0-9_-]+\z") ||
+                    string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(mimeType))
+                    throw new IOException("Invalid Google Drive file metadata.");
+                if (!visited.Add(id))
+                    continue;
+                if (mimeType != "application/vnd.google-apps.folder")
+                {
+                    var fileUrl = $"https://drive.google.com/file/d/{id}/view";
+                    if (!string.IsNullOrWhiteSpace(key))
+                        fileUrl += "?resourcekey=" + Uri.EscapeDataString(key);
+                    files.Add((id, name, fileUrl, file.Value<long?>("size")));
+                    continue;
+                }
+
+                string pageToken = null;
+                do
+                {
+                    var query = Uri.EscapeDataString($"'{id}' in parents and trashed = false");
+                    var path = $"?q={query}&fields=nextPageToken,incompleteSearch,files(id,name,mimeType,resourceKey,size)" +
+                        "&pageSize=1000&orderBy=name_natural&supportsAllDrives=true&includeItemsFromAllDrives=true";
+                    if (!string.IsNullOrWhiteSpace(pageToken))
+                        path += "&pageToken=" + Uri.EscapeDataString(pageToken);
+                    var page = await RequestMetadataAsync(path, id, key).ConfigureAwait(false);
+                    if (page.Value<bool?>("incompleteSearch") == true || page["files"] is not JArray children)
+                        throw new IOException("Incomplete Google Drive folder listing.");
+                    foreach (var child in children)
+                    {
+                        if (child is not JObject metadata)
+                            throw new IOException("Invalid Google Drive file metadata.");
+                        pending.Enqueue(metadata);
+                    }
+                    pageToken = page.Value<string>("nextPageToken");
+                } while (!string.IsNullOrWhiteSpace(pageToken));
+            }
+            return files;
+        }
+
+        private async Task<JObject> RequestMetadataAsync(string path, string fileId, string resourceKey)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://www.googleapis.com/drive/v3/files" + path);
             if (!string.IsNullOrWhiteSpace(resourceKey))
                 request.Headers.Add("X-Goog-Drive-Resource-Keys", $"{fileId}/{resourceKey}");
             using var response = await httpClient.SendAsync(request).ConfigureAwait(false);
@@ -107,11 +178,7 @@ namespace PictureSpider
                 throw new HttpRequestException($"Google Drive HTTP {(int)response.StatusCode}: {content}",
                     null, response.StatusCode);
             }
-            var file = JObject.Parse(content);
-            var name = file.Value<string>("name");
-            if (string.IsNullOrWhiteSpace(name) || file.Value<string>("id") != fileId)
-                throw new IOException("Invalid Google Drive file metadata.");
-            return (fileId, name);
+            return JObject.Parse(content);
         }
 
         public override async Task WaitForAll()

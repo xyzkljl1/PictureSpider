@@ -108,80 +108,68 @@ namespace PictureSpider.Pawchive
                 {
                     try
                     {
+                        var url = HtmlEntity.DeEntitize(anode.Attributes["href"].Value);
+                        var files = new List<(string id, string name, string url, long? size)>();
+                        var type = ExternalWork.ExternalWorkType.Mega;
                         //包含一个mega文件夹
                         //patreon/user/3659577/post/117461502/revision/9878902
                         //<p><img src=\"/05/68/0568e59bd4bfdea28e3b3183046b81668dc841dfd5bcdc847612248a161138f2.webp\"></p><p>Hi guys!</p><p><a href=\"https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ\" rel=\"noopener noreferrer\">DOWNLOAD</a>&nbsp;(Watermark-free)</p>
                         if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/folder/"))//Mega folder
                         {
-                            var rootUri = new Uri(anode.Attributes["href"].Value);
+                            var rootUri = new Uri(url);
                             foreach (var meganode in await mega.GetNodesFromLinkAsync(rootUri))//GetNodesFromLinkAsync是递归的
-                                if (meganode.Type == NodeType.File)
-                                {
-                                    var ext = Path.GetExtension(meganode.Name);
-                                    if (ext.IsVideo())//暂时只处理video
-                                    {
-                                        var work = new ExternalWork
-                                        {
-                                            url = GetMegaLink(meganode, rootUri).AbsoluteUri,
-                                            id = meganode.Id,
-                                            type = ExternalWork.ExternalWorkType.Mega,
-                                            name = meganode.Name,
-                                            index = index++
-                                        };
-                                        if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
-                                            continue;
-                                        work.workGroup = workGroup;
-                                        database.ExternalWorks.Add(work);
-                                        await database.SaveChangesAsync();
-                                    }
-                                }
+                                if (meganode.Type == NodeType.File && Path.GetExtension(meganode.Name).IsVideo())//暂时只处理video
+                                    files.Add((meganode.Id, meganode.Name, GetMegaLink(meganode, rootUri).AbsoluteUri, meganode.Size));
                         }
                         else if (anode.Attributes["href"].Value.StartsWith("https://drive.google.com/"))
                         {
-                            var url = HtmlEntity.DeEntitize(anode.Attributes["href"].Value);
-                            var file = await googleDriveDownloader.GetFileInfoAsync(url);
-                            if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
-                            {
-                                var work = new ExternalWork
-                                {
-                                    url = url,
-                                    id = file.id,
-                                    type = ExternalWork.ExternalWorkType.GoogleDrive,
-                                    name = file.name,
-                                    index = index++
-                                };
-                                if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
-                                    continue;
-                                work.workGroup = workGroup;
-                                database.ExternalWorks.Add(work);
-                                await database.SaveChangesAsync();
-                            }
+                            type = ExternalWork.ExternalWorkType.GoogleDrive;
+                            foreach (var file in await googleDriveDownloader.GetFilesAsync(url))
+                                if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
+                                    files.Add(file);
                         }
                         //单个mega文件 patreon/user/8693043/post/75248472
                         //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
                         else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
                         {
-                            var node = await mega.GetNodeFromLinkAsync(new Uri(anode.Attributes["href"].Value));
-                            if (node is not null)
+                            var node = await mega.GetNodeFromLinkAsync(new Uri(url));
+                            if (node is not null && Path.GetExtension(node.Name).IsVideo())//暂时只处理video
+                                files.Add((node.Id, node.Name, url, node.Size));
+                        }
+                        if (files.Count == 0)
+                            continue;
+                        files = files.DistinctBy(x => x.id).ToList();
+                        var ids = files.Select(x => x.id).ToList();
+                        var existingWorks = await database.ExternalWorks.Where(x => x.type == type && ids.Contains(x.id))
+                            .ToDictionaryAsync(x => x.id);
+                        var pendingFiles = files.Where(x => !existingWorks.TryGetValue(x.id, out var work) ||
+                            (!work.DettachDownloaded && !File.Exists(Path.Combine(download_dir_tmp, work.TmpSubPath)))).ToList();
+                        // 单个外链先完整统计，再写入记录，避免超限时已经加入了部分文件。
+                        if (pendingFiles.Any(x => x.size is null || x.size < 0))
+                        {
+                            LogError($"ExternalWork size unavailable {workGroup.service}/{workGroup.id}: {url}");
+                            continue;
+                        }
+                        var totalSize = pendingFiles.Sum(x => (decimal)x.size.Value);
+                        if (pendingFiles.Count > 200 || totalSize > 5L * 1024 * 1024 * 1024)
+                        {
+                            LogError($"ExternalWork limit exceeded {workGroup.service}/{workGroup.id}: {pendingFiles.Count} files, {totalSize} bytes (max 200 files / 5 GiB), {url}");
+                            continue;
+                        }
+                        foreach (var file in files)
+                        {
+                            if (existingWorks.ContainsKey(file.id))
+                                continue;
+                            database.ExternalWorks.Add(new ExternalWork
                             {
-                                var ext = Path.GetExtension(node.Name);
-                                if (ext.IsVideo())//暂时只处理video
-                                {
-                                    var work = new ExternalWork
-                                    {
-                                        url = anode.Attributes["href"].Value,
-                                        id = node.Id,
-                                        type = ExternalWork.ExternalWorkType.Mega,
-                                        name = node.Name,
-                                        index = index++
-                                    };
-                                    if (database.ExternalWorks.Count(x => x.id == work.id && x.type == work.type) > 0)
-                                        continue;
-                                    work.workGroup = workGroup;
-                                    database.ExternalWorks.Add(work);
-                                    await database.SaveChangesAsync();
-                                }
-                            }
+                                url = file.url,
+                                id = file.id,
+                                type = type,
+                                name = file.name,
+                                index = index++,
+                                workGroup = workGroup
+                            });
+                            await database.SaveChangesAsync();
                         }
                     }
                     catch (GoogleDriveResourceUnavailableException e)
