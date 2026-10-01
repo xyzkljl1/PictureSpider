@@ -265,12 +265,18 @@ namespace PictureSpider.Telegram
                 Log($"Fetch {ct} Messages from {channel.title}");
             }
         }
+        private static string FindBlockedKeyword(IEnumerable<string> keywords, params string[] texts)
+        {
+            return keywords.FirstOrDefault(word => texts.Any(text => (text ?? "").Contains(word, StringComparison.OrdinalIgnoreCase)));
+        }
         public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30)
         {
             Log($"Load Album Caption {messageInfo.ChatId}/{messageInfo.MediaAlbumId}");
             //一组图中只有一个有captain文本
             //升序排列，一般文本在id最小的message上
-            foreach (var _m in database.Messages.Where(ele => ele.albumid == messageInfo.MediaAlbumId&&ele.chat==messageInfo.ChatId).OrderBy(x=>x.id).ToList())
+            // albumid=0 不是相册，不能混入该频道的其他独立消息。
+            foreach (var _m in database.Messages.Where(ele => ele.albumid == messageInfo.MediaAlbumId&&ele.chat==messageInfo.ChatId
+                && (messageInfo.MediaAlbumId != 0 || ele.id == messageInfo.Id)).OrderBy(x=>x.id).ToList())
             {
                 try
                 {
@@ -284,6 +290,10 @@ namespace PictureSpider.Telegram
                         if (captionText != null && captionText.Text != null && captionText.Text != "")
                         {
                             var ret = captionText.Text;
+                            // 截断前排除裸链接，保留带链接的可见文字。
+                            foreach (var entity in (captionText.Entities ?? Array.Empty<TextEntity>())
+                                .Where(x => x.Type is TextEntityType.TextEntityTypeUrl).OrderByDescending(x => x.Offset))
+                                ret = ret.Remove(entity.Offset, entity.Length).Insert(entity.Offset, " ");
                             if (ret.Length > length_limit)
                                 ret = ret.Substring(0, length_limit);
                             Util.ReplaceInvalidCharInFilename(ref ret);
@@ -293,7 +303,7 @@ namespace PictureSpider.Telegram
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (TdException ex)
                 {
                     Log($"Fail to get caption message {_m.chat}/{_m.id}: {ex}");
                     continue;
@@ -304,6 +314,8 @@ namespace PictureSpider.Telegram
         public async Task DownloadByMessages()
         { 
             Log("Start Download Try");
+            var blockedKeywords = database.BlockedKeywords.Select(x => x.keyword).ToList()
+                .Where(x => !String.IsNullOrWhiteSpace(x)).ToList();
             foreach (var channel in database.Channels.ToList())//要tolist获得一份拷贝，否则database会处于占用中
             {
                 if (!(channel.download_telegraph || channel.download_video || channel.download_illust || channel.download_comments))
@@ -358,6 +370,18 @@ namespace PictureSpider.Telegram
                                 if (content != null&& content.LinkPreview!=null&&content.LinkPreview.Url.Contains("https://telegra.ph"))
                                 {
                                     Log($"Process Telegraph Message {message.chat}/{message.id}");
+                                    var text = content.Text?.Text ?? "";
+                                    // 不匹配正文中的裸链接，带链接的可见标题仍然属于正文。
+                                    foreach (var entity in (content.Text?.Entities ?? Array.Empty<TextEntity>())
+                                        .Where(x => x.Type is TextEntityType.TextEntityTypeUrl).OrderByDescending(x => x.Offset))
+                                        text = text.Remove(entity.Offset, entity.Length).Insert(entity.Offset, " ");
+                                    var blockedKeyword = FindBlockedKeyword(blockedKeywords, text, content.LinkPreview.Title);
+                                    if (blockedKeyword != null)
+                                    {
+                                        Log($"Blocked Telegraph {channel.title}({message.chat})/{message.id}: {blockedKeyword}");
+                                        database.SaveChanges();
+                                        continue;
+                                    }
                                     if (database.FinishedTasks.FirstOrDefault(ele=>ele.url==content.LinkPreview.Url) != null)//查重
                                     {
                                         message.state = MessageState.Dup;
@@ -411,6 +435,15 @@ namespace PictureSpider.Telegram
                                         parent_dir = Path.Combine(download_dir_organized, album_title);
                                     else//找不到描述的视同散图
                                         parent_dir = Path.Combine(download_dir_other, $"{channel.id}");
+                                }
+                                // 独立散图不屏蔽；只匹配截断、清理后的命名标题。
+                                var blockedKeyword = messageInfo.MediaAlbumId != 0 || !channel.download_illust
+                                    ? FindBlockedKeyword(blockedKeywords, comment_title) : null;
+                                if (blockedKeyword != null)
+                                {
+                                    Log($"Blocked Group {channel.title}({message.chat})/{message.id}: {blockedKeyword}");
+                                    database.SaveChanges();
+                                    continue;
                                 }
                                 if (!Directory.Exists(parent_dir)) 
                                     Directory.CreateDirectory(parent_dir);

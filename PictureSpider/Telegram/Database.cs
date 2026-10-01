@@ -26,5 +26,6 @@ namespace PictureSpider.Telegram
         public DbSet<Channel> Channels { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<FinishedTask> FinishedTasks { get; set; }
+        public DbSet<BlockedKeyword> BlockedKeywords { get; set; }
     }
 }

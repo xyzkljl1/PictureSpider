@@ -11,6 +11,13 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Telegram
 {
+    [Table("BlockedKeywords")]
+    public class BlockedKeyword
+    {
+        [Key]
+        [StringLength(255)]
+        public string keyword { get; set; }
+    }
     public enum MessageState
     {
         Ignore=0,
