@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Threading.Tasks;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.IO;
@@ -11,10 +12,12 @@ namespace PictureSpider
 {
     public delegate Task AsyncEventHandler(object sender, EventArgs e);
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public partial class MainWindow : Form
+    public partial class MainWindow : Form, IMessageFilter
     {
         private List<BaseServer> servers = new List<BaseServer>();
         private ListenerServer listenerServer = null;
+        private readonly Dictionary<Keys, Keys> pressedBrowserKeys = new Dictionary<Keys, Keys>();
+        private readonly SemaphoreSlim browserKeyLock = new SemaphoreSlim(1, 1);
         //生成64位程序会导致无法用设计器编辑
         public MainWindow(Config config, Pixiv.Server _pixiv_server, List<BaseServer> other_servers)
         {
@@ -48,7 +51,6 @@ namespace PictureSpider
             BookmarkPageLabel.Location = new System.Drawing.Point(0, 0);
             //设置事件
             FormClosing += OnClose;//关闭按钮不关闭，而是最小化
-            KeyUp += new KeyEventHandler(MainExplorer.OnKeyUp);
             NextButton.Click += new EventHandler(MainExplorer.SlideRight);
             PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
             idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
@@ -73,21 +75,55 @@ namespace PictureSpider
 
             //onListCheckBoxClick(null,null);
             listenerServer = new ListenerServer(servers);
+            Application.AddMessageFilter(this);
+            Deactivate += (s, e) => pressedBrowserKeys.Clear();
+            Disposed += (s, e) => Application.RemoveMessageFilter(this);
         }
         private void OnClose(object sender, FormClosingEventArgs e)
         {
             e.Cancel = true;
             this.Hide();
         }
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        public bool PreFilterMessage(ref Message msg)
         {
-            if (keyData == Keys.Tab)
-                return true;
-            if (keyData == Keys.Up || keyData == Keys.Down || keyData == Keys.Left || keyData == Keys.Right)
-                return true;
-            if (keyData == (Keys.Control | Keys.Left) || keyData == (Keys.Control | Keys.Right) || keyData == (Keys.Control | Keys.Down))
-                return true;
-            return false;
+            const int WM_KEYDOWN = 0x0100;
+            const int WM_KEYUP = 0x0101;
+            const int WM_SYSKEYDOWN = 0x0104;
+            const int WM_SYSKEYUP = 0x0105;
+            const int WM_UNICHAR = 0x0109;
+            if (!Visible || Form.ActiveForm != this || msg.Msg < WM_KEYDOWN || msg.Msg > WM_UNICHAR)
+                return false;
+
+            // 在控件预处理前拦截全部键盘消息，包括下拉列表和嵌入网页的默认快捷键。
+            var key = (Keys)msg.WParam.ToInt32() & Keys.KeyCode;
+            if (msg.Msg == WM_KEYDOWN || msg.Msg == WM_SYSKEYDOWN)
+            {
+                var modifiers = Control.ModifierKeys;
+                bool arrow = key == Keys.Left || key == Keys.Right || key == Keys.Up || key == Keys.Down;
+                if ((arrow && (modifiers == Keys.None || modifiers == Keys.Control))
+                    || (key == Keys.Delete && modifiers == Keys.None))
+                    pressedBrowserKeys.TryAdd(key, key | modifiers);
+            }
+            else if (msg.Msg == WM_KEYUP || msg.Msg == WM_SYSKEYUP)
+            {
+                // 保留按下时的修饰键；长按重复的 KeyDown 只在松键时执行一次。
+                if (pressedBrowserKeys.Remove(key, out var keyData))
+                    OnBrowserKeyUp(keyData);
+            }
+            return true;
+        }
+        private async void OnBrowserKeyUp(Keys keyData)
+        {
+            await browserKeyLock.WaitAsync();
+            try
+            {
+                if (!IsDisposed && Visible && Form.ActiveForm == this)
+                    await MainExplorer.OnKeyUp(this, new KeyEventArgs(keyData));
+            }
+            finally
+            {
+                browserKeyLock.Release();
+            }
         }
         private async Task OnQueueComboBoxChangedAsync(object sender, QueueChangeEventArgs e)
         {

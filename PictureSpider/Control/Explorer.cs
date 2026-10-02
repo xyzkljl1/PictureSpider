@@ -544,7 +544,7 @@ namespace PictureSpider
             process.Close();
         }
         //响应键盘
-        public async void OnKeyUp(object sender, KeyEventArgs e)
+        public async Task OnKeyUp(object sender, KeyEventArgs e)
         {
             //左右键盘逐帧切换，到头时进入下一组
             //上下键直接进入下一组
@@ -565,12 +565,10 @@ namespace PictureSpider
                 if (!await SlideHorizon(1))
                     await SlideVertical(1);
             }
-            else if (e.KeyCode == Keys.Up)
-                await SlideVertical(-1,false,true);
-            else if (e.KeyCode == Keys.Down)
+            else if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
             {
                 for (int i = 0; i < (e.Control ? 5 : 1); ++i)
-                    if (!await SlideVertical(1,false,true))
+                    if (!await SlideVertical(e.KeyCode == Keys.Up ? -1 : 1,false,true))
                         break;
             }
             else if (e.KeyCode == Keys.Delete)
