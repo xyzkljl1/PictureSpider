@@ -396,6 +396,10 @@ namespace PictureSpider.Pawchive
         }
         public async Task<string> HttpGet(string url)
         {
+            return (await HttpGet(url, false)).content;
+        }
+        private async Task<(string content, bool postNotFound)> HttpGet(string url, bool checkPostNotFound)
+        {
             for (int try_ct = 2; try_ct >= 0; --try_ct)
             {
                 try
@@ -407,10 +411,17 @@ namespace PictureSpider.Pawchive
                         throw new ArgumentException("Not SSL");
                     using (HttpResponseMessage response = await httpClient.GetAsync(url))
                     {
+                        if (checkPostNotFound && response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            var content = await response.Content.ReadAsStringAsync();
+                            if (JToken.Parse(content) is JObject error && error["error"]?.Type == JTokenType.String
+                                && error.Value<string>("error") == "Not Found")
+                                return (null, true);
+                        }
                         //未知错误
                         CheckStatusCode(response);
                         //正常
-                        return await response.Content.ReadAsStringAsync();
+                        return (await response.Content.ReadAsStringAsync(), false);
                     }
                 }
                 catch (Exception e)
@@ -422,7 +433,7 @@ namespace PictureSpider.Pawchive
                     //throw;
                 }
             }
-            return null;
+            return (null, false);
         }
         // 只由串行后台调用；不保存，由抓取调用方连同fetched状态一起提交。
         private async Task SplitNonImageWorks(WorkGroup group)
@@ -465,12 +476,64 @@ namespace PictureSpider.Pawchive
         //获取illustGroup的content以获取外链
         private async Task FetchWorkGroup(WorkGroup illustGroup)
         {
-            var doc = await HttpGetJson($"{baseAPIUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}");
+            var (content, postNotFound) = await HttpGet($"{baseAPIUrl}/{illustGroup.service}/user/{illustGroup.user.id}/post/{illustGroup.id}", true);
+            if (postNotFound)
+            {
+                var groups = new HashSet<WorkGroup> { illustGroup };
+                var pending = new Queue<WorkGroup>(groups);
+                while (pending.Count > 0)
+                    foreach (var child in pending.Dequeue().children)
+                        if (groups.Add(child))
+                            pending.Enqueue(child);
+                var works = groups.SelectMany(x => x.works.Concat(x.cover is null ? Array.Empty<Work>() : new[] { x.cover })).Distinct().ToList();
+                var externalWorks = groups.SelectMany(x => x.externalWorks).ToList();
+                var allWorks = works.Cast<PawchiveBaseWork>().Concat(externalWorks).ToList();
+                // 保留收藏、已下载内容，以及仍被其他图组引用的作品。
+                if (groups.Any(x => x.fav || (x.isNonImage && x.DettachDownloaded)
+                        || (x.IsChild && !x.isNonImage && x.works.Count > 0))
+                    || allWorks.Any(x => x.fav || (x.Dettached && x.DettachDownloaded))
+                    || works.Any(x => (x.workGroup is not null && !groups.Contains(x.workGroup))
+                        || (x.coverGroup is not null && !groups.Contains(x.coverGroup))))
+                {
+                    Log($"Keep missing post with protected records: {illustGroup.service}/{illustGroup.id}");
+                    return;
+                }
+                var directories = new[]
+                {
+                    Path.Combine(download_dir_tmp, illustGroup.service, illustGroup.user.id, illustGroup.id),
+                    Path.Combine(download_dir_fav, illustGroup.user.displayText, illustGroup.service, illustGroup.id)
+                };
+                var paths = allWorks.SelectMany(x => new[]
+                {
+                    Path.Combine(download_dir_tmp, x.TmpSubPath),
+                    Path.Combine(download_dir_fav, x.FavSubPath),
+                    Path.Combine(download_dir_tmp, Work.GetPreviewPath(x.TmpSubPath)),
+                    Path.Combine(download_dir_fav, Work.GetPreviewPath(x.FavSubPath))
+                });
+                if (directories.Any(x => Directory.Exists(x) && Directory.EnumerateFiles(x, "*", SearchOption.AllDirectories).Any())
+                    || paths.SelectMany(x => new[] { x, x + ".part", x + ".aria2", x + ".part.aria2" }).Any(File.Exists))
+                {
+                    Log($"Keep missing post with local files: {illustGroup.service}/{illustGroup.id}");
+                    return;
+                }
+                var keys = allWorks.Select(GetDownloadQueueKey).ToHashSet();
+                database.Works.RemoveRange(works);
+                database.ExternalWorks.RemoveRange(externalWorks);
+                database.WorkGroups.RemoveRange(groups);
+                await database.SaveChangesAsync();
+                downloadQueue.RemoveAll(keys.Contains);
+                Log($"Deleted missing post: {illustGroup.service}/{illustGroup.id}, {groups.Count} groups");
+                return;
+            }
+            var doc = content is null ? null : (JObject)JsonConvert.DeserializeObject(content);
             if (doc is null || !doc.ContainsKey("id"))
             {
                 Log($"Can't Fetch IllustGroup :{illustGroup.id} {illustGroup.service}");
                 return;
             }
+            database.Works.RemoveRange(illustGroup.works.ToList());
+            illustGroup.works.Clear();
+            await database.SaveChangesAsync();
             illustGroup.fetchedTime = DateTime.Now;
             illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
             illustGroup.desc = doc.Value<string>("content");
@@ -903,9 +966,6 @@ namespace PictureSpider.Pawchive
                     LogError($"Can't refetch favorite group: {illustGroup.service}/{illustGroup.id}");
                     continue;
                 }
-                database.Works.RemoveRange(illustGroup.works.ToList());
-                illustGroup.works.Clear();
-                await database.SaveChangesAsync();
                 await FetchWorkGroup(illustGroup);
             }
             Log("Fetch Groups Done");
