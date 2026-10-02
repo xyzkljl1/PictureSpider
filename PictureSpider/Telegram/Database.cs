@@ -12,6 +12,13 @@ namespace PictureSpider.Telegram
 {
     public class Database : BaseEFDatabase
     {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<Message>().Property(x => x.state)
+                .HasConversion<string>()
+                .HasColumnType("enum('Ignore','Wait','Done','Dup','NotFound')");
+        }
         public bool AddOrIgnoreMessage(TdLib.TdApi.Message messageInfo)
         {
             var message = Messages.FirstOrDefault(ele => ele.id == messageInfo.Id&&ele.chat==messageInfo.ChatId);
