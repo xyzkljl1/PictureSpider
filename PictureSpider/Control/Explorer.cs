@@ -549,7 +549,13 @@ namespace PictureSpider
             //左右键盘逐帧切换，到头时进入下一组
             //上下键直接进入下一组
             //按Del等于左键点击收藏按钮
-            if (e.KeyCode == Keys.Left)
+            if (e.Control && (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right))
+            {
+                for (int i = 0; i < 5; ++i)
+                    if (!await SlideHorizon(e.KeyCode == Keys.Left ? -1 : 1))
+                        break;
+            }
+            else if (e.KeyCode == Keys.Left)
             {
                 if(!await SlideHorizon(-1))
                     await SlideVertical(-1,true);
@@ -562,7 +568,11 @@ namespace PictureSpider
             else if (e.KeyCode == Keys.Up)
                 await SlideVertical(-1,false,true);
             else if (e.KeyCode == Keys.Down)
-                await SlideVertical(1,false,true);
+            {
+                for (int i = 0; i < (e.Control ? 5 : 1); ++i)
+                    if (!await SlideVertical(1,false,true))
+                        break;
+            }
             else if (e.KeyCode == Keys.Delete)
             {
                 if (index < 0 || index >= file_list.Count)

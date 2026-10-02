@@ -85,6 +85,8 @@ namespace PictureSpider
                 return true;
             if (keyData == Keys.Up || keyData == Keys.Down || keyData == Keys.Left || keyData == Keys.Right)
                 return true;
+            if (keyData == (Keys.Control | Keys.Left) || keyData == (Keys.Control | Keys.Right) || keyData == (Keys.Control | Keys.Down))
+                return true;
             return false;
         }
         private async Task OnQueueComboBoxChangedAsync(object sender, QueueChangeEventArgs e)
