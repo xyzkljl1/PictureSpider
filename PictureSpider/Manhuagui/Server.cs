@@ -44,8 +44,7 @@ namespace PictureSpider.Manhuagui
         public override Task Init()
         {
 #if !DEBUG
-            // 暂停定时抓取和下载，保留手动入口。
-            // _ = Task.Run(RunSchedule);
+            _ = Task.Run(RunSchedule);
 #endif
             return Task.CompletedTask;
         }
@@ -59,23 +58,24 @@ namespace PictureSpider.Manhuagui
                     .Where(x => x.Fav)
                     .OrderBy(x => x.Id)
                     .ToListAsync();
+                int remainingChapters = 20;
                 foreach (var comic in comics)
                 {
-                    await DownloadComic(comic.Id);
-                    if (DateTime.UtcNow < requestsBlockedUntil)
+                    remainingChapters -= await DownloadComic(comic.Id, remainingChapters);
+                    if (remainingChapters == 0 || DateTime.UtcNow < requestsBlockedUntil)
                         break;
                 }
             }
         }
 
-        public async Task DownloadComic(int comicId)
+        public async Task<int> DownloadComic(int comicId, int chapterLimit = 20)
         {
-            if (!await FetchComic(comicId))
-                return;
-            await DownloadStoredComic(comicId);
+            if (chapterLimit <= 0 || !await FetchComic(comicId))
+                return 0;
+            return await DownloadStoredComic(comicId, chapterLimit);
         }
 
-        private async Task DownloadStoredComic(int comicId)
+        private async Task<int> DownloadStoredComic(int comicId, int chapterLimit)
         {
             var comic = await database.Comics.FirstAsync(x => x.Id == comicId);
             var chapters = await database.Chapters
@@ -86,10 +86,11 @@ namespace PictureSpider.Manhuagui
             Util.TouchDir(comicDir);
             Log($"{comic.Title}: {chapters.Count} chapters");
 
-            foreach (var chapter in chapters)
+            int requestedChapters = 0;
+            foreach (var chapter in chapters.Where(x => !x.Downloaded).Take(chapterLimit))
             {
-                if (chapter.Downloaded)
-                    continue;
+                // 失败的章节也占用本轮请求额度。
+                requestedChapters++;
                 try
                 {
                     await DownloadChapter(comicDir, chapter);
@@ -101,6 +102,7 @@ namespace PictureSpider.Manhuagui
                 if (DateTime.UtcNow < requestsBlockedUntil)
                     break;
             }
+            return requestedChapters;
         }
 
         private async Task<bool> FetchComic(int comicId)
