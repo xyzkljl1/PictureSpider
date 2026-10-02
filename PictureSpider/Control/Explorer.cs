@@ -39,6 +39,8 @@ namespace PictureSpider
         //ImageCache需要手动dispose
         //key是图片路径
         private ConcurrentDictionary<string,ImageCache> cache_pool = new ConcurrentDictionary<string, ImageCache>();
+        private readonly object cacheLock = new object();
+        private ImageCache displayedCache;
         private List<ExplorerFileBase> file_list = new List<ExplorerFileBase>();
         private int index = 0;
         private int sub_index = 0;
@@ -131,10 +133,14 @@ namespace PictureSpider
         public void SetList(BaseServer _server,List<ExplorerFileBase> list)
         {
             server = _server;
-            this.Image = null;
-            foreach (var cache in cache_pool)
-                cache.Value.Dispose();
-            cache_pool.Clear();
+            lock (cacheLock)
+            {
+                displayedCache = null;
+                this.Image = null;
+                foreach (var cache in cache_pool)
+                    cache.Value.Dispose();
+                cache_pool.Clear();
+            }
             file_list = list;
             if (file_list.Count>0)
             {
@@ -307,6 +313,7 @@ namespace PictureSpider
         private ImageCache Load(ExplorerFileBase eFile,int i)
         {
             var path = eFile.FilePath(i);
+            lock (cacheLock)
             {//hit
                 if (cache_pool.TryGetValue(path, out var cache))
                 {
@@ -359,25 +366,33 @@ namespace PictureSpider
                         cache.data = img;
                     }
                 }
-                if (!cache_pool.TryAdd(path, cache))//开头就检测过hit，如果此时已经存在，那肯定是刚加进去的，没必要更新required_time
-                    cache.Dispose();
-                while (cache_pool.Count > cache_size)
+                lock (cacheLock)
                 {
-                    //C#里可修改的Pair类是什么？
-                    string oldest_cache = null;
-                    DateTime oldest_cache_time = DateTime.MaxValue;
-                    foreach (var tmp_cache in cache_pool)
-                        if (tmp_cache.Value.required_time < oldest_cache_time)
-                        {
-                            oldest_cache = tmp_cache.Key;
-                            oldest_cache_time = tmp_cache.Value.required_time;
-                        }
-                    if (oldest_cache is null)
-                        continue;
-                    if (cache_pool.TryRemove(oldest_cache, out var ignored))
-                        ignored.Dispose();
+                    if (!cache_pool.TryAdd(path, cache))
+                    {
+                        cache.Dispose();
+                        cache = cache_pool[path];
+                        cache.required_time = DateTime.UtcNow;
+                    }
+                    while (cache_pool.Count > cache_size)
+                    {
+                        string oldest_cache = null;
+                        DateTime oldest_cache_time = DateTime.MaxValue;
+                        foreach (var tmp_cache in cache_pool)
+                            if (!ReferenceEquals(tmp_cache.Value, displayedCache)
+                                && !ReferenceEquals(tmp_cache.Value, cache)
+                                && tmp_cache.Value.required_time < oldest_cache_time)
+                            {
+                                oldest_cache = tmp_cache.Key;
+                                oldest_cache_time = tmp_cache.Value.required_time;
+                            }
+                        if (oldest_cache is null)
+                            break;
+                        if (cache_pool.TryRemove(oldest_cache, out var ignored))
+                            ignored.Dispose();
+                    }
+                    return cache;
                 }
-                return cache;
             }
         }
         private void Load(ExplorerFileBase eFile, int s,int t)
@@ -392,8 +407,13 @@ namespace PictureSpider
             if (i >= file_list.Count || i < 0)
                 return;
             ExplorerFileBase illust = file_list[i];
-            ImageCache cache = Load(illust,j);
-            this.Image = cache.data;
+            // 取出缓存到设置显示对象期间不能被后台淘汰；后台解码仍在锁外执行。
+            lock (cacheLock)
+            {
+                ImageCache cache = Load(illust,j);
+                displayedCache = cache;
+                this.Image = cache.data;
+            }
             bool index_changed = index != i;
             bool sub_index_changed = sub_index!=j;
             index = i;//index和sub_index需要都更新完才能刷新
