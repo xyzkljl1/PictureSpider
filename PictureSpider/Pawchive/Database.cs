@@ -21,6 +21,7 @@ namespace PictureSpider.Pawchive
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<User>().Property(x => x.downloadCover).HasDefaultValue(true);
             modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()
                 .HasColumnType("enum('None','DirectExternal','KeyZipMega')")

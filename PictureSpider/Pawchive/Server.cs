@@ -270,7 +270,7 @@ namespace PictureSpider.Pawchive
                     {
                         workGroup = database.WorkGroups.Add(new WorkGroup { id=id,user=user}).Entity;
                         workGroup.title = obj.Value<string>("title");
-                        if (obj["file"].ToObject<JObject>().ContainsKey("path"))
+                        if (user.downloadCover && obj["file"].ToObject<JObject>().ContainsKey("path"))
                             workGroup.cover =await TryAddWork(obj["file"], service);
                         int index = 1;
                         //work可能重复，例 patreon/user/3659577/post/109256192包含了两张一样的图片
@@ -534,8 +534,11 @@ namespace PictureSpider.Pawchive
                 Log($"Can't Fetch IllustGroup :{illustGroup.id} {illustGroup.service}");
                 return;
             }
-            database.Works.RemoveRange(illustGroup.works.ToList());
+            var preservedCover = !illustGroup.user.downloadCover ? illustGroup.cover : null;
+            database.Works.RemoveRange(illustGroup.works.Where(x => x != preservedCover).ToList());
             illustGroup.works.Clear();
+            if (preservedCover is not null && preservedCover.Ext.IsImage())
+                illustGroup.works.Add(preservedCover);
             await database.SaveChangesAsync();
             illustGroup.fetchedTime = DateTime.Now;
             illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
@@ -543,7 +546,7 @@ namespace PictureSpider.Pawchive
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");
             // 图片封面也作为第一页，复用附件的下载和浏览逻辑。
             var file = doc["file"];
-            if (!String.IsNullOrWhiteSpace(file?.Value<string>("path")) && Path.GetExtension(file.Value<string>("name") ?? "").ToLower().IsImage())
+            if (illustGroup.user.downloadCover && !String.IsNullOrWhiteSpace(file?.Value<string>("path")) && Path.GetExtension(file.Value<string>("name") ?? "").ToLower().IsImage())
             {
                 var cover = illustGroup.cover;
                 if (cover is null || cover.urlPath != file.Value<string>("path"))
@@ -883,7 +886,7 @@ namespace PictureSpider.Pawchive
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.followed
-                                       && (illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages
+                                       && (illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
                                             : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
@@ -915,6 +918,7 @@ namespace PictureSpider.Pawchive
                 string id = id_text.Substring(id_text.IndexOf('/') + 1);
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
+                                        .Include(x => x.cover)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
@@ -923,7 +927,7 @@ namespace PictureSpider.Pawchive
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    if ((illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages
+                    if ((illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
                         : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega) && illustGroup.works.Count > 0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);

@@ -97,6 +97,11 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<bool>("downloadAttachmentVideos")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("downloadCover")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTime>("fetchedTime")
                         .HasColumnType("datetime");
 

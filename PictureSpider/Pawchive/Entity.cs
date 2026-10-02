@@ -210,7 +210,7 @@ namespace PictureSpider.Pawchive
         {
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
-                ((IsChild && !isNonImage ? user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega : user.downloadAttachmentImages)
+                ((IsChild && !isNonImage ? user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega : work.coverGroup == this || user.downloadAttachmentImages)
                     && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
             if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
                 selected = selected.Concat(externalWorks);
@@ -236,6 +236,7 @@ namespace PictureSpider.Pawchive
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;
         public bool downloadAttachmentImages { get; set; } = true;
+        public bool downloadCover { get; set; } = true;//只控制抓取时新增封面，已关联的封面不受影响
         public bool dowloadEmbed { get; set; } = false;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
