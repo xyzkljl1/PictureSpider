@@ -184,7 +184,10 @@ namespace PictureSpider.Pawchive
                         e.ApiResultCode == ApiResultCode.ResourceAdministrativelyBlocked ||
                         e.ApiResultCode == ApiResultCode.BadArguments)
                     {
-                        LogError($"Invalid ExternalWork {workGroup.service}/{workGroup.id}: {e.Message}");
+                        if (e.ApiResultCode == ApiResultCode.ResourceNotExists || e.ApiResultCode == ApiResultCode.ResourceExpired)
+                            Log($"Invalid ExternalWork {workGroup.service}/{workGroup.id}: {e.Message}");
+                        else
+                            LogError($"Invalid ExternalWork {workGroup.service}/{workGroup.id}: {e.Message}");
                     }
                     catch (Exception e)
                     {
