@@ -129,7 +129,8 @@ namespace PictureSpider
         {
             var server = servers[e.ServerIndex];
             AuthorBox.SetClient(server);
-            MainExplorer.SetList(servers[e.ServerIndex], await servers[e.ServerIndex].GetExplorerQueueItems(e.Item).ConfigureAwait(true));
+            MainExplorer.SetList(servers[e.ServerIndex], await servers[e.ServerIndex].GetExplorerQueueItems(e.Item).ConfigureAwait(true),
+                e.Item.type == ExplorerQueue.QueueType.User ? e.Item.id : "");
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:验证平台兼容性", Justification = "<挂起>")]

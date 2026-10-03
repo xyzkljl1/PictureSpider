@@ -40,20 +40,18 @@ namespace PictureSpider
         private void UpdateByUserId(string userId)
         {
             frozen = true;
-            if (!string.IsNullOrEmpty(userId)&&server!=null)
+            user = !string.IsNullOrEmpty(userId)&&server!=null ? server.GetUserById(userId) : null;
+            followCheckBox.Enabled = user != null;
+            if(user!=null)
             {
-                user = server.GetUserById(userId);
-                if(user!=null)
-                {
-                    nameLabel.Text = user.displayText;
-                    if (user.followed)
-                        followCheckBox.CheckState = CheckState.Checked;
-                    else if (user.queued)
-                        followCheckBox.CheckState = CheckState.Indeterminate;
-                    else
-                        followCheckBox.CheckState = CheckState.Unchecked;
-                    followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
-                }
+                nameLabel.Text = user.displayText;
+                if (user.followed)
+                    followCheckBox.CheckState = CheckState.Checked;
+                else if (user.queued)
+                    followCheckBox.CheckState = CheckState.Indeterminate;
+                else
+                    followCheckBox.CheckState = CheckState.Unchecked;
+                followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
             }
             else
             {
@@ -66,7 +64,7 @@ namespace PictureSpider
 
         private async void OnCheckedChange(object sender, EventArgs e)
         {
-            if (frozen)
+            if (frozen||user==null)
                 return;
             followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
             if(user!=null)

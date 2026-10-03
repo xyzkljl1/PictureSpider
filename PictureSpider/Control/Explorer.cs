@@ -42,6 +42,7 @@ namespace PictureSpider
         private readonly object cacheLock = new object();
         private ImageCache displayedCache;
         private List<ExplorerFileBase> file_list = new List<ExplorerFileBase>();
+        private string queueUserId = "";
         private int index = 0;
         private int sub_index = 0;
         private Image empty_image;
@@ -71,7 +72,7 @@ namespace PictureSpider
         public List<string> Tags => file_list.Count > 0 ? file_list[index].tags : new List<string>();
 
         [Bindable(true)]
-        public string UserId => file_list.Count > 0 ? file_list[index].userId : "";
+        public string UserId => file_list.Count > 0 ? file_list[index].userId : queueUserId;
 
         [Bindable(true)]
         public Bitmap FavIcon
@@ -130,9 +131,10 @@ namespace PictureSpider
             this.NotifyChange<string>("TotalPageText");
         }
         //设置当前列表
-        public void SetList(BaseServer _server,List<ExplorerFileBase> list)
+        public void SetList(BaseServer _server,List<ExplorerFileBase> list,string userId = "")
         {
             server = _server;
+            queueUserId = userId;
             lock (cacheLock)
             {
                 displayedCache = null;
