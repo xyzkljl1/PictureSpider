@@ -106,7 +106,28 @@ namespace PictureSpider.Telegram
                     return;
 
                 TdJsonClient.GlobalExecute("{\"@type\":\"setLogStream\",\"log_stream\":{\"@type\":\"logStreamEmpty\"}}");
-                TdJsonClient.GlobalExecute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}");
+                var result = TdJsonClient.GlobalExecute(new JObject
+                {
+                    ["@type"] = "setLogStream",
+                    ["log_stream"] = new JObject
+                    {
+                        ["@type"] = "logStreamFile",
+                        ["path"] = Path.Combine(AppContext.BaseDirectory, "tdlib.log"),
+                        ["max_file_size"] = 10 * 1024 * 1024,
+                        ["redirect_stderr"] = false
+                    }
+                }.ToString(Formatting.None));
+                if ((string)JObject.Parse(result)["@type"] == "ok")
+                {
+                    result = TdJsonClient.GlobalExecute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":4}");
+                    if ((string)JObject.Parse(result)["@type"] != "ok")
+                    {
+                        TdJsonClient.GlobalExecute("{\"@type\":\"setLogStream\",\"log_stream\":{\"@type\":\"logStreamEmpty\"}}");
+                        Console.WriteLine($"G TDLib log level setup failed: {result}");
+                    }
+                }
+                else
+                    Console.WriteLine($"G TDLib file logging setup failed: {result}");
                 tdLogConfigured = true;
             }
         }
