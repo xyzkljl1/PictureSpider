@@ -196,7 +196,7 @@ namespace PictureSpider
             this.queueComboBox.FormattingEnabled = true;
             this.queueComboBox.Location = new System.Drawing.Point(3, 83);
             this.queueComboBox.Name = "queueComboBox";
-            this.queueComboBox.Size = new System.Drawing.Size(90, 28);
+            this.queueComboBox.Size = new System.Drawing.Size(158, 28);
             this.queueComboBox.TabIndex = 19;
             // 
             // AuthorBox

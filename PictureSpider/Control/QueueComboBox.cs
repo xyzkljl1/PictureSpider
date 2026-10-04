@@ -28,6 +28,15 @@ namespace PictureSpider
         public QueueComboBox()
         {
             DropDownStyle = ComboBoxStyle.DropDownList;
+            DropDown += (object sender, EventArgs e) =>
+            {
+                var width = Width;
+                foreach (var item in Items)
+                    width = Math.Max(width, TextRenderer.MeasureText(item.ToString(), Font,
+                        System.Drawing.Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width
+                        + SystemInformation.VerticalScrollBarWidth);
+                DropDownWidth = Math.Min(width, Screen.FromControl(this).WorkingArea.Width);
+            };
             SelectedIndexChanged += (object sender, EventArgs e) =>
             {
                 if (!blockSignal)

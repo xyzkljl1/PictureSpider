@@ -37,6 +37,7 @@ namespace PictureSpider
         public string KemonoDownloadDir = "./";
         public string PawchiveConnectStr = "";
         public string PawchiveDownloadDir = "./";
+        public string AuthorHubConnectStr = "";
         public string MyDownloadServerAddress = "";
         public string LMangaRootDir = "./";
         public string ManhuaguiConnectStr = "";

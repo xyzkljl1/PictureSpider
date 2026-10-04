@@ -52,6 +52,16 @@ namespace PictureSpider
                                 using (var manhuaguiServer = new Manhuagui.Server(config))
                                 {
                                     var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer, lmangaServer, manhuaguiServer, pawchiveServer };
+                                    if (!string.IsNullOrWhiteSpace(config.AuthorHubConnectStr))
+                                        commonServers.Add(new AuthorHub.Server(config.AuthorHubConnectStr,
+                                            new Dictionary<AuthorHub.SourceModule, BaseServer>
+                                            {
+                                                { AuthorHub.SourceModule.Pixiv, pixivServer },
+                                                { AuthorHub.SourceModule.Twitter, twitterServer },
+                                                { AuthorHub.SourceModule.Hitomi, hitomiServer },
+                                                { AuthorHub.SourceModule.Kemono, kemonoServer },
+                                                { AuthorHub.SourceModule.Pawchive, pawchiveServer }
+                                            }));
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)
