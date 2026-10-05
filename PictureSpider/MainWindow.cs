@@ -50,6 +50,13 @@ namespace PictureSpider
             BookmarkPageLabel.Parent = SwitchBookmarkButton;
             BookmarkPageLabel.Location = new System.Drawing.Point(0, 0);
             //设置事件
+            MainExplorer.CurrentFileChanged += (s, e) =>
+            {
+                var file = MainExplorer.CurrentFile;
+                AuthorBox.SetClient(MainExplorer.server, file);
+                // 非联合队列沿用原来的 Pixiv 标签库。
+                TagBox.SetClient(MainExplorer.server is AuthorHub.Server && file != null ? MainExplorer.server : servers[0], file);
+            };
             FormClosing += OnClose;//关闭按钮不关闭，而是最小化
             NextButton.Click += new EventHandler(MainExplorer.SlideRight);
             PrevButton.Click += new EventHandler(MainExplorer.SlideLeft);
@@ -128,8 +135,7 @@ namespace PictureSpider
         private async Task OnQueueComboBoxChangedAsync(object sender, QueueChangeEventArgs e)
         {
             var server = servers[e.ServerIndex];
-            AuthorBox.SetClient(server);
-            MainExplorer.SetList(servers[e.ServerIndex], await servers[e.ServerIndex].GetExplorerQueueItems(e.Item).ConfigureAwait(true),
+            MainExplorer.SetList(server, await server.GetExplorerQueueItems(e.Item).ConfigureAwait(true),
                 e.Item.type == ExplorerQueue.QueueType.User ? e.Item.id : "");
         }
 

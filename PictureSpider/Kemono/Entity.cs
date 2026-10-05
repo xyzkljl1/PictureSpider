@@ -191,6 +191,7 @@ namespace PictureSpider.Kemono
     [PrimaryKey(nameof(id), nameof(service))]
     public class User : BaseUserEx
     {
+        public override string ModuleAbbreviation => "KM";
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理
         public string id { get;set; }

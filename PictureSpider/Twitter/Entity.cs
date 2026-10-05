@@ -19,6 +19,7 @@ namespace PictureSpider.Twitter
     [Table("user")]
     public class User : BaseUserEx
     {
+        public override string ModuleAbbreviation => "X";
         [Key]
         [DbKey]
         [MaxLength(64)]

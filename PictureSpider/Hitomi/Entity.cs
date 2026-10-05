@@ -62,6 +62,7 @@ namespace PictureSpider.Hitomi
     [Table("Users")]
     public class User : BaseUserEx
     {
+        public override string ModuleAbbreviation => "HT";
         //Hitomi.la以用户名作id
         [Key]
         [DbKey]

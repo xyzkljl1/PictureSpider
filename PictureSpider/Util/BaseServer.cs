@@ -69,6 +69,7 @@ namespace PictureSpider
             new_index = -1;
             new_sub_index = -1;
         }
+        public virtual bool UsesTripleBookmark(ExplorerFileBase file) { return tripleBookmarkState; }
         public virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual Task SetBookmarkEach(ExplorerFileBase file, int page) { return Task.CompletedTask; }
@@ -77,6 +78,11 @@ namespace PictureSpider
         public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }
         public virtual Dictionary<string, string> GetAllTagsDesc() { return new Dictionary<string, string>(); }
         public virtual Task UpdateTagStatus(string tag,TagStatus status) { return Task.CompletedTask; }
+        // 联合队列通过当前图片确定操作上下文，普通模块沿用原有接口。
+        public virtual BaseUser GetUserById(string id, ExplorerFileBase file) { return GetUserById(id); }
+        public virtual Dictionary<string, TagStatus> GetAllTagsStatus(ExplorerFileBase file) { return GetAllTagsStatus(); }
+        public virtual Dictionary<string, string> GetAllTagsDesc(ExplorerFileBase file) { return GetAllTagsDesc(); }
+        public virtual Task UpdateTagStatus(string tag, TagStatus status, ExplorerFileBase file) { return UpdateTagStatus(tag, status); }
         public virtual void Log(string text)
         {
             Console.WriteLine($"{logPrefix} {DateTime.Now.ToString("MM/dd-HH:mm:ss")} {text}");

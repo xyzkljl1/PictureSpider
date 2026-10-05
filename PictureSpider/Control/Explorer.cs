@@ -47,6 +47,8 @@ namespace PictureSpider
         private int sub_index = 0;
         private Image empty_image;
         public BaseServer server;
+        public event EventHandler CurrentFileChanged;
+        public ExplorerFileBase CurrentFile => file_list.Count > 0 ? file_list[index] : null;
         private Timer timer = new Timer();
         private bool playing = false;
 
@@ -155,6 +157,7 @@ namespace PictureSpider
             else
             {
                 index = sub_index = 0;
+                CurrentFileChanged?.Invoke(this, EventArgs.Empty);
                 this.NotifyChangeRange<string>(new List<string> { "IdText", "DescText", "TotalPageText" });
                 this.NotifyChange<string>("UserId");
                 this.NotifyChange<List<string>>("Tags");
@@ -422,6 +425,7 @@ namespace PictureSpider
             sub_index = j;
             if (index_changed || force_update)
             {
+                CurrentFileChanged?.Invoke(this, EventArgs.Empty);
                 this.NotifyChangeRange<string>(new List<string> { "IdText", "DescText", "TotalPageText" });
                 this.NotifyChange<string>("UserId");
                 this.NotifyChange<List<string>>("Tags");
@@ -519,7 +523,7 @@ namespace PictureSpider
         }
         private async Task SwitchBookmarkStatusImpLeftClick(ExplorerFileBase illust)
         {
-            if (server.tripleBookmarkState)
+            if (server.UsesTripleBookmark(illust))
             {
                 if (!illust.bookmarked)//0->1
                     illust.bookmarked = true;

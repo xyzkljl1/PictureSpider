@@ -19,6 +19,7 @@ namespace PictureSpider
             set => SetTags(value);
         }
         private BaseServer server;
+        private ExplorerFileBase currentFile;
         private Dictionary<string, TagStatus> tagsStatus;
         private Dictionary<string, string>    tagsDesc;
         private bool blockSignal = false;
@@ -39,11 +40,15 @@ namespace PictureSpider
             base.WrapContents = false;
         }
 
-        public void SetClient(BaseServer _client)
+        public void SetClient(BaseServer _client, ExplorerFileBase file = null)
         {
+            bool sameContext = ReferenceEquals(server, _client) && currentFile?.GetType() == file?.GetType();
+            currentFile = file;
+            if (sameContext)
+                return;
             server = _client;
-            tagsStatus = Task.Run(server.GetAllTagsStatus).ConfigureAwait(false).GetAwaiter().GetResult();
-            tagsDesc = Task.Run(server.GetAllTagsDesc).ConfigureAwait(false).GetAwaiter().GetResult();
+            tagsStatus = Task.Run(() => server.GetAllTagsStatus(file)).ConfigureAwait(false).GetAwaiter().GetResult();
+            tagsDesc = Task.Run(() => server.GetAllTagsDesc(file)).ConfigureAwait(false).GetAwaiter().GetResult();
         }
         private void SetTags(List<string> tags)
         {
@@ -106,15 +111,11 @@ namespace PictureSpider
             if (text.Contains('`'))
                 text = text.Substring(0,text.IndexOf('`'));
             var new_status = CheckState2TagStatus[((CheckBox)sender).CheckState];
-            if (!tagsStatus.ContainsKey(text))
+            if (!tagsStatus.TryGetValue(text, out var status) || status != new_status)
             {
-                await server.UpdateTagStatus(text, new_status);
-                tagsStatus.Add(text, new_status);
-            }
-            else if(tagsStatus[text]!= new_status)
-            {
-                await server.UpdateTagStatus(text, new_status);
-                tagsStatus[text] = new_status;
+                var currentTagsStatus = tagsStatus;
+                await server.UpdateTagStatus(text, new_status, currentFile);
+                currentTagsStatus[text] = new_status;
             }
             await Task.CompletedTask;
         }

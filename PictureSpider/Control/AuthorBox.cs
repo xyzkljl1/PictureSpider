@@ -22,6 +22,7 @@ namespace PictureSpider
         }
         private BaseUser user = null;
         private BaseServer server;
+        private ExplorerFileBase currentFile;
         private Boolean frozen = false;
         private static readonly Dictionary<CheckState, String> CheckState2Text = new Dictionary<CheckState, String> {
             { CheckState.Checked, "已关注" }, {  CheckState.Indeterminate, "已入列"  }, { CheckState.Unchecked, "未关注" } };
@@ -32,19 +33,21 @@ namespace PictureSpider
             followCheckBox.CheckStateChanged += OnCheckedChange;
         }
 
-        public void SetClient(BaseServer _server)
+        public void SetClient(BaseServer _server, ExplorerFileBase file = null)
         {
             server = _server;
+            currentFile = file;
         }
 
         private void UpdateByUserId(string userId)
         {
             frozen = true;
-            user = !string.IsNullOrEmpty(userId)&&server!=null ? server.GetUserById(userId) : null;
+            user = !string.IsNullOrEmpty(userId)&&server!=null ? server.GetUserById(userId, currentFile) : null;
             followCheckBox.Enabled = user != null;
             if(user!=null)
             {
-                nameLabel.Text = user.displayText;
+                nameLabel.Text = string.IsNullOrEmpty(user.ModuleAbbreviation)
+                    ? user.displayText : $"[{user.ModuleAbbreviation}] {user.displayText}";
                 if (user.followed)
                     followCheckBox.CheckState = CheckState.Checked;
                 else if (user.queued)

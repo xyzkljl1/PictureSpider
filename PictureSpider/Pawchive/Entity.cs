@@ -221,6 +221,7 @@ namespace PictureSpider.Pawchive
     [PrimaryKey(nameof(id), nameof(service))]
     public class User : BaseUserEx
     {
+        public override string ModuleAbbreviation => "PW";
         public enum DownloadExternalWorkType
         {
             None=0,

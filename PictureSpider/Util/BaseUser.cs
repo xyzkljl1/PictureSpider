@@ -24,6 +24,8 @@ namespace PictureSpider
 
     public class BaseUser
     {
+        [NotMapped]
+        public virtual string ModuleAbbreviation => "";
         [Required]
         //[DatabaseGenerated(DatabaseGeneratedOption.Identity)][DefaultValue("123")]
         //直接[DefualtValue]并没有卵用，参考https://stackoverflow.com/questions/19554050/entity-framework-6-code-first-default-value/34894274

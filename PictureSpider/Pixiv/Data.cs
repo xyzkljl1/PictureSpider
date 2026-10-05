@@ -10,6 +10,7 @@ namespace PictureSpider.Pixiv
 {
     public class User : BaseUser
     {
+        public override string ModuleAbbreviation => "PX";
         //Original Data
         public int userId;
         public string userName;
