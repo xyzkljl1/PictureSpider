@@ -45,7 +45,8 @@ namespace PictureSpider.AuthorHub
             try
             {
                 using var db = new Database { ConnStr = connectStr, ReadOnly = true };
-                authors = await db.Authors.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).ToListAsync();
+                authors = await db.Authors.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
+                    .Select(x => new Author { Id = x.Id, Name = x.Name }).ToListAsync();
                 sources = await db.AuthorSources.AsNoTracking().ToListAsync();
             }
             catch (Exception ex) when (ex is MySqlException

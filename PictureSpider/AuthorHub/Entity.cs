@@ -13,6 +13,7 @@ namespace PictureSpider.AuthorHub
     {
         public long Id { get; set; }
         public string Name { get; set; } = "";
+        public string StorageName { get; set; } = "";
     }
 
     public class AuthorSource
