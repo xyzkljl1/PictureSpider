@@ -233,6 +233,7 @@ namespace PictureSpider.Pawchive
         public string id { get;set; }
         public string service { get; set; }
         //public string relation_id { get; set; }//用途不明
+        public string AuthorStorageName { get; set; }
         public DownloadExternalWorkType dowloadExternalWorks { get; set; } = DownloadExternalWorkType.None;
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;

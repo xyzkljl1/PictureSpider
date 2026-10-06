@@ -195,7 +195,7 @@ namespace PictureSpider.Pixiv
         }
         public async Task<User> GetUserByIllustId(int illustId)
         {   //这里一定能找到user
-            return (await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where userId in (select userId from illust where id={0})", illustId),
+            return (await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where userId in (select userId from illust where id={0})", illustId),
                         ReadUser))[0];
         }
         public async Task<int> GetQueueUpdateInterval()
@@ -210,7 +210,7 @@ namespace PictureSpider.Pixiv
         }
         public User GetUserByIdSync(int userId)
         {
-            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued,`invalid` from user where userId ={0}", userId),
+            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where userId ={0}", userId),
                     ReadUser);
             if (ret != null && ret.Count > 0)
                 return ret.First();
@@ -218,22 +218,22 @@ namespace PictureSpider.Pixiv
         }
         public async Task<List<User>> GetFollowedUser(bool followed=true, bool validOnly=false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where followed={0}{1};",followed,validOnly? " and `invalid`=false" : ""),
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where followed={0}{1};",followed,validOnly? " and `invalid`=false" : ""),
                        ReadUser);
         }
         public async Task<List<User>> GetQueuedUser(bool validOnly=false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where queued=true{0};", validOnly ? " and `invalid`=false" : ""),
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where queued=true{0};", validOnly ? " and `invalid`=false" : ""),
                        ReadUser);
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
                        ReadUser);
         }
         public async Task<List<User>> GetQueuedOrFollowedUserStatusUpdateBatch(int count)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid` from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0};", count),
+            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0};", count),
                        ReadUser);
         }
 
@@ -243,7 +243,10 @@ namespace PictureSpider.Pixiv
                             reader.GetString(1),
                             reader.GetBoolean(2),
                             reader.GetBoolean(3),
-                            reader.GetBoolean(4));
+                            reader.GetBoolean(4))
+            {
+                AuthorStorageName = reader.IsDBNull(5) ? null : reader.GetString(5)
+            };
         }
 
         public void UpdateTagStatusSync(string tag, TagStatus followed)

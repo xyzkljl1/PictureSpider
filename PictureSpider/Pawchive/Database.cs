@@ -21,6 +21,11 @@ namespace PictureSpider.Pawchive
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            // 跨库外键在迁移中建立，这里只映射本库字段。
+            modelBuilder.Entity<User>().Property(x => x.AuthorStorageName)
+                .HasMaxLength(128).HasCharSet("utf8mb4")
+                .UseCollation("utf8mb4_0900_as_ci");
+            modelBuilder.Entity<User>().HasIndex(x => x.AuthorStorageName);
             modelBuilder.Entity<User>().Property(x => x.downloadCover).HasDefaultValue(true);
             modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()

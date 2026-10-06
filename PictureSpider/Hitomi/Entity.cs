@@ -67,6 +67,7 @@ namespace PictureSpider.Hitomi
         [Key]
         [DbKey]
         public string name { get; set; }
+        public string AuthorStorageName { get; set; }
         //一对多外键，需要virtual ICollection
         public virtual ICollection<IllustGroup> illustGroups { get; set; }
 

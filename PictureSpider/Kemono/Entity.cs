@@ -197,6 +197,7 @@ namespace PictureSpider.Kemono
         public string id { get;set; }
         public string service { get; set; }
         //public string relation_id { get; set; }//用途不明
+        public string AuthorStorageName { get; set; }
         public bool dowloadExternalWorks { get; set; } = false;//未实现
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;

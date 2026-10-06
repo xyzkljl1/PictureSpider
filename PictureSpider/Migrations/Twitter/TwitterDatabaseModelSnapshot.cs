@@ -138,7 +138,7 @@ namespace PictureSpider.Migrations.Twitter
                         .HasColumnType("varchar(64)");
 
                     b.Property<DateTime>("created_at")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetime");
 
                     b.Property<string>("full_text")
                         .HasColumnType("text");
@@ -162,6 +162,12 @@ namespace PictureSpider.Migrations.Twitter
 
             modelBuilder.Entity("PictureSpider.Twitter.User", b =>
                 {
+                    b.Property<string>("AuthorStorageName")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .UseCollation("utf8mb4_0900_as_ci")
+                        .HasAnnotation("MySql:CharSet", "utf8mb4");
+
                     b.Property<string>("id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
@@ -199,6 +205,8 @@ namespace PictureSpider.Migrations.Twitter
 
                     b.HasIndex("name")
                         .IsUnique();
+
+                    b.HasIndex("AuthorStorageName");
 
                     b.ToTable("user");
                 });

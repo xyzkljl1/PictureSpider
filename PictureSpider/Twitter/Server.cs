@@ -388,6 +388,7 @@ namespace PictureSpider.Twitter
                 remoteUser.queued = existingByName.queued;
                 remoteUser.api_latest_tweet_id = existingByName.api_latest_tweet_id;
                 remoteUser.search_latest_tweet_id = existingByName.search_latest_tweet_id;
+                remoteUser.AuthorStorageName = existingByName.AuthorStorageName;
                 remoteUser.invalid = false;
                 database.Users.Remove(existingByName);
                 await database.SaveChangesAsync();

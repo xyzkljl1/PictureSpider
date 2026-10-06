@@ -21,6 +21,11 @@ namespace PictureSpider.Hitomi
                 .WithMany(e => e.illusts)
                 .OnDelete(DeleteBehavior.Cascade);
             base.OnModelCreating(modelBuilder);
+            // 跨库外键在迁移中建立，这里只映射本库字段。
+            modelBuilder.Entity<User>().Property(x => x.AuthorStorageName)
+                .HasMaxLength(128).HasCharSet("utf8mb4")
+                .UseCollation("utf8mb4_0900_as_ci");
+            modelBuilder.Entity<User>().HasIndex(x => x.AuthorStorageName);
         }
         public DbSet<Illust> Illusts { get; set; }
         public DbSet<IllustGroup> IllustGroups { get; set; }

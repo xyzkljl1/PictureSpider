@@ -66,6 +66,12 @@ namespace PictureSpider.Migrations.Pawchive
 
             modelBuilder.Entity("PictureSpider.Pawchive.User", b =>
                 {
+                    b.Property<string>("AuthorStorageName")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .UseCollation("utf8mb4_0900_as_ci")
+                        .HasAnnotation("MySql:CharSet", "utf8mb4");
+
                     b.Property<string>("id")
                         .HasColumnType("varchar(95)");
 
@@ -112,6 +118,8 @@ namespace PictureSpider.Migrations.Pawchive
                         .HasColumnType("tinyint(1)");
 
                     b.HasKey("id", "service");
+
+                    b.HasIndex("AuthorStorageName");
 
                     b.ToTable("Users");
                 });
