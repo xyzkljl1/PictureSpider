@@ -122,19 +122,24 @@ namespace PictureSpider
         }
         public int CopyFile(string src,string dest)
         {
+            if (!File.Exists(src))
+                return 0;
+            var tmp = src + ".copying";
             try
             {
-                if (File.Exists(src))
-                {
-                    if(!Directory.Exists(Path.GetDirectoryName(dest)))
-                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                    File.Copy(src, dest, true);
-                    return 1;
-                }
+                if(!Directory.Exists(Path.GetDirectoryName(dest)))
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                File.Copy(src, tmp, true);
+                File.Move(tmp, dest, true);
+                return 1;
             }
             catch (Exception ex)
             {
                 Log($"Fail to copy {src} to {dest}:{ex.Message}");
+            }
+            finally
+            {
+                DeleteFile(tmp);
             }
             return 0;
         }
