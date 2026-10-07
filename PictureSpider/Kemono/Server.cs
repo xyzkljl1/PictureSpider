@@ -85,8 +85,8 @@ namespace PictureSpider.Kemono
 #if DEBUG
             _ = Task.Run(() => RunSchedule(false));
 #else
-            LogError("Kemono原图服务器似乎有问题，暂停Fetch，只执行UI待处理数据库操作");
-            _ = Task.Run(() => RunSchedule(false));
+            LogError("Kemono原图服务器似乎有问题，暂停抓取和下载，只执行本地同步及UI待处理数据库操作");
+            _ = Task.Run(() => RunSchedule(true));
 #endif
             return Task.CompletedTask;
         }
@@ -997,6 +997,7 @@ namespace PictureSpider.Kemono
         }
         private async Task RunSchedule(bool enableScheduleTasks)
         {
+#if false
             //和pixiv不同，请求次数很少，除了下载图片不需要使用队列
             //由于hitomi不提供浏览收藏等数据，通过tag或搜索获得的作品良莠不齐，因此只做关注作者相关功能，不做随机浏览队列
             int last_daily_task = DateTime.Now.Day;
@@ -1025,6 +1026,17 @@ namespace PictureSpider.Kemono
                 },
                 new TimeSpan(0, 30, 0),
                 enableScheduleTasks);
+#else
+            await RunPendingAndScheduleLoop(
+                ApplyPendingUiOperations,
+                () =>
+                {
+                    SyncLocalFile();
+                    return Task.CompletedTask;
+                },
+                new TimeSpan(0, 30, 0),
+                enableScheduleTasks);
+#endif
         }
         public override async Task<bool> ListenerUtil_FollowUser(string url)
         {
