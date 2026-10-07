@@ -843,24 +843,33 @@ namespace PictureSpider.Twitter
 
         private async Task SyncBookmarkDirectory()
         {
-            var private_files = new HashSet<string>();
+            var users = await database.Users.ToDictionaryAsync(user => user.id);
+            var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_private) };
+            foreach (var user in users.Values.Where(user => user.AuthorStorageName != null))
+                favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, user.AuthorStorageName, "twitter"));
+            var private_files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var media in await database.GetBookmarkedMedia())
             {
-                var dest = Path.Combine(download_dir_private, media.file_name);
-                var tmp = Path.Combine(download_dir_private, "_tmp");
+                var storageName = users.GetValueOrDefault(media.user_id)?.AuthorStorageName;
+                var favDirectory = storageName == null ? download_dir_private : Path.Combine(download_dir_unified_fav, storageName, "twitter");
+                var dest = Path.GetFullPath(Path.Combine(favDirectory, media.file_name));
+                var tmp = Path.Combine(favDirectory, "_tmp");
                 var src = Path.Combine(download_dir_tmp, media.file_name);
                 if (!File.Exists(dest) && File.Exists(src))
                     try
                     {
+                        Directory.CreateDirectory(favDirectory);
                         File.Copy(src, tmp, true);
                         File.Move(tmp, dest, true);
                     }
                     catch (IOException) { }
-                private_files.Add(media.file_name);
+                private_files.Add(dest);
             }
-            foreach (var file in Directory.GetFiles(download_dir_private, "*.*"))
-                if (!private_files.Contains(Path.GetFileName(file)))
-                    File.Delete(file);
+            foreach (var dir in favoriteDirectories)
+                if (Directory.Exists(dir))
+                    foreach (var file in Directory.GetFiles(dir, "*.*"))
+                        if (!private_files.Contains(file))
+                            File.Delete(file);
         }
 
         private async Task LoadAuthAsync()

@@ -66,6 +66,8 @@ namespace PictureSpider.Kemono
         {
             get
             {
+                if (GetGroup.user.AuthorStorageName != null)
+                    return $"{GetGroup.user.AuthorStorageName}/kemono/{service}/{GetGroup.user.id}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
                 return $"{GetGroup.user.displayText}/{service}/{GetGroup.id}/{index}_{Path.GetFileName(name)}";
             }
         }

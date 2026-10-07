@@ -838,9 +838,13 @@ namespace PictureSpider.Kemono
             database.SaveChanges();
             //整理Fav文件夹
             {
-                //.ToList()以释放数据库连接
-                //GetFullPath以统一斜杠格式
-                var existedFiles = Directory.GetFiles(Path.GetFullPath(download_dir_fav),"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
+                var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
+                foreach (var user in database.Users.ToList().Where(x => x.AuthorStorageName != null))
+                    favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, user.AuthorStorageName, "kemono"));
+                var existedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        existedFiles.UnionWith(Directory.GetFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }));
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
@@ -848,8 +852,9 @@ namespace PictureSpider.Kemono
                     foreach (var illust in illustGroup.works)
                         if (!illust.Dettached) // 一个group中可能同时存在图片和dettach类型
                         {
+                            var favDirectory = illust.GetGroup.user.AuthorStorageName == null ? download_dir_fav : download_dir_unified_fav;
                             var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.TmpSubPath}");
-                            var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
+                            var fav_path = Path.GetFullPath(Path.Combine(favDirectory, illust.FavSubPath));
                             if (!illust.excluded)
                             {
                                 if (existedFiles.Contains(fav_path))
@@ -860,7 +865,9 @@ namespace PictureSpider.Kemono
                         }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
                     DeleteFile(file);
-                Util.ClearEmptyFolders(download_dir_fav);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        Util.ClearEmptyFolders(dir);
             }
             //清理tmp文件夹
             {
