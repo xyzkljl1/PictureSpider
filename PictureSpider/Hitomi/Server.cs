@@ -200,18 +200,26 @@ namespace PictureSpider.Hitomi
             }
             //整理Fav文件夹
             {
-                //.ToList()以释放数据库连接
-                var existedFiles =Directory.GetFiles(download_dir_fav,"*",new EnumerationOptions { RecurseSubdirectories=true}).Select(x=> Path.GetFullPath(x)).ToHashSet<string>();
+                var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
+                foreach (var user in database.Users.ToList().Where(x => x.AuthorStorageName != null))
+                    favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, user.AuthorStorageName, "hitomi"));
+                var existedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        existedFiles.UnionWith(Directory.GetFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }));
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fav
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
+                    var favDirectory = illustGroup.user.AuthorStorageName == null
+                        ? Path.Combine(download_dir_fav, illustGroup.user.displayText)
+                        : Path.Combine(download_dir_unified_fav, illustGroup.user.AuthorStorageName, "hitomi");
                     foreach (var illust in illustGroup.illusts)
                     {
                         var file_name = $"{illust.fileName}{illust.ext}";
                         var tmp_path = Path.GetFullPath($"{download_dir_tmp}/{illust.fileName}{illust.ext}");
-                        var fav_path = Path.GetFullPath($"{download_dir_fav}/{illustGroup.user.displayText}/{illust.fileName}{illust.ext}");//按作者分目录
+                        var fav_path = Path.GetFullPath(Path.Combine(favDirectory, file_name));
                         if (!illust.excluded)
                         {
                             if (existedFiles.Contains(fav_path))//从existedFiles中移除
@@ -223,7 +231,9 @@ namespace PictureSpider.Hitomi
                 }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
                     DeleteFile(file);
-                Util.ClearEmptyFolders(download_dir_fav);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        Util.ClearEmptyFolders(dir);
             }
             //清理tmp文件夹
             {
