@@ -39,7 +39,7 @@ namespace PictureSpider.LocalSingleFile
         private string FavDir;
         private List<string> TmpDirs;
         public static HashSet<string> valid_exts = new HashSet<string>{".jpg",".png",".webp",".gif", ".jpeg" };
-        public Server(Config config):base(config.LSFConnectStr)
+        public Server(Config config):base(config, config.LSFConnectStr)
         {
             logPrefix = "L";
             FavDir = config.LSFFavDir;

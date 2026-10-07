@@ -70,7 +70,7 @@ namespace PictureSpider.Telegram
         private static readonly object tdLogConfigLock = new();
         private static bool tdLogConfigured;
         //private static readonly ManualResetEventSlim ReadyToAuthenticate = new();
-        public Server(Config config):base(config.TelegramConnectStr)
+        public Server(Config config):base(config, config.TelegramConnectStr)
         {
             base.logPrefix = "G";
             ConfigureTdLibLogging();

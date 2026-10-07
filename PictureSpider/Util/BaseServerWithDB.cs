@@ -29,7 +29,7 @@ namespace PictureSpider
             //暂时回退
             get => databaseUI;
         }
-        protected BaseServerWithDB(String connStr="")
+        protected BaseServerWithDB(Config config, String connStr=""): base(config)
         {
             ResetDb(connStr);
         }

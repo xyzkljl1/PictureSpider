@@ -14,13 +14,13 @@ namespace PictureSpider.AuthorHub
         private readonly string connectStr;
         private readonly Dictionary<SourceModule, BaseServer> sourceServers;
 
-        public Server(string connectionString, Dictionary<SourceModule, BaseServer> servers)
+        public Server(Config config, Dictionary<SourceModule, BaseServer> servers): base(config)
         {
             logPrefix = "AuthorHub";
             sourceServers = new Dictionary<SourceModule, BaseServer>(servers);
             try
             {
-                var settings = new MySqlConnectionStringBuilder(connectionString);
+                var settings = new MySqlConnectionStringBuilder(config.AuthorHubConnectStr);
                 if (string.IsNullOrWhiteSpace(settings.Database))
                 {
                     LogError("AuthorHubConnectStr must specify the AuthorHub database.");

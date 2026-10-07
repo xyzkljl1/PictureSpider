@@ -44,7 +44,7 @@ namespace PictureSpider.Twitter
         private string userByScreenNameQueryId = "KybxDj9RrADIITXlGG8kpw";
         private string userMediaQueryId = "TwLiEVUhRjjjKVc98IT0TQ";
 
-        public Server(Config config) : base(config.TwitterConnectStr)
+        public Server(Config config) : base(config, config.TwitterConnectStr)
         {
             this.config = config;
             logPrefix = "X";

@@ -42,7 +42,7 @@ namespace PictureSpider.Pawchive
         GoogleDriveDownloadQueue googleDriveDownloader;
         HttpZipEntriesReader httpZipEntriesReader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
-        public Server(Config config):base(config.PawchiveConnectStr)
+        public Server(Config config):base(config, config.PawchiveConnectStr)
         {
             logPrefix = "Paw";
 
@@ -501,17 +501,25 @@ namespace PictureSpider.Pawchive
                     Log($"Keep missing post with protected records: {illustGroup.service}/{illustGroup.id}");
                     return;
                 }
+                var storageName = illustGroup.user.AuthorStorageName;
                 var directories = new[]
                 {
                     Path.Combine(download_dir_tmp, illustGroup.service, illustGroup.user.id, illustGroup.id),
-                    Path.Combine(download_dir_fav, illustGroup.user.displayText, illustGroup.service, illustGroup.id)
+                    storageName == null
+                        ? Path.Combine(download_dir_fav, illustGroup.user.displayText, illustGroup.service, illustGroup.id)
+                        : Path.Combine(download_dir_unified_fav, storageName, "pawchive", illustGroup.service, illustGroup.user.id, illustGroup.id)
                 };
-                var paths = allWorks.SelectMany(x => new[]
+                var paths = allWorks.SelectMany(work =>
                 {
-                    Path.Combine(download_dir_tmp, x.TmpSubPath),
-                    Path.Combine(download_dir_fav, x.FavSubPath),
-                    Path.Combine(download_dir_tmp, Work.GetPreviewPath(x.TmpSubPath)),
-                    Path.Combine(download_dir_fav, Work.GetPreviewPath(x.FavSubPath))
+                    var group = work is Work attachment ? attachment.GetGroup : ((ExternalWork)work).workGroup.ParentGroup;
+                    var favDirectory = group.user.AuthorStorageName == null ? download_dir_fav : download_dir_unified_fav;
+                    return new[]
+                    {
+                        Path.Combine(download_dir_tmp, work.TmpSubPath),
+                        Path.Combine(favDirectory, work.FavSubPath),
+                        Path.Combine(download_dir_tmp, Work.GetPreviewPath(work.TmpSubPath)),
+                        Path.Combine(favDirectory, Work.GetPreviewPath(work.FavSubPath))
+                    };
                 });
                 if (directories.Any(x => Directory.Exists(x) && Directory.EnumerateFiles(x, "*", SearchOption.AllDirectories).Any())
                     || paths.SelectMany(x => new[] { x, x + ".part", x + ".aria2", x + ".part.aria2" }).Any(File.Exists))
@@ -813,9 +821,13 @@ namespace PictureSpider.Pawchive
             database.SaveChanges();
             //整理Fav文件夹
             {
-                //.ToList()以释放数据库连接
-                //GetFullPath以统一斜杠格式
-                var existedFiles = Directory.GetFiles(Path.GetFullPath(download_dir_fav),"*",new EnumerationOptions {RecurseSubdirectories=true}).ToHashSet<string>();
+                var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
+                foreach (var user in database.Users.Where(x => x.AuthorStorageName != null).ToList())
+                    favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, user.AuthorStorageName, "pawchive"));
+                var existedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        existedFiles.UnionWith(Directory.GetFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }));
                 var illustGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.fav && !illustGroup.isNonImage
                                     select illustGroup).ToList();
@@ -823,8 +835,9 @@ namespace PictureSpider.Pawchive
                     foreach (var illust in illustGroup.works)
                         if (!illust.Dettached) // 一个group中可能同时存在图片和dettach类型
                         {
+                            var favDirectory = illust.GetGroup.user.AuthorStorageName == null ? download_dir_fav : download_dir_unified_fav;
                             var tmp_path = illust.GetLocalPath(download_dir_tmp);
-                            var fav_path = Path.GetFullPath($"{download_dir_fav}/{illust.FavSubPath}");
+                            var fav_path = Path.GetFullPath(Path.Combine(favDirectory, illust.FavSubPath));
                             if (!illust.excluded)
                             {
                                 var preview_path = Work.GetPreviewPath(fav_path);
@@ -838,7 +851,9 @@ namespace PictureSpider.Pawchive
                         }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
                     DeleteFile(file);
-                Util.ClearEmptyFolders(download_dir_fav);
+                foreach (var dir in favoriteDirectories)
+                    if (Directory.Exists(dir))
+                        Util.ClearEmptyFolders(dir);
             }
             //清理tmp文件夹
             {
@@ -1008,6 +1023,7 @@ namespace PictureSpider.Pawchive
                     if (DateTime.Now.Day != last_daily_task)//每日一次
                     {
                         last_daily_task = DateTime.Now.Day;
+                        SyncLocalFile();
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
                         if (DateTime.Now.DayOfWeek == DayOfWeek.Monday) //每周一次
@@ -1090,11 +1106,7 @@ namespace PictureSpider.Pawchive
                         continue;
                     }
                 }
-                catch (HttpRequestException e)
-                {
-                    Log($"Can't check image URLs {groupKey}: {e.Message}");
-                }
-                catch (TaskCanceledException e)
+                catch (Exception e) when (e is HttpRequestException || e is TaskCanceledException)
                 {
                     Log($"Can't check image URLs {groupKey}: {e.Message}");
                 }

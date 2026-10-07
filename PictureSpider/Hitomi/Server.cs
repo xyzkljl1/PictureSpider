@@ -39,7 +39,7 @@ namespace PictureSpider.Hitomi
         private string download_dir_fav = "";
         Aria2DownloadQueue downloader;
         private List<int> downloadQueue = new List<int>();//计划下载的illustid,线程不安全,只在RunSchedule里使用
-        public Server(Config config): base(config.HitomiConnectStr)
+        public Server(Config config): base(config, config.HitomiConnectStr)
         {
             logPrefix = "H";
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;

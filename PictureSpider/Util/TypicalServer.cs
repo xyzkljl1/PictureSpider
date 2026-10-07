@@ -35,7 +35,7 @@ namespace PictureSpider
             get => databaseSchedule;
         }
 
-        protected TypicalServer(String proxy,Config config): base()
+        protected TypicalServer(String proxy,Config config): base(config)
         {
             {
                 var name = this.GetType().Namespace;

@@ -12,6 +12,11 @@ namespace PictureSpider
 {
     public abstract class BaseServer
     {
+        protected string download_dir_unified_fav;
+        protected BaseServer(Config config)
+        {
+            download_dir_unified_fav = Path.Combine(Path.GetFullPath(config.AuthorHubDownloadDir), "fav");
+        }
         public bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
         public string logPrefix
         {

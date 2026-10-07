@@ -22,7 +22,7 @@ namespace PictureSpider.Manhuagui
         private DateTime requestsBlockedUntil;
         private readonly string[] imageHosts = { "i", "eu", "eu1", "eu2", "us", "us1", "us2", "us3" };
 
-        public Server(Config config) : base(config.ManhuaguiConnectStr)
+        public Server(Config config) : base(config, config.ManhuaguiConnectStr)
         {
             logPrefix = "MG";
             downloadDir = config.LMangaRootDir;

@@ -74,7 +74,7 @@ namespace PictureSpider.Pixiv
          * 目前使用的是 https://github.com/URenko/Accesser 在本地的代理,端口号1200(在Accesser目录下config.toml配置)
          */
         // SNI代理有问题，暂时换回常规代理
-        public Server(Config config)
+        public Server(Config config): base(config)
         {
             base.tripleBookmarkState = true;
             base.logPrefix = "P";

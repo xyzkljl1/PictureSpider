@@ -41,7 +41,7 @@ namespace PictureSpider.Kemono
         MegaApiClient mega;//从downloader借的mega client，用于访问
         GoogleDriveDownloadQueue googleDriveDownloader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
-        public Server(Config config):base(config.KemonoConnectStr)
+        public Server(Config config):base(config, config.KemonoConnectStr)
         {
             logPrefix = "K";
 

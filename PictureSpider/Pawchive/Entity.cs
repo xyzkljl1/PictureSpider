@@ -65,6 +65,8 @@ namespace PictureSpider.Pawchive
             get
             {
                 var group = GetGroup;
+                if (group.user.AuthorStorageName != null)
+                    return $"{group.user.AuthorStorageName}/pawchive/{service}/{group.user.id}/{group.parentId ?? group.id}/{index}_{Path.GetFileName(name)}";
                 return $"{group.user.displayText}/{service}/{group.parentId ?? group.id}/{index}_{Path.GetFileName(name)}";
             }
         }
@@ -145,6 +147,8 @@ namespace PictureSpider.Pawchive
         {
             get
             {
+                if (workGroup.user.AuthorStorageName != null)
+                    return $"{workGroup.user.AuthorStorageName}/pawchive/{service}/{workGroup.user.id}/{workGroup.parentId ?? workGroup.id}/{index}_{Path.GetFileName(name)}";
                 var group = workGroup.ParentGroup;
                 if(Ext.IsVideo())
                     return $"{group.user.displayText}/{service}_{group.id}_{index}_{Path.GetFileName(name)}";

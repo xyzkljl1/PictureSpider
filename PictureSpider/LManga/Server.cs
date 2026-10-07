@@ -10,7 +10,7 @@ namespace PictureSpider.LManga
     {
         private readonly string rootDir;
 
-        public Server(Config config)
+        public Server(Config config): base(config)
         {
             logPrefix = "LM";
             rootDir = config.LMangaRootDir;

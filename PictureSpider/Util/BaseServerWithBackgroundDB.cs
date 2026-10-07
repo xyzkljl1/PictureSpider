@@ -16,7 +16,7 @@ namespace PictureSpider
     {
         protected override DatabaseType database => databaseSchedule;
 
-        protected BaseServerWithBackgroundDB(string connStr = "") : base(connStr)
+        protected BaseServerWithBackgroundDB(Config config, string connStr = "") : base(config, connStr)
         {
         }
 

@@ -53,7 +53,7 @@ namespace PictureSpider
                                 {
                                     var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer, lmangaServer, manhuaguiServer, pawchiveServer };
                                     if (!string.IsNullOrWhiteSpace(config.AuthorHubConnectStr))
-                                        commonServers.Add(new AuthorHub.Server(config.AuthorHubConnectStr,
+                                        commonServers.Add(new AuthorHub.Server(config,
                                             new Dictionary<AuthorHub.SourceModule, BaseServer>
                                             {
                                                 { AuthorHub.SourceModule.Pixiv, pixivServer },
