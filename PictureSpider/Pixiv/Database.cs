@@ -194,24 +194,23 @@ namespace PictureSpider.Pixiv
         }
         public async Task UpdateIllustBookmarked(int id,bool enable,bool is_private)
         {
-            await StandardNoneQuery("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
-                (cmd) => {
-                    cmd.Parameters.AddWithValue("@0", enable?1:0);
-                    cmd.Parameters.AddWithValue("@1", is_private ? 1:0);
-                    cmd.Parameters.AddWithValue("@2", id);
-                });
+            int ret = await Illusts.Where(x => x.id == id).ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.bookmarked, enable)
+                .SetProperty(x => x.bookmarkPrivate, is_private));
+            Console.WriteLine("Update {0} Rows", ret);
         }
         public async Task UpdateIllustBookmarkEach(int id,string bookmarkEach)
         {
-            await StandardNoneQuery("update illust set bookmarkEach=@0 where id=@1",
-                (cmd) => {
-                    cmd.Parameters.AddWithValue("@0", bookmarkEach);
-                    cmd.Parameters.AddWithValue("@1", id);
-                });
+            int ret = await Illusts.Where(x => x.id == id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.bookmarkEach, bookmarkEach));
+            Console.WriteLine("Update {0} Rows", ret);
         }
         public async Task UpdateQueue(string queue)
         {
-            await StandardNoneQuery("update status set Queue=@0,QueueUpdateTime=Now()",(cmd)=>{cmd.Parameters.AddWithValue("@0", queue); });
+            int ret = await QueueStatuses.ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Queue, queue)
+                .SetProperty(x => x.QueueUpdateTime, x => DateTime.Now));
+            Console.WriteLine("Update {0} Rows", ret);
         }
         /*
          * 注意字段里可能有引号等,不能直接用String.Format
@@ -351,15 +350,21 @@ namespace PictureSpider.Pixiv
         }
         public async Task UpdateCookie(string cookie)
         {
-            await StandardNoneQuery("update status set CookieCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", cookie); });
+            int ret = await QueueStatuses.Where(x => x.Id == "Current")
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CookieCache, cookie));
+            Console.WriteLine("Update {0} Rows", ret);
         }
         public async Task UpdateCSRFToken(string token)
         {
-            await StandardNoneQuery("update status set CSRFTokenCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", token); });
+            int ret = await QueueStatuses.Where(x => x.Id == "Current")
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CSRFTokenCache, token));
+            Console.WriteLine("Update {0} Rows", ret);
         }
         public async Task UpdateUserAgent(string userAgent)
         {
-            await StandardNoneQuery("update `status` set UserAgentCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", userAgent); });
+            int ret = await QueueStatuses.Where(x => x.Id == "Current")
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.UserAgentCache, userAgent));
+            Console.WriteLine("Update {0} Rows", ret);
         }
 
 
