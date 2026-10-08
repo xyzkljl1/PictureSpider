@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -183,10 +182,6 @@ namespace PictureSpider.Pixiv
             }
             return users;
         }
-        public async Task<User> GetUserByIllustId(int illustId)
-        {
-            return InitUsers(await Users.FromSqlRaw("select * from user where userId in (select userId from illust where id={0})", illustId).ToListAsync())[0];
-        }
         public async Task<int> GetQueueUpdateInterval()
         {
             return (await base.Database.SqlQueryRaw<int>("SELECT datediff(NOW(),QueueUpdateTime) FROM status WHERE id='Current'").ToListAsync())[0];
@@ -215,21 +210,9 @@ namespace PictureSpider.Pixiv
         {
             return InitUsers(await Users.FromSqlRaw("select * from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0}", count).ToListAsync());
         }
-        private User ReadUser(DbDataReader reader)
+        public async Task UpdateTagStatus(string tag, TagStatus followed)
         {
-            return new User(reader.GetInt32(0),
-                            reader.GetString(1),
-                            reader.GetBoolean(2),
-                            reader.GetBoolean(3),
-                            reader.GetBoolean(4))
-            {
-                AuthorStorageName = reader.IsDBNull(5) ? null : reader.GetString(5)
-            };
-        }
-
-        public void UpdateTagStatusSync(string tag, TagStatus followed)
-        {
-            StandardNoneQuerySync("insert into keyword(`word`,`type`,`status`) values(@0,'tag',@1) on duplicate key update `status`=@1",
+            await StandardNoneQuery("insert into keyword(`word`,`type`,`status`) values(@0,'tag',@1) on duplicate key update `status`=@1",
                 (cmd) => { cmd.Parameters.AddWithValue("@0", tag);
                     if (followed == TagStatus.Follow)
                         cmd.Parameters.AddWithValue("@1", "Follow");
@@ -239,22 +222,22 @@ namespace PictureSpider.Pixiv
                         cmd.Parameters.AddWithValue("@1", "None");
                 });
         }
-        public void UpdateIllustReadedSync(int id)
+        public async Task UpdateIllustReaded(int id)
         {
-            StandardNoneQuerySync("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
+            await StandardNoneQuery("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
         }
-        public void UpdateIllustBookmarkedSync(int id,bool enable,bool is_private)
+        public async Task UpdateIllustBookmarked(int id,bool enable,bool is_private)
         {
-            StandardNoneQuerySync("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
+            await StandardNoneQuery("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
                 (cmd) => {
                     cmd.Parameters.AddWithValue("@0", enable?1:0);
                     cmd.Parameters.AddWithValue("@1", is_private ? 1:0);
                     cmd.Parameters.AddWithValue("@2", id);
                 });
         }
-        public void UpdateIllustBookmarkEachSync(int id,string bookmarkEach)
+        public async Task UpdateIllustBookmarkEach(int id,string bookmarkEach)
         {
-            StandardNoneQuerySync("update illust set bookmarkEach=@0 where id=@1",
+            await StandardNoneQuery("update illust set bookmarkEach=@0 where id=@1",
                 (cmd) => {
                     cmd.Parameters.AddWithValue("@0", bookmarkEach);
                     cmd.Parameters.AddWithValue("@1", id);
@@ -323,9 +306,9 @@ namespace PictureSpider.Pixiv
                 }
             }
         }
-        public void UpdateUserSync(User user)
+        public async Task UpdateUser(User user)
         {
-            StandardNoneQuerySync("insert into user(userId,userName,followed,queued,updateTime) values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n"
+            await StandardNoneQuery("insert into user(userId,userName,followed,queued,updateTime) values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW();\n"
                 , (cmd) => {
                     cmd.Parameters.AddWithValue("@0", user.userId);
                     cmd.Parameters.AddWithValue("@1", user.userName);
@@ -400,33 +383,6 @@ namespace PictureSpider.Pixiv
                 }
             }
         }
-        public void UpdateIllustMyData(List<Illust> data)
-        {
-            using (var ts = base.Database.BeginTransaction())
-            {
-                try
-                {
-                    int affected = 0;
-                    foreach (var illust in data)
-                    {
-                        string cmdText = "update illust set readed=@13,bookmarkEach=@14,updateTime=NOW() where id=@0;\n";
-                        var cmd = new MySqlCommand(cmdText);
-                        cmd.Parameters.AddWithValue("@0", illust.id);
-                        cmd.Parameters.AddWithValue("@13", illust.readed);
-                        cmd.Parameters.AddWithValue("@14", illust.bookmarkEach);
-                        affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
-                    }
-                    ts.Commit();
-                    Console.WriteLine("Affected:" + affected);
-                }
-                catch (MySqlException e)
-                {
-                    Console.Error.WriteLine(e.Message);
-                    ts.Rollback();
-                    throw;
-                }
-            }
-        }
         public async Task UpdateCookie(string cookie)
         {
             await StandardNoneQuery("update status set CookieCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", cookie); });
@@ -446,14 +402,6 @@ namespace PictureSpider.Pixiv
             using var cmd = new MySqlCommand(cmd_text);
             add_para(cmd);
             int ret = await base.Database.ExecuteSqlRawAsync(cmd.CommandText, cmd.Parameters.Cast<object>());
-            Console.WriteLine("Update {0} Rows", ret);
-            return ret;
-        }
-        public int StandardNoneQuerySync(string cmd_text, Action<MySqlCommand> add_para)
-        {
-            using var cmd = new MySqlCommand(cmd_text);
-            add_para(cmd);
-            int ret = base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
             Console.WriteLine("Update {0} Rows", ret);
             return ret;
         }

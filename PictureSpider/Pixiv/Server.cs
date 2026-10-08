@@ -363,7 +363,7 @@ namespace PictureSpider.Pixiv
             if (operation.Kind == PendingUiOperationKind.SetTagStatus)
             {
                 if (Enum.IsDefined(typeof(TagStatus), operation.Value))
-                    database.UpdateTagStatusSync(operation.TargetKey, (TagStatus)operation.Value);
+                    await database.UpdateTagStatus(operation.TargetKey, (TagStatus)operation.Value);
                 else
                     LogError($"Invalid pending tag status: {operation.Id}");
                 return;
@@ -382,7 +382,7 @@ namespace PictureSpider.Pixiv
                 if (illust.bookmarkEach.Length != illust.pageCount)
                     illust.bookmarkEach = new string('0', illust.pageCount);
                 illust.bookmarkEach = illust.bookmarkEach.Remove(page, 1).Insert(page, operation.Value != 0 ? "1" : "0");
-                database.UpdateIllustBookmarkEachSync(illust.id, illust.bookmarkEach);
+                await database.UpdateIllustBookmarkEach(illust.id, illust.bookmarkEach);
                 return;
             }
             if (!int.TryParse(operation.TargetKey, out var id))
@@ -393,10 +393,10 @@ namespace PictureSpider.Pixiv
             switch (operation.Kind)
             {
                 case PendingUiOperationKind.SetReaded:
-                    database.UpdateIllustReadedSync(id);
+                    await database.UpdateIllustReaded(id);
                     break;
                 case PendingUiOperationKind.SetBookmarked:
-                    database.UpdateIllustBookmarkedSync(id, (operation.Value & 1) != 0, (operation.Value & 2) != 0);
+                    await database.UpdateIllustBookmarked(id, (operation.Value & 1) != 0, (operation.Value & 2) != 0);
                     break;
                 case PendingUiOperationKind.SetUserFollowOrQueue:
                 case PendingUiOperationKind.AddQueuedUser:
@@ -416,7 +416,7 @@ namespace PictureSpider.Pixiv
                         }
                         user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
                     }
-                    database.UpdateUserSync(user);
+                    await database.UpdateUser(user);
                     break;
                 default:
                     LogError($"Unsupported pending operation: {operation.Id}");
