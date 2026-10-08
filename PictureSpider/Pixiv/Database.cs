@@ -1,242 +1,216 @@
-﻿using System;
-using System.Collections;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using MySqlConnector;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PictureSpider;
-using MySql.Data.MySqlClient;
 using System.Data.Common;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PictureSpider.Pixiv
 {
-    public class Database
+    public class Database : BaseEFDatabase
     {
-        private string connect_str;
-        private Dictionary<string, TagStatus> String2TagStatus = new Dictionary<string, TagStatus> { { "Follow", TagStatus.Follow }, { "Ignore", TagStatus.Ignore }, { "None", TagStatus.None } };
+        public DbSet<Illust> Illusts { get; set; }
+        public DbSet<User> Users { get; set; }
+        public Database() { }
+        public Database(string connectStr) { ConnStr = connectStr; }
 
-        public Database(string _connect_str)
+        protected override void OnConfiguring(DbContextOptionsBuilder builder)
         {
-            connect_str = _connect_str;
+            builder.UseMySql(ConnStr, new MySqlServerVersion(new Version(8, 0, 31)));
+            builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         }
-        public async Task<List<int>> GetAllIllustId(string condition = "")
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            return await StandardQuery(String.Format("select id from illust {0}", condition),
-                        (DbDataReader reader) => { return reader.GetInt32(0); });
+            var illust = modelBuilder.Entity<Illust>();
+            illust.ToTable("illust");
+            foreach (var field in typeof(Illust).GetFields().Where(x => x.Name != "userName" && x.Name != "score" && x.Name != "debugMsg"))
+                illust.Property(field.FieldType, field.Name);
+            illust.HasKey(nameof(Illust.id));
+            illust.Property(x => x.id).ValueGeneratedNever();
+            illust.Property(x => x.tags).HasConversion(
+                value => string.Join("`", value),
+                value => value.Split('`', StringSplitOptions.None).ToList())
+                .Metadata.SetValueComparer(new ValueComparer<List<string>>(
+                    (left, right) => left.SequenceEqual(right),
+                    value => value.Aggregate(0, (hash, item) => HashCode.Combine(hash, item.GetHashCode())),
+                    value => value.ToList()));
+            // 保持原 MySql.Data 的非零布尔值、整数溢出和 TIMESTAMP 本地时间语义。
+            illust.Property(x => x.valid).HasConversion(value => value ? 1 : 0, value => value != 0).HasColumnType("int");
+            illust.Property(x => x.width).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
+            illust.Property(x => x.height).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
+            illust.Property(x => x.pageCount).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
+            illust.Property(x => x.updateTime).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
+            illust.Property(x => x.uploadDate).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
+            illust.Property(x => x.ugoiraFrames).IsRequired(false);
+
+            var user = modelBuilder.Entity<User>();
+            user.ToTable("user");
+            user.Ignore(x => x.displayId);
+            user.Ignore(x => x.displayText);
+            foreach (var field in typeof(User).GetFields())
+                user.Property(field.FieldType, field.Name);
+            user.HasKey(nameof(User.userId));
+            user.Property(x => x.userId).ValueGeneratedNever();
+            user.Property<DateTime>("updateTime").HasColumnType("timestamp");
+            user.Property(x => x.AuthorStorageName).HasMaxLength(128).IsRequired(false);
+        }
+        public Task<List<int>> GetAllIllustId(string condition = "")
+        {
+            var sql = $"select id from illust {condition}";
+            return base.Database.SqlQueryRaw<int>(sql).ToListAsync();
         }
         public async Task<int> GetIllustCount()
         {
-            return (await StandardQuery<int>("select count(id) from illust",(DbDataReader reader) => { return reader.GetInt32(0); }))[0];
+            return (await base.Database.SqlQueryRaw<int>("select count(id) from illust").ToListAsync())[0];
         }
-        public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time,float ratio=1.0f,bool reverse=false)
+        public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time, float ratio = 1.0f, bool reverse = false)
         {
-            var list=await GetAllIllustId(String.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse?"not":"",time.ToString("yyyy-MM-dd HH:mm:ss")));
+            var list = await GetAllIllustId(string.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse ? "not" : "", time.ToString("yyyy-MM-dd HH:mm:ss")));
             var ct = await GetIllustCount();
-            return new List<int>(list.Take((int)(ct * ratio)));
+            return list.Take((int)(ct * ratio)).ToList();
         }
         public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
         {
-            return await StandardQuery<Illust>("select id,updateTime,likeCount from illust",
-               (DbDataReader dataReader) => {
-                   return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")),true)
-                   {
-                       updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
-                       likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
-                   };
-               });
+            return await Illusts.Select(x => new Illust(x.id, true)
+            {
+                updateTime = x.updateTime,
+                likeCount = x.likeCount
+            }).ToListAsync();
         }
-        public async Task<List<int>> GetBookmarkIllustId(bool pub)
+        public Task<List<int>> GetBookmarkIllustId(bool pub)
         {
-            return await StandardQuery(String.Format("select id from illust where bookmarked=true and bookmarkPrivate={0}",!pub),
-                        (DbDataReader reader) => { return reader.GetInt32(0); });
+            return base.Database.SqlQueryRaw<int>("select id from illust where bookmarked=true and bookmarkPrivate={0}", !pub).ToListAsync();
         }
-        public async Task<HashSet<String>> GetBannedKeyword()
+        public async Task<HashSet<string>> GetBannedKeyword()
         {
-            return new HashSet<String>(await StandardQuery("select word from invalidkeyword",
-                        (DbDataReader reader) => { return reader.GetString(0); }));
+            return (await base.Database.SqlQueryRaw<string>("select word from invalidkeyword").ToListAsync()).ToHashSet();
         }
-        public async Task<List<int>> GetIllustIdOfQueuedOrFollowedUser()
+        public Task<List<int>> GetIllustIdOfQueuedOrFollowedUser()
         {
-            return await GetAllIllustId("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
+            return GetAllIllustId("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
         }
-        public async Task<List<Illust>> GetAllIllustFull(string condition="")//id是int，但是可以直接GetString
+        public async Task<List<Illust>> GetAllIllustFull(string condition = "")
         {
-            return await StandardQuery<Illust>(String.Format("select * from illust {0}",condition),
-               (DbDataReader dataReader) => {
-                   return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")), dataReader.GetBoolean(dataReader.GetOrdinal("valid")))
-                           {
-                               title = dataReader.GetString(dataReader.GetOrdinal("title")),
-                               description = dataReader.GetString(dataReader.GetOrdinal("description")),
-                               xRestrict = dataReader.GetInt32(dataReader.GetOrdinal("xRestrict")),
-                               tags = dataReader.GetString(dataReader.GetOrdinal("tags")).Split('`').ToList(),
-                               userId = dataReader.GetInt32(dataReader.GetOrdinal("userId")),
-                               width = dataReader.GetInt32(dataReader.GetOrdinal("width")),
-                               height = dataReader.GetInt32(dataReader.GetOrdinal("height")),
-                               pageCount = dataReader.GetInt32(dataReader.GetOrdinal("pageCount")),
-                               bookmarked = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarked")),
-                               bookmarkPrivate = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarkPrivate")),
-                               urlFormat = dataReader.GetString(dataReader.GetOrdinal("urlFormat")),
-                               urlThumbFormat = dataReader.GetString(dataReader.GetOrdinal("urlThumbFormat")),
-                               readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
-                               bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
-                               updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
-                               uploadDate = dataReader.GetDateTime(dataReader.GetOrdinal("uploadDate")),
-                               valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
-                               likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
-                               bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
-                               viewCount = dataReader.GetInt32(dataReader.GetOrdinal("viewCount")),
-                               ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
-                               ugoiraFrames = dataReader.IsDBNull(dataReader.GetOrdinal("ugoiraFrames")) ? "" : dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
-                   };
-               });
+            var sql = $"select * from illust {condition}";
+            var result = await Illusts.FromSqlRaw(sql).ToListAsync();
+            foreach (var illust in result)
+                illust.ugoiraFrames ??= "";
+            return result;
         }
-        public async Task<List<Illust>> GetIllustFullSortedByUser(int userId)//按id排序，实际等于按时间排序
-        { return await GetAllIllustFull(String.Format("where `userId`={0} order by `id` DESC", userId)); }
+        public Task<List<Illust>> GetIllustFullSortedByUser(int userId)
+        {
+            return GetAllIllustFull($"where `userId`={userId} order by `id` DESC");
+        }
         public async Task<List<Illust>> GetIllustFull(List<int> id_list)
-        {   //要保持顺序
-            var cmd=new List<String>();
-            foreach (var id in id_list)
-                cmd.Add(String.Format("select * from illust where id={0};", id));
-            return await StandardQuery(cmd,
-                        (DbDataReader dataReader) => {
-                            return new Illust(dataReader.GetInt32(dataReader.GetOrdinal("id")), dataReader.GetBoolean(dataReader.GetOrdinal("valid")))
-                            {
-                                title = dataReader.GetString(dataReader.GetOrdinal("title")),
-                                description = dataReader.GetString(dataReader.GetOrdinal("description")),
-                                xRestrict = dataReader.GetInt32(dataReader.GetOrdinal("xRestrict")),
-                                tags = dataReader.GetString(dataReader.GetOrdinal("tags")).Split('`').ToList(),
-                                userId = dataReader.GetInt32(dataReader.GetOrdinal("userId")),
-                                width = dataReader.GetInt32(dataReader.GetOrdinal("width")),
-                                height = dataReader.GetInt32(dataReader.GetOrdinal("height")),
-                                pageCount = dataReader.GetInt32(dataReader.GetOrdinal("pageCount")),
-                                bookmarked = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarked")),
-                                bookmarkPrivate = dataReader.GetBoolean(dataReader.GetOrdinal("bookmarkPrivate")),
-                                urlFormat = dataReader.GetString(dataReader.GetOrdinal("urlFormat")),
-                                urlThumbFormat = dataReader.GetString(dataReader.GetOrdinal("urlThumbFormat")),
-                                readed = dataReader.GetBoolean(dataReader.GetOrdinal("readed")),
-                                bookmarkEach = dataReader.GetString(dataReader.GetOrdinal("bookmarkEach")),
-                                updateTime = dataReader.GetDateTime(dataReader.GetOrdinal("updateTime")),
-                                uploadDate = dataReader.GetDateTime(dataReader.GetOrdinal("uploadDate")),
-                                valid = dataReader.GetBoolean(dataReader.GetOrdinal("valid")),
-                                likeCount = dataReader.GetInt32(dataReader.GetOrdinal("likeCount")),
-                                bookmarkCount = dataReader.GetInt32(dataReader.GetOrdinal("bookmarkCount")),
-                                viewCount = dataReader.GetInt32(dataReader.GetOrdinal("viewCount")),
-                                ugoiraURL = dataReader.GetString(dataReader.GetOrdinal("ugoiraURL")),
-                                ugoiraFrames = dataReader.IsDBNull(dataReader.GetOrdinal("ugoiraFrames")) ? "" : dataReader.GetString(dataReader.GetOrdinal("ugoiraFrames"))
-                            };
-                        });
-        }
-        public async Task<List<Illust>> GetAllUnreadedIllustFull()
         {
-            return await GetAllIllustFull("where `bookmarked`=0 and `readed`=0");
+            var result = new List<Illust>();
+            // UNION ALL 保留重复 ID；按输入位置排序，不依赖数据库的默认返回顺序。
+            for (int offset = 0; offset < id_list.Count; offset += 500)
+            {
+                var ids = id_list.Skip(offset).Take(500).ToList();
+                var positions = string.Join(" UNION ALL ", ids.Select((id, index) => $"SELECT {id} AS id, {index} AS position"));
+                var sql = $"SELECT illust.* FROM ({positions}) AS requested INNER JOIN illust ON illust.id=requested.id ORDER BY requested.position";
+                var batch = await Illusts.FromSqlRaw(sql).ToListAsync();
+                foreach (var illust in batch)
+                    illust.ugoiraFrames ??= "";
+                result.AddRange(batch);
+            }
+            return result;
+        }
+        public Task<List<Illust>> GetAllUnreadedIllustFull()
+        {
+            return GetAllIllustFull("where `bookmarked`=0 and `readed`=0");
         }
         public async Task<string> GetCookie()
         {
-            var ret = await StandardQuery<string>("select CookieCache from status where id=\"Current\"",
-                (DbDataReader reader) => { return reader.GetString(0); });
-            if (ret.Count == 0)
+            var result = await base.Database.SqlQueryRaw<string>("select CookieCache from status where id='Current'").ToListAsync();
+            if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
-            return ret[0];
+            return result[0];
         }
         public async Task<string> GetCSRFToken()
         {
-            var ret = await StandardQuery<string>("select CSRFTokenCache from status where id=\"Current\"",
-                (DbDataReader reader) => { return reader.GetString(0); });
-            if (ret.Count == 0)
+            var result = await base.Database.SqlQueryRaw<string>("select CSRFTokenCache from status where id='Current'").ToListAsync();
+            if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
-            return ret[0];
+            return result[0];
         }
         public async Task EnsureUserAgentCache()
         {
-            var exists = await StandardQuery<int>(@"SELECT COUNT(*)
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                    AND TABLE_NAME = 'status'
-                    AND COLUMN_NAME = 'UserAgentCache'",
-                (DbDataReader reader) => { return Convert.ToInt32(reader.GetValue(0)); });
+            var exists = await base.Database.SqlQueryRaw<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='status' AND COLUMN_NAME='UserAgentCache'").ToListAsync();
             if (exists.Count == 0 || exists[0] == 0)
-                await StandardNoneQuery("ALTER TABLE `status` ADD COLUMN UserAgentCache text COLLATE utf8mb3_bin NULL",
-                    (cmd) => { });
+                await StandardNoneQuery("ALTER TABLE `status` ADD COLUMN UserAgentCache text COLLATE utf8mb3_bin NULL", cmd => { });
         }
         public async Task<string> GetUserAgent(string fallback)
         {
-            var ret = await StandardQuery<string>("select UserAgentCache from `status` where id=\"Current\"",
-                (DbDataReader reader) =>
-                {
-                    return reader.IsDBNull(0) ? fallback : reader.GetString(0);
-                });
-            if (ret.Count == 0)
+            var result = await base.Database.SqlQueryRaw<string>("select UserAgentCache from status where id='Current'").ToListAsync();
+            if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
-            return string.IsNullOrWhiteSpace(ret[0]) ? fallback : ret[0];
+            return string.IsNullOrWhiteSpace(result[0]) ? fallback : result[0];
         }
-        public async Task<List<string>> GetFollowedTagsOrdered()
+        public Task<List<string>> GetFollowedTagsOrdered()
         {
-            return await StandardQuery("select `word` from keyword where `status`='Follow' and type='tag' ORDER BY word ",
-                        (DbDataReader reader) => { return reader.GetString(0); });
+            return base.Database.SqlQueryRaw<string>("select word from keyword where status='Follow' and type='tag' ORDER BY word").ToListAsync();
         }
         public Dictionary<string, TagStatus> GetAllTagsStatusSync()
         {
-            var tags = StandardQuerySync("select `word`,`status` from keyword where `type`='tag'",
-                        (DbDataReader reader) => { return new Tuple<string, string>(reader.GetString(0), reader.GetString(1)); });
-            var ret = new Dictionary<string, TagStatus>();
-            foreach (var pair in tags)
-                ret[pair.Item1] = String2TagStatus[pair.Item2];
-            return ret;
+            return base.Database.SqlQueryRaw<TagRow>("select word,status,`desc` from keyword where type='tag'").ToList()
+                .ToDictionary(x => x.word, x => Enum.Parse<TagStatus>(x.status));
         }
-
-        public Dictionary<string,string> GetAllTagsDescSync()
+        public Dictionary<string, string> GetAllTagsDescSync()
         {
-            var tags=StandardQuerySync("select `word`,`desc` from keyword where `type`='tag'",
-                        (DbDataReader reader) => { return new Tuple<string,string>(reader.GetString(0),reader.GetString(1)); });
-            var ret=new Dictionary<string, string>();
-            foreach(var pair in tags)
-                ret[pair.Item1] = pair.Item2;
-            return ret;
+            return base.Database.SqlQueryRaw<TagRow>("select word,status,`desc` from keyword where type='tag'").ToList()
+                .ToDictionary(x => x.word, x => x.desc);
+        }
+        private class TagRow
+        {
+            public string word { get; set; }
+            public string status { get; set; }
+            public string desc { get; set; }
+        }
+        private List<User> InitUsers(List<User> users)
+        {
+            foreach (var user in users)
+            {
+                user.displayId = user.userId.ToString();
+                user.displayText = user.userName;
+            }
+            return users;
         }
         public async Task<User> GetUserByIllustId(int illustId)
-        {   //这里一定能找到user
-            return (await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where userId in (select userId from illust where id={0})", illustId),
-                        ReadUser))[0];
+        {
+            return InitUsers(await Users.FromSqlRaw("select * from user where userId in (select userId from illust where id={0})", illustId).ToListAsync())[0];
         }
         public async Task<int> GetQueueUpdateInterval()
-        {   
-            return (await StandardQuery(String.Format("SELECT datediff(NOW(),`QueueUpdateTime`) FROM status WHERE id=\"Current\";"),
-                        (DbDataReader reader) => { return reader.GetInt32(0); }))[0];
+        {
+            return (await base.Database.SqlQueryRaw<int>("SELECT datediff(NOW(),QueueUpdateTime) FROM status WHERE id='Current'").ToListAsync())[0];
         }
         public async Task<string> GetQueue()
-        {   //这里一定能找到user
-            return (await StandardQuery(String.Format("SELECT Queue FROM status WHERE id=\"Current\";"),
-                        (DbDataReader reader) => { return reader.GetString(0); }))[0];
+        {
+            return (await base.Database.SqlQueryRaw<string>("SELECT Queue FROM status WHERE id='Current'").ToListAsync())[0];
         }
         public User GetUserByIdSync(int userId)
         {
-            var ret = StandardQuerySync(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where userId ={0}", userId),
-                    ReadUser);
-            if (ret != null && ret.Count > 0)
-                return ret.First();
-            return null;
+            return InitUsers(Users.FromSqlRaw("select * from user where userId={0}", userId).ToList()).FirstOrDefault();
         }
-        public async Task<List<User>> GetFollowedUser(bool followed=true, bool validOnly=false)
+        public async Task<List<User>> GetFollowedUser(bool followed = true, bool validOnly = false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where followed={0}{1};",followed,validOnly? " and `invalid`=false" : ""),
-                       ReadUser);
+            return InitUsers(await Users.FromSqlRaw("select * from user where followed={0}" + (validOnly ? " and `invalid`=false" : ""), followed).ToListAsync());
         }
-        public async Task<List<User>> GetQueuedUser(bool validOnly=false)
+        public async Task<List<User>> GetQueuedUser(bool validOnly = false)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where queued=true{0};", validOnly ? " and `invalid`=false" : ""),
-                       ReadUser);
+            return InitUsers(await Users.FromSqlRaw("select * from user where queued=true" + (validOnly ? " and `invalid`=false" : "")).ToListAsync());
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<\"{0}\");",time.ToString("yyyy-MM-dd HH:mm:ss")),
-                       ReadUser);
+            return InitUsers(await Users.FromSqlRaw("select * from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<{0})", time.ToString("yyyy-MM-dd HH:mm:ss")).ToListAsync());
         }
         public async Task<List<User>> GetQueuedOrFollowedUserStatusUpdateBatch(int count)
         {
-            return await StandardQuery(String.Format("select userId,userName,followed,queued,`invalid`,AuthorStorageName from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0};", count),
-                       ReadUser);
+            return InitUsers(await Users.FromSqlRaw("select * from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0}", count).ToListAsync());
         }
-
         private User ReadUser(DbDataReader reader)
         {
             return new User(reader.GetInt32(0),
@@ -290,62 +264,54 @@ namespace PictureSpider.Pixiv
          * 注意字段里可能有引号等,不能直接用String.Format
          */
         public void UpdateFollowedUser(List<User> data) {
+            using (var ts = base.Database.BeginTransaction())
             {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-            {
-                connection.Open();
-                MySqlTransaction ts = null;
                 try
                 {
-                    ts = connection.BeginTransaction();
                     int affected = 0;
-                    using(var cmd = new MySqlCommand("update user set followed=false", connection, ts))
-                        cmd.ExecuteNonQuery();
+                    using(var cmd = new MySqlCommand("update user set followed=false"))
+                        base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                     foreach (var user in data)
                     {
                         string cmdText = "insert into user(userId,userName,followed,queued,updateTime) values(@0,@1,@2,@3,NOW()) on duplicate key update userName=@1,followed=@2,queued=@3,updateTime=NOW(),`invalid`=false;\n";
-                        var cmd = new MySqlCommand(cmdText, connection, ts);
+                        var cmd = new MySqlCommand(cmdText);
                         cmd.Parameters.AddWithValue("@0", user.userId);
                         cmd.Parameters.AddWithValue("@1", user.userName);
                         cmd.Parameters.AddWithValue("@2", user.followed);
                         cmd.Parameters.AddWithValue("@3", user.queued);
-                        affected += cmd.ExecuteNonQuery();
+                        affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                     }
                     ts.Commit();
                     Console.WriteLine("Affected:" + affected);
                 }
-                catch (Exception e)
+                catch (MySqlException e)
                 {
                     Console.Error.WriteLine(e.Message);
                     ts.Rollback();
                     throw;
                 }
-                }
             }
         }
         public void UpdateUserNameAndValid(List<User> data)
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            using (var ts = base.Database.BeginTransaction())
             {
-                connection.Open();
-                MySqlTransaction ts = null;
                 try
                 {
-                    ts = connection.BeginTransaction();
                     int affected = 0;
                     foreach (var user in data)
                     {
                         string cmdText = "insert into user(userId,userName,followed,queued,updateTime,`invalid`) values(@0,@1,false,false,NOW(),@2) on duplicate key update userId=@0,userName=@1,updateTime=NOW(),`invalid`=@2;\n";
-                        var cmd = new MySqlCommand(cmdText, connection, ts);
+                        var cmd = new MySqlCommand(cmdText);
                         cmd.Parameters.AddWithValue("@0", user.userId);
                         cmd.Parameters.AddWithValue("@1", user.userName);
                         cmd.Parameters.AddWithValue("@2", user.invalid);
-                        affected += cmd.ExecuteNonQuery();
+                        affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                     }
                     ts.Commit();
                     Console.WriteLine("Affected:" + affected);
                 }
-                catch (Exception e)
+                catch (MySqlException e)
                 {
                     Console.Error.WriteLine(e.Message);
                     ts.Rollback();
@@ -368,13 +334,10 @@ namespace PictureSpider.Pixiv
         */
         public void UpdateIllustOriginalData(List<Illust> data)
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            using (var ts = base.Database.BeginTransaction())
             {
-                connection.Open();
-                MySqlTransaction ts = null;
                 try
                 {
-                    ts = connection.BeginTransaction();
                     int affected = 0;
                     foreach (var illust in data)
                         if(illust.valid)
@@ -385,7 +348,7 @@ namespace PictureSpider.Pixiv
                                              "userId=@5,width=@6,height=@7,pageCount=@8," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW(),"+
                                              "ugoiraFrames=@18,ugoiraURL=@19,viewCount=@20,uploadDate=@21;\n";
-                            var cmd = new MySqlCommand(cmdText, connection, ts);
+                            var cmd = new MySqlCommand(cmdText);
                             cmd.Parameters.AddWithValue("@userId", illust.userId);
                             cmd.Parameters.AddWithValue("@0", illust.id);
                             cmd.Parameters.AddWithValue("@1", illust.title);
@@ -409,23 +372,23 @@ namespace PictureSpider.Pixiv
                             cmd.Parameters.AddWithValue("@19", illust.ugoiraURL);
                             cmd.Parameters.AddWithValue("@20", illust.viewCount);
                             cmd.Parameters.AddWithValue("@21", illust.uploadDate);
-                            affected += cmd.ExecuteNonQuery();
+                            affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                         }
                         else
                         {
                             string cmdText = "insert ignore user(userId) values(@userId);\n" +
                                              "insert into illust(id,updateTime,valid) values(@0,NOW(),@1)" +
                                              "on duplicate key update updateTime=NOW(),valid=@1;\n";
-                            var cmd = new MySqlCommand(cmdText, connection, ts);
+                            var cmd = new MySqlCommand(cmdText);
                             cmd.Parameters.AddWithValue("@userId", illust.userId);
                             cmd.Parameters.AddWithValue("@0", illust.id);
                             cmd.Parameters.AddWithValue("@1", illust.valid);
-                            affected += cmd.ExecuteNonQuery();
+                            affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                         }
                     ts.Commit();
                     Console.WriteLine("Affected:"+affected);
                 }
-                catch (Exception e)
+                catch (MySqlException e)
                 {
                     Console.Error.WriteLine(e.Message);
                     ts.Rollback();
@@ -435,27 +398,24 @@ namespace PictureSpider.Pixiv
         }
         public void UpdateIllustMyData(List<Illust> data)
         {
-            using (MySqlConnection connection = new MySqlConnection(this.connect_str))
+            using (var ts = base.Database.BeginTransaction())
             {
-                connection.Open();
-                MySqlTransaction ts = null;
                 try
                 {
-                    ts = connection.BeginTransaction();
                     int affected = 0;
                     foreach (var illust in data)
                     {
                         string cmdText = "update illust set readed=@13,bookmarkEach=@14,updateTime=NOW() where id=@0;\n";
-                        var cmd = new MySqlCommand(cmdText, connection, ts);
+                        var cmd = new MySqlCommand(cmdText);
                         cmd.Parameters.AddWithValue("@0", illust.id);
                         cmd.Parameters.AddWithValue("@13", illust.readed);
                         cmd.Parameters.AddWithValue("@14", illust.bookmarkEach);
-                        affected += cmd.ExecuteNonQuery();
+                        affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                     }
                     ts.Commit();
                     Console.WriteLine("Affected:" + affected);
                 }
-                catch (Exception e)
+                catch (MySqlException e)
                 {
                     Console.Error.WriteLine(e.Message);
                     ts.Rollback();
@@ -476,167 +436,22 @@ namespace PictureSpider.Pixiv
             await StandardNoneQuery("update `status` set UserAgentCache=@0 where id=\"Current\";", (cmd) => { cmd.Parameters.AddWithValue("@0", userAgent); });
         }
 
-        //注意字符串必须以cmd.Parameters.AddWithValue以避免转义问题
-        public async Task<int> StandardNoneQuery(String cmd_text, Action<MySqlCommand> add_para)
-        {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var cmd = new MySqlCommand(cmd_text, connection);
-                    add_para(cmd);
-                    int ret=await cmd.ExecuteNonQueryAsync();
-                    Console.WriteLine("Update {0} Rows",ret);
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception1 {0}", e.Message);
-                throw;
-            }
-        }
-        public int StandardNoneQuerySync(String cmd_text, Action<MySqlCommand> add_para)
-        {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var cmd = new MySqlCommand(cmd_text, connection);
-                    add_para(cmd);
-                    int ret = cmd.ExecuteNonQuery();
-                    Console.WriteLine("Update {0} Rows", ret);
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception1 {0}", e.Message);
-                throw;
-            }
-        }
-        public async Task<List<T>> StandardQuery<T>(String cmd_text,Func<DbDataReader, T> converter)
-        {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var ret = new List<T>();
-                    var cmd = new MySqlCommand(cmd_text, connection);
-                    using (var dataReader = await cmd.ExecuteReaderAsync())
-                        while (dataReader.Read())
-                            ret.Add(converter(dataReader));
-//                    Console.WriteLine("Select {0} Rows", ret.Count);
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception2 {0}",e.Message);
-                throw;
-            }
-        }
-        public async Task<List<T>> StandardQuery<T>(List<String> cmd_text_list, Func<DbDataReader, T> converter)
-        {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var ret = new List<T>();
-                    var cmd = "";
-                    foreach(var cmd_text in cmd_text_list)
-                    {
-                        cmd += cmd_text;
-                        if (cmd.Length > 30000)
-                        {
-                            using (var dataReader = await (new MySqlCommand(cmd, connection)).ExecuteReaderAsync())
-                                do
-                                    while (dataReader.Read())
-                                        ret.Add(converter(dataReader));
-                                while (dataReader.NextResult());
-                            cmd = "";
-                        }
-                    }
-                    if(cmd.Length>0)
-                        using (var dataReader = await (new MySqlCommand(cmd, connection)).ExecuteReaderAsync())
-                            do
-                                while (dataReader.Read())
-                                    ret.Add(converter(dataReader));
-                            while (dataReader.NextResult());
 
-                    Console.WriteLine("Select {0} Rows", ret.Count);
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception3 {0}", e.Message);
-                throw;
-            }
-        }
-        public List<T> StandardQuerySync<T>(String cmd_text, Func<DbDataReader, T> converter)
+        public async Task<int> StandardNoneQuery(string cmd_text, Action<MySqlCommand> add_para)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var ret = new List<T>();
-                    var cmd = new MySqlCommand(cmd_text, connection);
-                    using (var dataReader = cmd.ExecuteReader())
-                        while (dataReader.Read())
-                            ret.Add(converter(dataReader));
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception2 {0}", e.Message);
-                throw;
-            }
+            using var cmd = new MySqlCommand(cmd_text);
+            add_para(cmd);
+            int ret = await base.Database.ExecuteSqlRawAsync(cmd.CommandText, cmd.Parameters.Cast<object>());
+            Console.WriteLine("Update {0} Rows", ret);
+            return ret;
         }
-        public List<T> StandardQuerySync<T>(List<String> cmd_text_list, Func<DbDataReader, T> converter)
+        public int StandardNoneQuerySync(string cmd_text, Action<MySqlCommand> add_para)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(this.connect_str))
-                {
-                    connection.Open();
-                    var ret = new List<T>();
-                    var cmd = "";
-                    foreach (var cmd_text in cmd_text_list)
-                    {
-                        cmd += cmd_text;
-                        if (cmd.Length > 30000)
-                        {
-                            using (var dataReader = (new MySqlCommand(cmd, connection)).ExecuteReader())
-                                do
-                                    while (dataReader.Read())
-                                        ret.Add(converter(dataReader));
-                                while (dataReader.NextResult());
-                            cmd = "";
-                        }
-                    }
-                    if (cmd.Length > 0)
-                        using (var dataReader = (new MySqlCommand(cmd, connection)).ExecuteReader())
-                            do
-                                while (dataReader.Read())
-                                    ret.Add(converter(dataReader));
-                            while (dataReader.NextResult());
-
-                    Console.WriteLine("Select {0} Rows", ret.Count);
-                    return ret;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine("Database Exception3 {0}", e.Message);
-                throw;
-            }
+            using var cmd = new MySqlCommand(cmd_text);
+            add_para(cmd);
+            int ret = base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
+            Console.WriteLine("Update {0} Rows", ret);
+            return ret;
         }
     }
 }

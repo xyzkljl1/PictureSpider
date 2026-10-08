@@ -23,7 +23,7 @@ using System.Data.Common;
 namespace PictureSpider.Pixiv
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    partial class Server : BaseServer, IBindHandleProvider, IDisposable
+    partial class Server : BaseServerWithDB<Database>, IBindHandleProvider, IDisposable
     {
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
         public delegate void Delegate_V_B();
@@ -47,7 +47,7 @@ namespace PictureSpider.Pixiv
         public string download_dir_main;
         private string download_dir_ugoira_tmp;
         public string special_dir;
-        public Database database;
+        protected override Database database => databaseSchedule;
         private HttpClient httpClient;
         private HttpClient httpClient_anonymous;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private HttpClient httpClientCSRF;//用于获取csrf的client
@@ -74,7 +74,7 @@ namespace PictureSpider.Pixiv
          * 目前使用的是 https://github.com/URenko/Accesser 在本地的代理,端口号1200(在Accesser目录下config.toml配置)
          */
         // SNI代理有问题，暂时换回常规代理
-        public Server(Config config): base(config)
+        public Server(Config config): base(config, config.PixivConnectStr)
         {
             base.tripleBookmarkState = true;
             base.logPrefix = "P";
@@ -89,7 +89,6 @@ namespace PictureSpider.Pixiv
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-            database = new Database(config.PixivConnectStr);
             request_proxy = config.Proxy;
             //request_proxy = config.ProxySNI;
             user_id = config.PixivUserId;
@@ -158,6 +157,8 @@ namespace PictureSpider.Pixiv
 #pragma warning restore CS1998
         public void Dispose()
         {
+            database.Dispose();
+            base.database.Dispose();
             if(httpClient is not null)
             {
                 httpClient.Dispose();
@@ -252,6 +253,7 @@ namespace PictureSpider.Pixiv
         }
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
+            using var database = NewDbContext(true);
             var ret = new List<ExplorerQueue>();
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
             ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.FavR, "0", "FavR"));
@@ -263,6 +265,7 @@ namespace PictureSpider.Pixiv
         }
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
+            using var database = NewDbContext(true);
             var illusts = new List<Illust>();
             if (queue.type == ExplorerQueue.QueueType.Main || queue.type == ExplorerQueue.QueueType.MainR)
             {
@@ -312,24 +315,28 @@ namespace PictureSpider.Pixiv
         }
         public override Task SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
         {
+            using var database = NewDbContext();
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustReadedSync(illust.id);
             return Task.CompletedTask;
         }
         public override Task SetBookmarked(ExplorerFileBase file)
         {
+            using var database = NewDbContext();
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkedSync(illust.id,file.bookmarked,file.bookmarkPrivate);
             return Task.CompletedTask;
         }
         public override Task SetBookmarkEach(ExplorerFileBase file, int page)
         {
+            using var database = NewDbContext();
             var illust = (file as ExplorerFile).illust;
             database.UpdateIllustBookmarkEachSync(illust.id,illust.bookmarkEach);
             return Task.CompletedTask;
         }
         public override BaseUser GetUserById(string id)
         {
+            using var database = NewDbContext(true);
             int user_id = 0;
             if(int.TryParse(id, out user_id))
                 return database.GetUserByIdSync(user_id);
@@ -337,13 +344,23 @@ namespace PictureSpider.Pixiv
         }
         public override Task SetUserFollowOrQueue(BaseUser user)
         {
+            using var database = NewDbContext();
             database.UpdateUserSync(user as User);
             return Task.CompletedTask;
         }
-        public override Dictionary<string, TagStatus> GetAllTagsStatus() { return database.GetAllTagsStatusSync(); }
-        public override Dictionary<string, string> GetAllTagsDesc() { return database.GetAllTagsDescSync(); }
+        public override Dictionary<string, TagStatus> GetAllTagsStatus()
+        {
+            using var database = NewDbContext(true);
+            return database.GetAllTagsStatusSync();
+        }
+        public override Dictionary<string, string> GetAllTagsDesc()
+        {
+            using var database = NewDbContext(true);
+            return database.GetAllTagsDescSync();
+        }
         public override Task UpdateTagStatus(string tag, TagStatus status)
         {
+            using var database = NewDbContext();
             database.UpdateTagStatusSync(tag, status);
             return Task.CompletedTask;
         }
@@ -1117,6 +1134,7 @@ namespace PictureSpider.Pixiv
          */
         private async Task FetchCSRFToken()
         {
+            using var database = NewDbContext();
             httpClientCSRF.DefaultRequestHeaders.Add("Cookie",await database.GetCookie());
             //id为1的作品的编辑收藏页面，这个作品存不存在/是否已加入收藏不影响，设置语言表单里会带token
             var url = "https://www.pixiv.net/bookmark_add.php?type=illust&illust_id=1";
@@ -1149,6 +1167,7 @@ namespace PictureSpider.Pixiv
         }
         public override async Task ListenerUtil_SetCookie(string cookie, string userAgent)
         {
+            using var database = NewDbContext();
             //获取cookie和csrftoken
             await database.EnsureUserAgentCache();
             var old_cookie = await database.GetCookie();
@@ -1204,6 +1223,7 @@ namespace PictureSpider.Pixiv
         }
         public bool AddQueuedUser(int id)
         {
+            using var database = NewDbContext();
             var user = database.GetUserByIdSync(id);
             if (user is null)
                 user = new User(id, "", false, false);
@@ -1215,6 +1235,7 @@ namespace PictureSpider.Pixiv
         }
         public async Task UpdateHttpClientByDatabaseCookie()
         {
+            using var database = NewDbContext(true);
             var cookie = await database.GetCookie();
             httpClient.DefaultRequestHeaders.Remove("Cookie");
             httpClient.DefaultRequestHeaders.Remove("x-csrf-token");

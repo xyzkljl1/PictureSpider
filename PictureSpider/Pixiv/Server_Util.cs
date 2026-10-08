@@ -187,6 +187,7 @@ namespace PictureSpider.Pixiv
 
         public async Task<bool> PushBookmark(bool bookmarked,int illust_id,bool pub, Int64 bookmark_id=-1)
         {
+            using var database = NewDbContext(true);
             if(bookmarked)
             {
                 var ret = await RequestPixivAsyncPost(String.Format("{0}ajax/illusts/bookmarks/add", base_url),

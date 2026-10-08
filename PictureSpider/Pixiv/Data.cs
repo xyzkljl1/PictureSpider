@@ -16,6 +16,7 @@ namespace PictureSpider.Pixiv
         public string userName;
         public bool invalid;
         public string AuthorStorageName;
+        public User() { }
         public User(int _id,string _name,Boolean _f, Boolean _q, Boolean _invalid = false)
         {
             userId = _id;
@@ -71,6 +72,7 @@ namespace PictureSpider.Pixiv
         public string userName;
         public int score;
         public string debugMsg;
+        public Illust() { }
         public Illust(int _id,bool _valid)
         {
             id = _id;
