@@ -109,14 +109,14 @@ namespace PictureSpider.Pixiv
         }
         public async Task<string> GetCookie()
         {
-            var result = await base.Database.SqlQueryRaw<string>("select CookieCache from status where id='Current'").ToListAsync();
+            var result = await QueueStatuses.Where(x => x.Id == "Current").Select(x => x.CookieCache).ToListAsync();
             if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
             return result[0];
         }
         public async Task<string> GetCSRFToken()
         {
-            var result = await base.Database.SqlQueryRaw<string>("select CSRFTokenCache from status where id='Current'").ToListAsync();
+            var result = await QueueStatuses.Where(x => x.Id == "Current").Select(x => x.CSRFTokenCache).ToListAsync();
             if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
             return result[0];
@@ -129,14 +129,15 @@ namespace PictureSpider.Pixiv
         }
         public async Task<string> GetUserAgent(string fallback)
         {
-            var result = await base.Database.SqlQueryRaw<string>("select UserAgentCache from status where id='Current'").ToListAsync();
+            var result = await QueueStatuses.Where(x => x.Id == "Current").Select(x => x.UserAgentCache).ToListAsync();
             if (result.Count == 0)
                 throw new TopLevelException("there must be a row whose id is 'Current' in Table `status`");
             return string.IsNullOrWhiteSpace(result[0]) ? fallback : result[0];
         }
         public Task<List<string>> GetFollowedTagsOrdered()
         {
-            return base.Database.SqlQueryRaw<string>("select word from keyword where status='Follow' and type='tag' ORDER BY word").ToListAsync();
+            return Keywords.Where(x => x.status == "Follow" && x.type == "tag")
+                .OrderBy(x => x.word).Select(x => x.word).ToListAsync();
         }
         public Dictionary<string, TagStatus> GetAllTagsStatusSync()
         {
@@ -155,7 +156,7 @@ namespace PictureSpider.Pixiv
         }
         public async Task<string> GetQueue()
         {
-            return (await base.Database.SqlQueryRaw<string>("SELECT Queue FROM status WHERE id='Current'").ToListAsync())[0];
+            return (await QueueStatuses.Where(x => x.Id == "Current").Select(x => x.Queue).ToListAsync())[0];
         }
         public User GetUserByIdSync(int userId)
         {
