@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.IO;
 using System.Linq;
@@ -9,6 +10,27 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PictureSpider.Pixiv
 {
+    [Table("invalidkeyword")]
+    public class InvalidKeyword
+    {
+        [Key]
+        public string word { get; set; }
+    }
+    [Table("keyword")]
+    public class Tag
+    {
+        [Key]
+        public string word { get; set; }
+        public string type { get; set; }
+        public string status { get; set; }
+        public string desc { get; set; }
+    }
+    [Table("status")]
+    public class QueueStatus
+    {
+        public string Id { get; set; }
+        public DateTime QueueUpdateTime { get; set; }
+    }
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "PX";

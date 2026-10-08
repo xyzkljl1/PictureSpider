@@ -12,6 +12,9 @@ namespace PictureSpider.Pixiv
     {
         public DbSet<Illust> Illusts { get; set; }
         public DbSet<User> Users { get; set; }
+        public DbSet<InvalidKeyword> InvalidKeywords { get; set; }
+        public DbSet<Tag> Keywords { get; set; }
+        public DbSet<QueueStatus> QueueStatuses { get; set; }
         public Database() { }
         public Database(string connectStr) { ConnStr = connectStr; }
 
@@ -59,14 +62,10 @@ namespace PictureSpider.Pixiv
             user.Property<DateTime>("updateTime").HasColumnType("timestamp");
             user.Property(x => x.AuthorStorageName).HasMaxLength(128).IsRequired(false);
         }
-        public Task<List<int>> GetAllIllustId(string condition = "")
-        {
-            var sql = $"select id from illust {condition}";
-            return base.Database.SqlQueryRaw<int>(sql).ToListAsync();
-        }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time, float ratio = 1.0f, bool reverse = false)
         {
-            var list = await GetAllIllustId(string.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse ? "not" : "", time.ToString("yyyy-MM-dd HH:mm:ss")));
+            var list = await Illusts.Where(x => ((!x.readed || x.bookmarked) && x.updateTime < time) != reverse)
+                .Select(x => x.id).ToListAsync();
             var ct = await Illusts.CountAsync();
             return list.Take((int)(ct * ratio)).ToList();
         }
@@ -76,7 +75,7 @@ namespace PictureSpider.Pixiv
         }
         public async Task<HashSet<string>> GetBannedKeyword()
         {
-            return (await base.Database.SqlQueryRaw<string>("select word from invalidkeyword").ToListAsync()).ToHashSet();
+            return (await InvalidKeywords.Select(x => x.word).ToListAsync()).ToHashSet();
         }
         public async Task<List<Illust>> GetIllustFullSortedByUser(int userId)
         {
@@ -141,23 +140,18 @@ namespace PictureSpider.Pixiv
         }
         public Dictionary<string, TagStatus> GetAllTagsStatusSync()
         {
-            return base.Database.SqlQueryRaw<TagRow>("select word,status,`desc` from keyword where type='tag'").ToList()
+            return Keywords.Where(x => x.type == "tag").ToList()
                 .ToDictionary(x => x.word, x => Enum.Parse<TagStatus>(x.status));
         }
         public Dictionary<string, string> GetAllTagsDescSync()
         {
-            return base.Database.SqlQueryRaw<TagRow>("select word,status,`desc` from keyword where type='tag'").ToList()
+            return Keywords.Where(x => x.type == "tag").ToList()
                 .ToDictionary(x => x.word, x => x.desc);
-        }
-        private class TagRow
-        {
-            public string word { get; set; }
-            public string status { get; set; }
-            public string desc { get; set; }
         }
         public async Task<int> GetQueueUpdateInterval()
         {
-            return (await base.Database.SqlQueryRaw<int>("SELECT datediff(NOW(),QueueUpdateTime) FROM status WHERE id='Current'").ToListAsync())[0];
+            return (await QueueStatuses.Where(x => x.Id == "Current")
+                .Select(x => EF.Functions.DateDiffDay(x.QueueUpdateTime.Date, DateTime.Now.Date)).ToListAsync())[0];
         }
         public async Task<string> GetQueue()
         {
@@ -177,11 +171,13 @@ namespace PictureSpider.Pixiv
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return await Users.FromSqlRaw("select * from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<{0})", time.ToString("yyyy-MM-dd HH:mm:ss")).ToListAsync();
+            return await Users.Where(x => !x.followed && !x.queued && !x.invalid
+                && (x.userName == "" || EF.Property<DateTime>(x, "updateTime") < time)).ToListAsync();
         }
         public async Task<List<User>> GetQueuedOrFollowedUserStatusUpdateBatch(int count)
         {
-            return await Users.FromSqlRaw("select * from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0}", count).ToListAsync();
+            return await Users.Where(x => (x.followed || x.queued) && !x.invalid)
+                .OrderBy(x => EF.Property<DateTime>(x, "updateTime")).Take(count).ToListAsync();
         }
         public async Task UpdateTagStatus(string tag, TagStatus followed)
         {
