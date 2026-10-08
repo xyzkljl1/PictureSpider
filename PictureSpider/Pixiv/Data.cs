@@ -41,8 +41,10 @@ namespace PictureSpider.Pixiv
             base.queued = false;
         }
     }
-    public class Illust
+    public class Illust : IHasReadFav
     {
+        bool IHasReadFav.readed { get => readed; set => readed = value; }
+        bool IHasReadFav.fav { get => bookmarked; set => bookmarked = value; }
         //Original Data
         public int id;//same as illustId
         public string title;//=illustTitle

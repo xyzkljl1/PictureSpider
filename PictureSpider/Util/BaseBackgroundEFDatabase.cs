@@ -11,7 +11,6 @@ namespace PictureSpider
         SetBookmarked = 2,
         SetPageExcluded = 3,
         SetUserFollowOrQueue = 4,
-        AddQueuedUser = 5,
         SetTagStatus = 6,
         SetLoginInfo = 7
     }

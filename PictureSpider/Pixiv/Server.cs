@@ -20,6 +20,7 @@ using HttpClient = System.Net.Http.HttpClient;
 using HttpResponseMessage = System.Net.Http.HttpResponseMessage;
 using System.Text.RegularExpressions;
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 namespace PictureSpider.Pixiv
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -351,75 +352,72 @@ namespace PictureSpider.Pixiv
                 Value = (int)status
             });
         }
-        // Pixiv 直接调用原数据库接口处理 Pending，不使用基类的实体查找。
-        protected override Task<IHasReadFav> FindWorkGroupByDbKey(string key) => Task.FromResult<IHasReadFav>(null);
+        protected override async Task<IHasReadFav> FindWorkGroupByDbKey(string key)
+        {
+            if (!int.TryParse(key, out var id))
+                return null;
+            return database.Illusts.Local.FirstOrDefault(x => x.id == id)
+                ?? await database.Illusts.AsTracking().FirstOrDefaultAsync(x => x.id == id);
+        }
         protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
         {
-            if (operation.Kind == PendingUiOperationKind.SetLoginInfo)
-            {
-                await ApplyLoginInfo(operation.Cookie, operation.UserAgent);
-                return;
-            }
-            if (operation.Kind == PendingUiOperationKind.SetTagStatus)
-            {
-                if (Enum.IsDefined(typeof(TagStatus), operation.Value))
-                    await database.UpdateTagStatus(operation.TargetKey, (TagStatus)operation.Value);
-                else
-                    LogError($"Invalid pending tag status: {operation.Id}");
-                return;
-            }
-            if (operation.Kind == PendingUiOperationKind.SetPageExcluded)
-            {
-                var keys = operation.TargetKey.Split('/');
-                if (keys.Length != 2 || !int.TryParse(keys[0], out var illustId) || !int.TryParse(keys[1], out var page))
-                {
-                    LogError($"Invalid pending page key: {operation.Id}");
-                    return;
-                }
-                var illust = (await database.GetIllustFull(new List<int> { illustId })).FirstOrDefault();
-                if (illust == null || page < 0 || page >= illust.pageCount)
-                    return;
-                if (illust.bookmarkEach.Length != illust.pageCount)
-                    illust.bookmarkEach = new string('0', illust.pageCount);
-                illust.bookmarkEach = illust.bookmarkEach.Remove(page, 1).Insert(page, operation.Value != 0 ? "1" : "0");
-                await database.UpdateIllustBookmarkEach(illust.id, illust.bookmarkEach);
-                return;
-            }
-            if (!int.TryParse(operation.TargetKey, out var id))
-            {
-                LogError($"Invalid pending target key: {operation.Id}");
-                return;
-            }
             switch (operation.Kind)
             {
-                case PendingUiOperationKind.SetReaded:
-                    await database.UpdateIllustReaded(id);
+                case PendingUiOperationKind.SetLoginInfo:
+                    await ApplyLoginInfo(operation.Cookie, operation.UserAgent);
                     break;
-                case PendingUiOperationKind.SetBookmarked:
-                    await database.UpdateIllustBookmarked(id, (operation.Value & 1) != 0, (operation.Value & 2) != 0);
-                    break;
-                case PendingUiOperationKind.SetUserFollowOrQueue:
-                case PendingUiOperationKind.AddQueuedUser:
-                    var user = database.GetUserByIdSync(id) ?? new User(id, "", false, false);
-                    if (operation.Kind == PendingUiOperationKind.AddQueuedUser)
-                    {
-                        if (user.followed || user.queued)
-                            return;
-                        user.queued = true;
-                    }
+                case PendingUiOperationKind.SetTagStatus:
+                    if (Enum.IsDefined(typeof(TagStatus), operation.Value))
+                        await database.UpdateTagStatus(operation.TargetKey, (TagStatus)operation.Value);
                     else
+                        LogError($"Invalid pending tag status: {operation.Id}");
+                    break;
+                case PendingUiOperationKind.SetPageExcluded:
                     {
+                        var keys = operation.TargetKey.Split('/');
+                        if (keys.Length != 2 || !int.TryParse(keys[0], out var illustId) || !int.TryParse(keys[1], out var page))
+                        {
+                            LogError($"Invalid pending page key: {operation.Id}");
+                            return;
+                        }
+                        var illust = (await database.GetIllustFull(new List<int> { illustId })).FirstOrDefault();
+                        if (illust == null || page < 0 || page >= illust.pageCount)
+                            return;
+                        if (illust.bookmarkEach.Length != illust.pageCount)
+                            illust.bookmarkEach = new string('0', illust.pageCount);
+                        illust.bookmarkEach = illust.bookmarkEach.Remove(page, 1).Insert(page, operation.Value != 0 ? "1" : "0");
+                        await database.UpdateIllustBookmarkEach(illust.id, illust.bookmarkEach);
+                        break;
+                    }
+                case PendingUiOperationKind.SetBookmarked:
+                    {
+                        if (!int.TryParse(operation.TargetKey, out var id))
+                        {
+                            LogError($"Invalid pending target key: {operation.Id}");
+                            return;
+                        }
+                        await database.UpdateIllustBookmarked(id, (operation.Value & 1) != 0, (operation.Value & 2) != 0);
+                        break;
+                    }
+                case PendingUiOperationKind.SetUserFollowOrQueue:
+                    {
+                        if (!int.TryParse(operation.TargetKey, out var id))
+                        {
+                            LogError($"Invalid pending target key: {operation.Id}");
+                            return;
+                        }
+                        var user = database.GetUserByIdSync(id) ?? new User(id, "", false, false);
                         if (!Enum.IsDefined(typeof(UserFollowQueueStatus), operation.Value))
                         {
                             LogError($"Invalid pending user status: {operation.Id}");
                             return;
                         }
                         user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
+                        await database.UpdateUser(user);
+                        break;
                     }
-                    await database.UpdateUser(user);
-                    break;
                 default:
-                    LogError($"Unsupported pending operation: {operation.Id}");
+                    await base.ApplyPendingUiOperation(operation);
                     break;
             }
         }
@@ -1298,9 +1296,15 @@ namespace PictureSpider.Pixiv
         }
         public async Task<bool> AddQueuedUser(int id)
         {
+            using (var db = NewDbContext(true))
+            {
+                var user = await db.Users.FirstOrDefaultAsync(x => x.userId == id);
+                if (user is not null && (user.followed || user.queued))
+                    return true;
+            }
             await QueuePendingUiOperation(new PendingUiOperation
             {
-                Kind = PendingUiOperationKind.AddQueuedUser,
+                Kind = PendingUiOperationKind.SetUserFollowOrQueue,
                 TargetKey = id.ToString(),
                 Value = (int)UserFollowQueueStatus.Queued
             });

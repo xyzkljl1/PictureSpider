@@ -222,10 +222,6 @@ namespace PictureSpider.Pixiv
                         cmd.Parameters.AddWithValue("@1", "None");
                 });
         }
-        public async Task UpdateIllustReaded(int id)
-        {
-            await StandardNoneQuery("update illust set readed=1 where id=@0", (cmd) => { cmd.Parameters.AddWithValue("@0", id); });
-        }
         public async Task UpdateIllustBookmarked(int id,bool enable,bool is_private)
         {
             await StandardNoneQuery("update illust set bookmarked=@0,bookmarkPrivate=@1 where id=@2",
