@@ -10,7 +10,10 @@ namespace PictureSpider
         SetReaded = 1,
         SetBookmarked = 2,
         SetPageExcluded = 3,
-        SetUserFollowOrQueue = 4
+        SetUserFollowOrQueue = 4,
+        AddQueuedUser = 5,
+        SetTagStatus = 6,
+        SetLoginInfo = 7
     }
 
     [Table("PendingUiOperations")]
@@ -24,6 +27,10 @@ namespace PictureSpider
         [MaxLength(128)]
         public string TargetKey { get; set; } = "";
         public int Value { get; set; }
+        [NotMapped]
+        public string Cookie { get; set; }
+        [NotMapped]
+        public string UserAgent { get; set; }
     }
 
     public interface IHasReadFav

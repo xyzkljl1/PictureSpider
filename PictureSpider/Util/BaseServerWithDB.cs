@@ -20,7 +20,7 @@ namespace PictureSpider
         // 例如将一个对象加入downloadQueue,然后重置了DbContext，再修改该对象，即使save也不会存入数据库
         // 并且EF的数据库本身不是线程安全
         // 例如，只使用单个数据库databaseSchedule，ui上从数据库里查询到对象，然后从ui线程进行setFav,同时schedule线程也在操作，则可能令DbContext状态损坏
-        private DatabaseType databaseUI;
+        protected DatabaseType databaseUI;
         protected DatabaseType databaseSchedule;
         private string ConnStr;
         virtual protected DatabaseType database

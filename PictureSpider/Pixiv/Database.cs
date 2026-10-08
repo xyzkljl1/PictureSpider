@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Pixiv
 {
-    public class Database : BaseEFDatabase
+    public class Database : BaseBackgroundEFDatabase
     {
         public DbSet<Illust> Illusts { get; set; }
         public DbSet<User> Users { get; set; }
@@ -23,6 +23,10 @@ namespace PictureSpider.Pixiv
         }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.Kind).HasConversion<string>()
+                .HasColumnType("enum('SetReaded','SetBookmarked','SetPageExcluded','SetUserFollowOrQueue','AddQueuedUser','SetTagStatus','SetLoginInfo')");
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.Cookie).HasColumnType("text").IsRequired(false);
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.UserAgent).HasColumnType("text").IsRequired(false);
             var illust = modelBuilder.Entity<Illust>();
             illust.ToTable("illust");
             foreach (var field in typeof(Illust).GetFields().Where(x => x.Name != "userName" && x.Name != "score" && x.Name != "debugMsg"))

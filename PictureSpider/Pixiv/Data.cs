@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -8,11 +9,14 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PictureSpider.Pixiv
 {
-    public class User : BaseUser
+    public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "PX";
         //Original Data
         public int userId;
+        [DbKey]
+        [NotMapped]
+        public int UserDbKey => userId;
         public string userName;
         public bool invalid;
         public string AuthorStorageName;
@@ -200,11 +204,15 @@ namespace PictureSpider.Pixiv
             return true;
         }
     }
-    public class ExplorerFile : ExplorerFileBase
+    public class ExplorerFile : ExplorerFileBaseEx
     {
         //基类中定义的属性在基类中修改，未定义的在illust中
         public Illust illust;
         public string download_dir_main;
+        [DbKey]
+        [NotMapped]
+        public int IllustDbKey => illust.id;
+        public override string GetPageDbKey(int page) => $"{illust.id}/{page}";
         public ExplorerFile(Illust _illust, string _download_dir)
         {
             illust = _illust;

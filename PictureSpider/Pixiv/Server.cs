@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -23,7 +23,7 @@ using System.Data.Common;
 namespace PictureSpider.Pixiv
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    partial class Server : BaseServerWithDB<Database>, IBindHandleProvider, IDisposable
+    partial class Server : BaseServerWithBackgroundDB<Database>, IBindHandleProvider, IDisposable
     {
         public BindHandleProvider provider { get; set; } = new BindHandleProvider();
         public delegate void Delegate_V_B();
@@ -47,7 +47,6 @@ namespace PictureSpider.Pixiv
         public string download_dir_main;
         private string download_dir_ugoira_tmp;
         public string special_dir;
-        protected override Database database => databaseSchedule;
         private HttpClient httpClient;
         private HttpClient httpClient_anonymous;//不需要登陆的地方使用不带cookie的客户端，以防被网站警告
         private HttpClient httpClientCSRF;//用于获取csrf的client
@@ -103,16 +102,19 @@ namespace PictureSpider.Pixiv
             banned_keyword = await database.GetBannedKeyword();
             await database.EnsureUserAgentCache();
             pixiv_user_agent = await database.GetUserAgent(DefaultPixivUserAgent);
-            await ResetHttpClient();
+            await ApplyPendingUiOperations();
+            if (httpClient is null)
+                await ResetHttpClient();
 #if DEBUG
             await Test();
+            _ = Task.Run(() => RunSchedule(false));
             return;
 #endif
             //设置cookie和csrftoken
             //await UpdateHttpClientByDatabaseCookie();
             //会修改属性引发UI更新，需要从主线程调用或使用invoke
             await CheckHomePage();
-            _ = Task.Run(RunSchedule);
+            _ = Task.Run(() => RunSchedule(true));
         }
         public async Task<string> Test()
         {
@@ -158,7 +160,7 @@ namespace PictureSpider.Pixiv
         public void Dispose()
         {
             database.Dispose();
-            base.database.Dispose();
+            databaseUI.Dispose();
             if(httpClient is not null)
             {
                 httpClient.Dispose();
@@ -313,26 +315,14 @@ namespace PictureSpider.Pixiv
             }
             return result;
         }
-        public override Task SetReaded(ExplorerFileBase file)//基类中定义的属性在基类中取，未定义的在illust中取
-        {
-            using var database = NewDbContext();
-            var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustReadedSync(illust.id);
-            return Task.CompletedTask;
-        }
         public override Task SetBookmarked(ExplorerFileBase file)
         {
-            using var database = NewDbContext();
-            var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustBookmarkedSync(illust.id,file.bookmarked,file.bookmarkPrivate);
-            return Task.CompletedTask;
-        }
-        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
-        {
-            using var database = NewDbContext();
-            var illust = (file as ExplorerFile).illust;
-            database.UpdateIllustBookmarkEachSync(illust.id,illust.bookmarkEach);
-            return Task.CompletedTask;
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetBookmarked,
+                TargetKey = ((ExplorerFile)file).DbKey,
+                Value = (file.bookmarked ? 1 : 0) | (file.bookmarkPrivate ? 2 : 0)
+            });
         }
         public override BaseUser GetUserById(string id)
         {
@@ -341,12 +331,6 @@ namespace PictureSpider.Pixiv
             if(int.TryParse(id, out user_id))
                 return database.GetUserByIdSync(user_id);
             return null;
-        }
-        public override Task SetUserFollowOrQueue(BaseUser user)
-        {
-            using var database = NewDbContext();
-            database.UpdateUserSync(user as User);
-            return Task.CompletedTask;
         }
         public override Dictionary<string, TagStatus> GetAllTagsStatus()
         {
@@ -360,38 +344,119 @@ namespace PictureSpider.Pixiv
         }
         public override Task UpdateTagStatus(string tag, TagStatus status)
         {
-            using var database = NewDbContext();
-            database.UpdateTagStatusSync(tag, status);
-            return Task.CompletedTask;
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetTagStatus,
+                TargetKey = tag,
+                Value = (int)status
+            });
+        }
+        // Pixiv 直接调用原数据库接口处理 Pending，不使用基类的实体查找。
+        protected override Task<IHasReadFav> FindWorkGroupByDbKey(string key) => Task.FromResult<IHasReadFav>(null);
+        protected override async Task ApplyPendingUiOperation(PendingUiOperation operation)
+        {
+            if (operation.Kind == PendingUiOperationKind.SetLoginInfo)
+            {
+                await ApplyLoginInfo(operation.Cookie, operation.UserAgent);
+                return;
+            }
+            if (operation.Kind == PendingUiOperationKind.SetTagStatus)
+            {
+                if (Enum.IsDefined(typeof(TagStatus), operation.Value))
+                    database.UpdateTagStatusSync(operation.TargetKey, (TagStatus)operation.Value);
+                else
+                    LogError($"Invalid pending tag status: {operation.Id}");
+                return;
+            }
+            if (operation.Kind == PendingUiOperationKind.SetPageExcluded)
+            {
+                var keys = operation.TargetKey.Split('/');
+                if (keys.Length != 2 || !int.TryParse(keys[0], out var illustId) || !int.TryParse(keys[1], out var page))
+                {
+                    LogError($"Invalid pending page key: {operation.Id}");
+                    return;
+                }
+                var illust = (await database.GetIllustFull(new List<int> { illustId })).FirstOrDefault();
+                if (illust == null || page < 0 || page >= illust.pageCount)
+                    return;
+                if (illust.bookmarkEach.Length != illust.pageCount)
+                    illust.bookmarkEach = new string('0', illust.pageCount);
+                illust.bookmarkEach = illust.bookmarkEach.Remove(page, 1).Insert(page, operation.Value != 0 ? "1" : "0");
+                database.UpdateIllustBookmarkEachSync(illust.id, illust.bookmarkEach);
+                return;
+            }
+            if (!int.TryParse(operation.TargetKey, out var id))
+            {
+                LogError($"Invalid pending target key: {operation.Id}");
+                return;
+            }
+            switch (operation.Kind)
+            {
+                case PendingUiOperationKind.SetReaded:
+                    database.UpdateIllustReadedSync(id);
+                    break;
+                case PendingUiOperationKind.SetBookmarked:
+                    database.UpdateIllustBookmarkedSync(id, (operation.Value & 1) != 0, (operation.Value & 2) != 0);
+                    break;
+                case PendingUiOperationKind.SetUserFollowOrQueue:
+                case PendingUiOperationKind.AddQueuedUser:
+                    var user = database.GetUserByIdSync(id) ?? new User(id, "", false, false);
+                    if (operation.Kind == PendingUiOperationKind.AddQueuedUser)
+                    {
+                        if (user.followed || user.queued)
+                            return;
+                        user.queued = true;
+                    }
+                    else
+                    {
+                        if (!Enum.IsDefined(typeof(UserFollowQueueStatus), operation.Value))
+                        {
+                            LogError($"Invalid pending user status: {operation.Id}");
+                            return;
+                        }
+                        user.FollowQueueStatus = (UserFollowQueueStatus)operation.Value;
+                    }
+                    database.UpdateUserSync(user);
+                    break;
+                default:
+                    LogError($"Unsupported pending operation: {operation.Id}");
+                    break;
+            }
         }
         /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
-        private async Task RunSchedule()
+        private async Task RunSchedule(bool enableScheduleTasks)
         {
             int last_daily_task = DateTime.Now.Day;
             int process_speed = 50;
             var startup_day_of_week = DateTime.Now.DayOfWeek.Next(); // 启动至少一天后触发第一次weektask
-            await DownloadIllustsInExplorerQueue();
-            foreach (var id in await database.GetAllIllustId("where readed=0"))
-                illust_download_queue.Add(id);
-            do
+            await ApplyPendingUiOperations();
+            if (enableScheduleTasks)
             {
-                if(DateTime.Now.Day!=last_daily_task)
-                {
-                    await ResetHttpClient();//由于不明原因，过数日后会一直请求失败，试试直接重置http client
-                    last_daily_task = DateTime.Now.Day;
-                    await DailyTask(startup_day_of_week);
-                }
-                //每小时处理下载和更新队列
-                await ProcessIllustFetchQueue(process_speed);
-                await ProcessIllustDownloadQueue(process_speed);
-                if (illust_fetch_queue.Count / process_speed > 24 * 7 * 2)//积压量大于一周时逐渐加速
-                    process_speed++;
-                else if (illust_fetch_queue.Count / process_speed < 24 * 2 &&process_speed>140)//积压量小于一天时逐渐减速
-                    process_speed--;
-                await Task.Delay(new TimeSpan(0, 30, 0));//每隔半小时执行一次
+                await DownloadIllustsInExplorerQueue();
+                foreach (var id in await database.GetAllIllustId("where readed=0"))
+                    illust_download_queue.Add(id);
             }
-            while (true);
+            await RunPendingAndScheduleLoop(
+                ApplyPendingUiOperations,
+                async () =>
+                {
+                    if(DateTime.Now.Day!=last_daily_task)
+                    {
+                        await ResetHttpClient();//由于不明原因，过数日后会一直请求失败，试试直接重置http client
+                        last_daily_task = DateTime.Now.Day;
+                        await DailyTask(startup_day_of_week);
+                    }
+                    //每半小时处理下载和更新队列
+                    await ProcessIllustFetchQueue(process_speed);
+                    await ProcessIllustDownloadQueue(process_speed);
+                    if (illust_fetch_queue.Count / process_speed > 24 * 7 * 2)//积压量大于一周时逐渐加速
+                        process_speed++;
+                    else if (illust_fetch_queue.Count / process_speed < 24 * 2 &&process_speed>140)//积压量小于一天时逐渐减速
+                        process_speed--;
+                },
+                new TimeSpan(0, 30, 0),
+                enableScheduleTasks);
         }
         private async Task DailyTask(DayOfWeek day_of_week)
         {
@@ -1088,6 +1153,7 @@ namespace PictureSpider.Pixiv
         //确认是否成功登录
         private async Task CheckHomePage()
         {
+            await ApplyPendingUiOperations();
             await UpdateHttpClientByDatabaseCookie();
             VerifyState = "Checking";
             string url = base_url;
@@ -1121,7 +1187,12 @@ namespace PictureSpider.Pixiv
                 }
                 VerifyState = "Login Retrying";
                 LogError("Login Retry");
-                await Task.Delay(1000 * 60 * 10);
+                var retryTime = DateTime.UtcNow.AddMinutes(10);
+                while (DateTime.UtcNow < retryTime)
+                {
+                    await Task.Delay(PendingOperationInterval);
+                    await ApplyPendingUiOperations();
+                }
             }
             VerifyState = "Login Fail";
             LogError("Login Fail");
@@ -1134,7 +1205,7 @@ namespace PictureSpider.Pixiv
          */
         private async Task FetchCSRFToken()
         {
-            using var database = NewDbContext();
+            httpClientCSRF.DefaultRequestHeaders.Remove("Cookie");
             httpClientCSRF.DefaultRequestHeaders.Add("Cookie",await database.GetCookie());
             //id为1的作品的编辑收藏页面，这个作品存不存在/是否已加入收藏不影响，设置语言表单里会带token
             var url = "https://www.pixiv.net/bookmark_add.php?type=illust&illust_id=1";
@@ -1165,9 +1236,18 @@ namespace PictureSpider.Pixiv
                 }
             await database.UpdateCSRFToken(csrf_token);
         }
-        public override async Task ListenerUtil_SetCookie(string cookie, string userAgent)
+        public override Task ListenerUtil_SetCookie(string cookie, string userAgent)
         {
-            using var database = NewDbContext();
+            return QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.SetLoginInfo,
+                TargetKey = "Current",
+                Cookie = cookie,
+                UserAgent = userAgent
+            });
+        }
+        private async Task ApplyLoginInfo(string cookie, string userAgent)
+        {
             //获取cookie和csrftoken
             await database.EnsureUserAgentCache();
             var old_cookie = await database.GetCookie();
@@ -1175,23 +1255,18 @@ namespace PictureSpider.Pixiv
             if (!string.IsNullOrWhiteSpace(userAgent))
             {
                 var old_user_agent = await database.GetUserAgent(DefaultPixivUserAgent);
-                userAgentChanged = userAgent != old_user_agent;
-                if (userAgentChanged)
+                userAgentChanged = userAgent != old_user_agent || userAgent != pixiv_user_agent;
+                if (userAgent != old_user_agent)
                     await database.UpdateUserAgent(userAgent);
                 pixiv_user_agent = userAgent;
             }
             var cookieChanged = cookie != old_cookie;
             if (cookieChanged)
                 await database.UpdateCookie(cookie);
-            if (userAgentChanged)
+            if (userAgentChanged || httpClient is null)
                 await ResetHttpClient();
-            else if (cookieChanged)
-            {
-                if (httpClient is null)
-                    await ResetHttpClient();
-                else
-                    await UpdateHttpClientByDatabaseCookie();
-            }
+            else
+                await UpdateHttpClientByDatabaseCookie();
         }
         public override bool ListenerUtil_IsValidUrl(string url)
         {
@@ -1207,7 +1282,7 @@ namespace PictureSpider.Pixiv
                 var id = Int32.Parse(regex.Match(url).Groups[1].Value);
                 var illust = await RequestIllustAsync(id);
                 if(illust is not null&&illust.userId!=0)
-                    return AddQueuedUser(illust.userId);
+                    return await AddQueuedUser(illust.userId);
             }
             else if (url.StartsWith("https://www.pixiv.net/users/"))
             {
@@ -1216,21 +1291,19 @@ namespace PictureSpider.Pixiv
                 if(results.Count > 1)
                 {
                     var id = Int32.Parse(results[1].Value);
-                    return AddQueuedUser(id);
+                    return await AddQueuedUser(id);
                 }
             }
             return false;
         }
-        public bool AddQueuedUser(int id)
+        public async Task<bool> AddQueuedUser(int id)
         {
-            using var database = NewDbContext();
-            var user = database.GetUserByIdSync(id);
-            if (user is null)
-                user = new User(id, "", false, false);
-            else if (user.followed || user.queued)//已经关注过视作成功
-                return true;
-            user.queued = true;//默认标记为queued
-            database.UpdateUserSync(user);
+            await QueuePendingUiOperation(new PendingUiOperation
+            {
+                Kind = PendingUiOperationKind.AddQueuedUser,
+                TargetKey = id.ToString(),
+                Value = (int)UserFollowQueueStatus.Queued
+            });
             return true;
         }
         public async Task UpdateHttpClientByDatabaseCookie()
