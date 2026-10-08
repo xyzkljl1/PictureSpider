@@ -37,11 +37,7 @@ namespace PictureSpider.Pixiv
                     (left, right) => left.SequenceEqual(right),
                     value => value.Aggregate(0, (hash, item) => HashCode.Combine(hash, item.GetHashCode())),
                     value => value.ToList()));
-            // 保持原 MySql.Data 的非零布尔值、整数溢出和 TIMESTAMP 本地时间语义。
-            illust.Property(x => x.valid).HasConversion(value => value ? 1 : 0, value => value != 0).HasColumnType("int");
-            illust.Property(x => x.width).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
-            illust.Property(x => x.height).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
-            illust.Property(x => x.pageCount).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
+            // 保持原 MySql.Data 的 TIMESTAMP 本地时间语义。
             illust.Property(x => x.updateTime).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
             illust.Property(x => x.uploadDate).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
             modelBuilder.Entity<User>().Property<DateTime>("updateTime").HasColumnType("timestamp");
