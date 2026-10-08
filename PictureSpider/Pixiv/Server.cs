@@ -432,7 +432,7 @@ namespace PictureSpider.Pixiv
             if (enableScheduleTasks)
             {
                 await DownloadIllustsInExplorerQueue();
-                foreach (var id in await database.GetAllIllustId("where readed=0"))
+                foreach (var id in await database.Illusts.Where(x => !x.readed).Select(x => x.id).ToListAsync())
                     illust_download_queue.Add(id);
             }
             await RunPendingAndScheduleLoop(
