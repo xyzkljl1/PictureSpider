@@ -35,27 +35,33 @@ namespace PictureSpider.Pixiv
         public string CSRFTokenCache { get; set; }
         public string UserAgentCache { get; set; }
     }
+    [Table("user")]
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "PX";
+        [NotMapped]
         public override string displayId
         {
             get => userId.ToString();
             set => throw new NotSupportedException();
         }
+        [NotMapped]
         public override string displayText
         {
             get => userName;
             set => throw new NotSupportedException();
         }
         //Original Data
-        public int userId;
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.None)]
+        public int userId { get; set; }
         [DbKey]
         [NotMapped]
         public int UserDbKey => userId;
-        public string userName;
-        public bool invalid;
-        public string AuthorStorageName;
+        public string userName { get; set; }
+        public bool invalid { get; set; }
+        [MaxLength(128)]
+        public string AuthorStorageName { get; set; }
         public User() { }
         public User(int _id,string _name,Boolean _f, Boolean _q, Boolean _invalid = false)
         {
@@ -73,39 +79,42 @@ namespace PictureSpider.Pixiv
             base.queued = false;
         }
     }
+    [Table("illust")]
     public class Illust : IHasReadFav
     {
         bool IHasReadFav.readed { get => readed; set => readed = value; }
         bool IHasReadFav.fav { get => bookmarked; set => bookmarked = value; }
         //Original Data
-        public int id;//same as illustId
-        public string title;//=illustTitle
-        public string description;// same as illustComment
-        public int xRestrict;//is not public
-        public List<string> tags;//name
-        public int userId=0;
-        public int width;
-        public int height;
-        public int pageCount;
-        public Boolean bookmarked;//整体
-        public Boolean bookmarkPrivate;
-        public int likeCount = 0;
-        public int bookmarkCount = 0;
-        public int viewCount = 0;
-        public bool valid;//不在json里,获取不到(即已删除)则为无效
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.None)]
+        public int id { get; set; }//same as illustId
+        public string title { get; set; }//=illustTitle
+        public string description { get; set; }// same as illustComment
+        public int xRestrict { get; set; }//is not public
+        public List<string> tags { get; set; }//name
+        public int userId { get; set; } = 0;
+        public int width { get; set; }
+        public int height { get; set; }
+        public int pageCount { get; set; }
+        public Boolean bookmarked { get; set; }//整体
+        public Boolean bookmarkPrivate { get; set; }
+        public int likeCount { get; set; } = 0;
+        public int bookmarkCount { get; set; } = 0;
+        public int viewCount { get; set; } = 0;
+        public bool valid { get; set; }//不在json里,获取不到(即已删除)则为无效
 
-        public DateTime uploadDate;//illust上传的时间 
+        public DateTime uploadDate { get; set; }//illust上传的时间
         //Modified data
-        public string urlFormat;//假定每P的格式都相同
-        public string urlThumbFormat;
-        public string ugoiraFrames="";//动图帧，json格式，假定动图全部只有1p
-        public string ugoiraURL="";//动图url,如果此项不为空则为动图
+        public string urlFormat { get; set; }//假定每P的格式都相同
+        public string urlThumbFormat { get; set; }
+        public string ugoiraFrames { get; set; } = "";//动图帧，json格式，假定动图全部只有1p
+        public string ugoiraURL { get; set; } = "";//动图url,如果此项不为空则为动图
         //My Data
-        public Boolean readed;
-        public string bookmarkEach="";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
+        public Boolean readed { get; set; }
+        public string bookmarkEach { get; set; } = "";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
                                         string浪费空间且修改消耗大，但是考虑到读远比写次数多，且多数illust的bookmarkEach为空，直接使用string以方便数据库交互
                                         */
-        public DateTime updateTime;//数据库中该条record更新的时间(不是illust更新时间)
+        public DateTime updateTime { get; set; }//数据库中该条record更新的时间(不是illust更新时间)
         //tmp
         public string userName;
         public int score;

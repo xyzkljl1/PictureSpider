@@ -27,14 +27,9 @@ namespace PictureSpider.Pixiv
         {
             modelBuilder.Entity<PendingUiOperation>().Property(x => x.Kind).HasConversion<string>()
                 .HasColumnType("enum('SetReaded','SetBookmarked','SetPageExcluded','SetUserFollowOrQueue','AddQueuedUser','SetTagStatus','SetLoginInfo')");
-            modelBuilder.Entity<PendingUiOperation>().Property(x => x.Cookie).HasColumnType("text").IsRequired(false);
-            modelBuilder.Entity<PendingUiOperation>().Property(x => x.UserAgent).HasColumnType("text").IsRequired(false);
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.Cookie).HasColumnType("text");
+            modelBuilder.Entity<PendingUiOperation>().Property(x => x.UserAgent).HasColumnType("text");
             var illust = modelBuilder.Entity<Illust>();
-            illust.ToTable("illust");
-            foreach (var field in typeof(Illust).GetFields().Where(x => x.Name != "userName" && x.Name != "score" && x.Name != "debugMsg"))
-                illust.Property(field.FieldType, field.Name);
-            illust.HasKey(nameof(Illust.id));
-            illust.Property(x => x.id).ValueGeneratedNever();
             illust.Property(x => x.tags).HasConversion(
                 value => string.Join("`", value),
                 value => value.Split('`', StringSplitOptions.None).ToList())
@@ -49,18 +44,7 @@ namespace PictureSpider.Pixiv
             illust.Property(x => x.pageCount).HasConversion(value => checked((uint)value), value => checked((int)value)).HasColumnType("int unsigned");
             illust.Property(x => x.updateTime).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
             illust.Property(x => x.uploadDate).HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Local)).HasColumnType("timestamp");
-            illust.Property(x => x.ugoiraFrames).IsRequired(false);
-
-            var user = modelBuilder.Entity<User>();
-            user.ToTable("user");
-            user.Ignore(x => x.displayId);
-            user.Ignore(x => x.displayText);
-            foreach (var field in typeof(User).GetFields())
-                user.Property(field.FieldType, field.Name);
-            user.HasKey(nameof(User.userId));
-            user.Property(x => x.userId).ValueGeneratedNever();
-            user.Property<DateTime>("updateTime").HasColumnType("timestamp");
-            user.Property(x => x.AuthorStorageName).HasMaxLength(128).IsRequired(false);
+            modelBuilder.Entity<User>().Property<DateTime>("updateTime").HasColumnType("timestamp");
         }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time, float ratio = 1.0f, bool reverse = false)
         {
