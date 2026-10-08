@@ -155,15 +155,6 @@ namespace PictureSpider.Pixiv
             public string status { get; set; }
             public string desc { get; set; }
         }
-        private List<User> InitUsers(List<User> users)
-        {
-            foreach (var user in users)
-            {
-                user.displayId = user.userId.ToString();
-                user.displayText = user.userName;
-            }
-            return users;
-        }
         public async Task<int> GetQueueUpdateInterval()
         {
             return (await base.Database.SqlQueryRaw<int>("SELECT datediff(NOW(),QueueUpdateTime) FROM status WHERE id='Current'").ToListAsync())[0];
@@ -174,23 +165,23 @@ namespace PictureSpider.Pixiv
         }
         public User GetUserByIdSync(int userId)
         {
-            return InitUsers(Users.Where(x => x.userId == userId).ToList()).FirstOrDefault();
+            return Users.FirstOrDefault(x => x.userId == userId);
         }
         public async Task<List<User>> GetFollowedUser(bool followed = true, bool validOnly = false)
         {
-            return InitUsers(await Users.Where(x => x.followed == followed && (!validOnly || !x.invalid)).ToListAsync());
+            return await Users.Where(x => x.followed == followed && (!validOnly || !x.invalid)).ToListAsync();
         }
         public async Task<List<User>> GetQueuedUser(bool validOnly = false)
         {
-            return InitUsers(await Users.Where(x => x.queued && (!validOnly || !x.invalid)).ToListAsync());
+            return await Users.Where(x => x.queued && (!validOnly || !x.invalid)).ToListAsync();
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {
-            return InitUsers(await Users.FromSqlRaw("select * from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<{0})", time.ToString("yyyy-MM-dd HH:mm:ss")).ToListAsync());
+            return await Users.FromSqlRaw("select * from user where followed=0 and queued=0 and `invalid`=false and (userName=\"\" or updateTime<{0})", time.ToString("yyyy-MM-dd HH:mm:ss")).ToListAsync();
         }
         public async Task<List<User>> GetQueuedOrFollowedUserStatusUpdateBatch(int count)
         {
-            return InitUsers(await Users.FromSqlRaw("select * from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0}", count).ToListAsync());
+            return await Users.FromSqlRaw("select * from user where (followed=true or queued=true) and `invalid`=false order by updateTime limit {0}", count).ToListAsync();
         }
         public async Task UpdateTagStatus(string tag, TagStatus followed)
         {

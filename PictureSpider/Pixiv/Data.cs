@@ -12,6 +12,16 @@ namespace PictureSpider.Pixiv
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "PX";
+        public override string displayId
+        {
+            get => userId.ToString();
+            set => throw new NotSupportedException();
+        }
+        public override string displayText
+        {
+            get => userName;
+            set => throw new NotSupportedException();
+        }
         //Original Data
         public int userId;
         [DbKey]
@@ -26,8 +36,6 @@ namespace PictureSpider.Pixiv
             userId = _id;
             userName = _name;
             invalid = _invalid;
-            base.displayId = userId.ToString();
-            base.displayText=userName;
             base.followed = _f;
             base.queued = _q;
         }
@@ -35,8 +43,6 @@ namespace PictureSpider.Pixiv
         {
             userId = json.Value<int>("userId");
             userName = json.Value<string>("userName");
-            base.displayId = userId.ToString();
-            base.displayText = userName;
             base.followed = json.Value<Boolean>("following");
             base.queued = false;
         }
