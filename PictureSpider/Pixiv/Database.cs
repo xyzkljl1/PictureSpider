@@ -64,47 +64,26 @@ namespace PictureSpider.Pixiv
             var sql = $"select id from illust {condition}";
             return base.Database.SqlQueryRaw<int>(sql).ToListAsync();
         }
-        public async Task<int> GetIllustCount()
-        {
-            return (await base.Database.SqlQueryRaw<int>("select count(id) from illust").ToListAsync())[0];
-        }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time, float ratio = 1.0f, bool reverse = false)
         {
             var list = await GetAllIllustId(string.Format("where {0}((readed=0 or bookmarked=1) and updateTime<\"{1}\")", reverse ? "not" : "", time.ToString("yyyy-MM-dd HH:mm:ss")));
-            var ct = await GetIllustCount();
+            var ct = await Illusts.CountAsync();
             return list.Take((int)(ct * ratio)).ToList();
-        }
-        public async Task<List<Illust>> GetIllustIdAndTimeAndLikeCount()
-        {
-            return await Illusts.Select(x => new Illust(x.id, true)
-            {
-                updateTime = x.updateTime,
-                likeCount = x.likeCount
-            }).ToListAsync();
         }
         public Task<List<int>> GetBookmarkIllustId(bool pub)
         {
-            return base.Database.SqlQueryRaw<int>("select id from illust where bookmarked=true and bookmarkPrivate={0}", !pub).ToListAsync();
+            return Illusts.Where(x => x.bookmarked && x.bookmarkPrivate == !pub).Select(x => x.id).ToListAsync();
         }
         public async Task<HashSet<string>> GetBannedKeyword()
         {
             return (await base.Database.SqlQueryRaw<string>("select word from invalidkeyword").ToListAsync()).ToHashSet();
         }
-        public Task<List<int>> GetIllustIdOfQueuedOrFollowedUser()
+        public async Task<List<Illust>> GetIllustFullSortedByUser(int userId)
         {
-            return GetAllIllustId("WHERE userId IN (SELECT userId FROM user WHERE followed=1 OR queued=1)");
-        }
-        public async Task<List<Illust>> GetAllIllustFull(string condition = "")
-        {
-            var sql = $"select * from illust {condition}";
-            var result = await Illusts.FromSqlRaw(sql).ToListAsync();
+            var result = await Illusts.Where(x => x.userId == userId).OrderByDescending(x => x.id).ToListAsync();
             foreach (var illust in result)
                 illust.ugoiraFrames ??= "";
             return result;
-        }
-        public Task<List<Illust>> GetIllustFullSortedByUser(int userId)
-        {
-            return GetAllIllustFull($"where `userId`={userId} order by `id` DESC");
         }
         public async Task<List<Illust>> GetIllustFull(List<int> id_list)
         {
@@ -122,9 +101,12 @@ namespace PictureSpider.Pixiv
             }
             return result;
         }
-        public Task<List<Illust>> GetAllUnreadedIllustFull()
+        public async Task<List<Illust>> GetAllUnreadedIllustFull()
         {
-            return GetAllIllustFull("where `bookmarked`=0 and `readed`=0");
+            var result = await Illusts.Where(x => !x.bookmarked && !x.readed).ToListAsync();
+            foreach (var illust in result)
+                illust.ugoiraFrames ??= "";
+            return result;
         }
         public async Task<string> GetCookie()
         {
@@ -192,15 +174,15 @@ namespace PictureSpider.Pixiv
         }
         public User GetUserByIdSync(int userId)
         {
-            return InitUsers(Users.FromSqlRaw("select * from user where userId={0}", userId).ToList()).FirstOrDefault();
+            return InitUsers(Users.Where(x => x.userId == userId).ToList()).FirstOrDefault();
         }
         public async Task<List<User>> GetFollowedUser(bool followed = true, bool validOnly = false)
         {
-            return InitUsers(await Users.FromSqlRaw("select * from user where followed={0}" + (validOnly ? " and `invalid`=false" : ""), followed).ToListAsync());
+            return InitUsers(await Users.Where(x => x.followed == followed && (!validOnly || !x.invalid)).ToListAsync());
         }
         public async Task<List<User>> GetQueuedUser(bool validOnly = false)
         {
-            return InitUsers(await Users.FromSqlRaw("select * from user where queued=true" + (validOnly ? " and `invalid`=false" : "")).ToListAsync());
+            return InitUsers(await Users.Where(x => x.queued && (!validOnly || !x.invalid)).ToListAsync());
         }
         public async Task<List<User>> GetUnFollowedUserNeedUpdate(DateTime time)
         {

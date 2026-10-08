@@ -732,7 +732,8 @@ namespace PictureSpider.Pixiv
                     ((await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                     .ToList<string>()
                     .Select<string, int>(x => Int32.Parse(x)));
-            (await database.GetIllustIdOfQueuedOrFollowedUser()).ForEach(id => id_list.Add(id));
+            var userIds = database.Users.Where(x => x.followed || x.queued).Select(x => x.userId);
+            (await database.Illusts.Where(x => userIds.Contains(x.userId)).Select(x => x.id).ToListAsync()).ForEach(id => id_list.Add(id));
             await DownloadIllusts(id_list, -1);
         }
         private async Task UgoiraToGIF (HashSet<Illust> illustList)
@@ -982,7 +983,11 @@ namespace PictureSpider.Pixiv
             int tmp = illust_fetch_queue.Count;
             if (only_necessary)
             {
-                var local_illust = (await database.GetIllustIdAndTimeAndLikeCount()).ToDictionary(illust => illust.id);
+                var local_illust = (await database.Illusts.Select(x => new Illust(x.id, true)
+                {
+                    updateTime = x.updateTime,
+                    likeCount = x.likeCount
+                }).ToListAsync()).ToDictionary(illust => illust.id);
                 if(list_bytime != null)
                     foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
                         if ((!local_illust.ContainsKey(id))
