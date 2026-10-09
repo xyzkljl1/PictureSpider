@@ -207,8 +207,8 @@ namespace PictureSpider
             // 
             // AuthorBox
             // 
-            this.AuthorBox.Location = new System.Drawing.Point(4, 119);
-            this.AuthorBox.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.AuthorBox.Location = new System.Drawing.Point(4, 179);
+            this.AuthorBox.Margin = new System.Windows.Forms.Padding(4, 65, 4, 5);
             this.AuthorBox.Name = "AuthorBox";
             this.AuthorBox.Size = new System.Drawing.Size(154, 20);
             this.AuthorBox.TabIndex = 12;
@@ -222,10 +222,10 @@ namespace PictureSpider
             this.TagBox.BackColor = System.Drawing.Color.Transparent;
             this.TagBox.CausesValidation = false;
             this.TagBox.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
-            this.TagBox.Location = new System.Drawing.Point(0, 144);
+            this.TagBox.Location = new System.Drawing.Point(0, 204);
             this.TagBox.Margin = new System.Windows.Forms.Padding(0);
             this.TagBox.Name = "TagBox";
-            this.TagBox.Size = new System.Drawing.Size(161, 132);
+            this.TagBox.Size = new System.Drawing.Size(161, 108);
             this.TagBox.TabIndex = 9;
             this.TagBox.Tags = null;
             this.TagBox.WrapContents = false;
@@ -237,12 +237,12 @@ namespace PictureSpider
             | System.Windows.Forms.AnchorStyles.Right)));
             this.DescBrowser.CausesValidation = false;
             this.DescBrowser.IsWebBrowserContextMenuEnabled = false;
-            this.DescBrowser.Location = new System.Drawing.Point(0, 276);
+            this.DescBrowser.Location = new System.Drawing.Point(0, 312);
             this.DescBrowser.Margin = new System.Windows.Forms.Padding(0);
             this.DescBrowser.MinimumSize = new System.Drawing.Size(20, 20);
             this.DescBrowser.Name = "DescBrowser";
             this.DescBrowser.ScrollBarsEnabled = false;
-            this.DescBrowser.Size = new System.Drawing.Size(164, 291);
+            this.DescBrowser.Size = new System.Drawing.Size(164, 255);
             this.DescBrowser.TabIndex = 7;
             this.DescBrowser.TabStop = false;
             // 
