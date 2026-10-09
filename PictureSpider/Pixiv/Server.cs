@@ -800,41 +800,53 @@ namespace PictureSpider.Pixiv
         }
         private async Task SyncBookmarkDirectory()
         {
-            var private_files = new HashSet<string>();
-            var pub_files = new HashSet<string>();
-            var illust_ids = await database.GetBookmarkIllustId(true);
-            illust_ids.AddRange(await database.GetBookmarkIllustId(false));
-            foreach (var illust in await database.GetIllustFull(illust_ids))
+            var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                string dir = illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub;
+                Path.GetFullPath(download_dir_bookmark_pub), Path.GetFullPath(download_dir_bookmark_private)
+            };
+            foreach (var storageName in await database.Users.Where(x => x.AuthorStorageName != null)
+                .Select(x => x.AuthorStorageName).Distinct().ToListAsync())
+            {
+                favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, storageName, "pixiv", "pub"));
+                favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, storageName, "pixiv", "private"));
+            }
+            var existedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in favoriteDirectories)
+                if (Directory.Exists(dir))
+                    existedFiles.UnionWith(Directory.GetFiles(dir, "*.*"));
+            var illusts = await (from illust in database.Illusts
+                                join user in database.Users on illust.userId equals user.userId into users
+                                from user in users.DefaultIfEmpty()
+                                where illust.bookmarked
+                                select new { illust, user.AuthorStorageName }).ToListAsync();
+            bool unifiedCopyFailed = false;
+            foreach (var item in illusts)
+            {
+                var illust = item.illust;
+                string dir = item.AuthorStorageName == null
+                    ? (illust.bookmarkPrivate ? download_dir_bookmark_private : download_dir_bookmark_pub)
+                    : Path.Combine(download_dir_unified_fav, item.AuthorStorageName, "pixiv", illust.bookmarkPrivate ? "private" : "pub");
                 for (int i = 0; i < illust.pageCount; ++i)
                     if(illust.isPageValid(i))
                     {
                         string file_name = illust.storeFileName(i);
-                        string dest = Path.Combine(dir, file_name);
-                        string tmp = Path.Combine(dir, "_tmp");
-                        string src = Path.Combine(download_dir_main, file_name);
-                        if (!File.Exists(dest) && File.Exists(src))
+                        string dest = Path.GetFullPath(Path.Combine(dir, file_name));
+                        if (!existedFiles.Remove(dest))
                         {
-                            try
-                            {
-                                File.Copy(src, tmp, true);
-                                File.Move(tmp, dest);
-                            }
-                            catch (System.IO.IOException) { }//此时文件可能被Explorer的缓存占用,复制不需要立刻完成，因此忽略该异常
+                            string src = Path.Combine(download_dir_main, file_name);
+                            if (CopyFile(src, dest) == 0 && item.AuthorStorageName != null)
+                                unifiedCopyFailed = true;
                         }
-                        if (illust.bookmarkPrivate)
-                            private_files.Add(file_name);
-                        else
-                            pub_files.Add(file_name);
                     }
             }
-            foreach (var file in Directory.GetFiles(download_dir_bookmark_pub, "*.*"))//下载临时文件
-                if(!pub_files.Contains(Path.GetFileName(file)))
-                    File.Delete(file);
-            foreach (var file in Directory.GetFiles(download_dir_bookmark_private, "*.*"))//下载临时文件
-                if (!private_files.Contains(Path.GetFileName(file)))
-                    File.Delete(file);
+            // 统一收藏尚未补齐时保留旧副本，下次同步再清理。
+            if (unifiedCopyFailed)
+            {
+                LogError("Unified favorites incomplete; skip bookmark directory cleanup.");
+                return;
+            }
+            foreach (var file in existedFiles)
+                DeleteFile(file);
         }
 
         private async Task<Dictionary<int, int>> RequestAllKeywordSearchIllustBlock(int idx_block)
