@@ -142,10 +142,14 @@ namespace PictureSpider.LocalSingleFile
             var result = new List<ExplorerFileBase>();
             if (queue.type == ExplorerQueue.QueueType.Fav)
             {
-                var existedFiles = GetFiles(FavDir);
-                foreach (var path in existedFiles.OrderBy(x => Path.GetRelativePath(FavDir, x), NaturalStringComparer.Instance))
-                    result.Add(new ExplorerFile(Path.GetFullPath(path),FavDir, true));
+                result.AddRange(GetFavoriteFiles());
+                if (Directory.Exists(download_dir_unified_fav))
+                    foreach (var dir in Directory.GetDirectories(download_dir_unified_fav)
+                        .OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance))
+                        result.AddRange(GetFavoriteFiles(Path.GetFileName(dir)));
             }
+            else if (queue.type == ExplorerQueue.QueueType.User)
+                result.AddRange(GetFavoriteFiles(queue.id));
             else if (queue.type == ExplorerQueue.QueueType.Folder)
             {
                 var readed=database.Waited.Select(x => x.path).ToHashSet<String>();
@@ -155,6 +159,15 @@ namespace PictureSpider.LocalSingleFile
                     if(!readed.Contains(path))
                         result.Add(new ExplorerFile(Path.GetFullPath(path),dir, false));
                     }
+            return result;
+        }
+        private List<ExplorerFileBase> GetFavoriteFiles(string storageName = null)
+        {
+            var dir = storageName == null ? FavDir : Path.Combine(download_dir_unified_fav, storageName, "lsf");
+            var root = storageName == null ? FavDir : download_dir_unified_fav;
+            var result = new List<ExplorerFileBase>();
+            foreach (var path in GetFiles(dir).OrderBy(x => Path.GetRelativePath(root, x), NaturalStringComparer.Instance))
+                result.Add(new ExplorerFile(Path.GetFullPath(path), root, true));
             return result;
         }
         //获取该目录及子目录下所有图片文件,为便于比较统一使用Path.GetFullPath

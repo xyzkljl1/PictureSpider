@@ -102,10 +102,6 @@ namespace PictureSpider.AuthorHub
                     if (user is null)
                         continue;
 
-                    var key = user is BaseUserEx userEx ? userEx.DbKey : user.displayId;
-                    // 来源库可能忽略大小写或接受其它 ID 写法，只接受其返回的规范键。
-                    if (!string.Equals(key, source.SourceKey, StringComparison.Ordinal))
-                        continue;
                     modules.Add(source.Module);
                     followed |= user.followed;
                 }
@@ -156,15 +152,8 @@ namespace PictureSpider.AuthorHub
                     continue;
                 try
                 {
-                    var user = server.GetUserById(source.SourceKey);
-                    if (user is null)
-                        continue;
-                    var key = user is BaseUserEx userEx ? userEx.DbKey : user.displayId;
-                    if (!string.Equals(key, source.SourceKey, StringComparison.Ordinal))
-                        continue;
-
                     var files = await server.GetExplorerQueueItems(new ExplorerQueue(
-                        ExplorerQueue.QueueType.User, source.SourceKey, user.displayText));
+                        ExplorerQueue.QueueType.User, source.SourceKey, source.SourceKey));
                     foreach (var file in files)
                     {
                         if (!file.bookmarked)
@@ -200,6 +189,7 @@ namespace PictureSpider.AuthorHub
                 Hitomi.ExplorerFile or Hitomi.User => SourceModule.Hitomi,
                 Kemono.ExplorerFile or Kemono.User => SourceModule.Kemono,
                 Pawchive.ExplorerFile or Pawchive.User => SourceModule.Pawchive,
+                LocalSingleFile.ExplorerFile => SourceModule.LSF,
                 _ => null
             };
             if (module.HasValue && sourceServers.TryGetValue(module.Value, out var server))

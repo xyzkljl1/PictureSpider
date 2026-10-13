@@ -60,7 +60,8 @@ namespace PictureSpider
                                                 { AuthorHub.SourceModule.Twitter, twitterServer },
                                                 { AuthorHub.SourceModule.Hitomi, hitomiServer },
                                                 { AuthorHub.SourceModule.Kemono, kemonoServer },
-                                                { AuthorHub.SourceModule.Pawchive, pawchiveServer }
+                                                { AuthorHub.SourceModule.Pawchive, pawchiveServer },
+                                                { AuthorHub.SourceModule.LSF, lsfServer }
                                             }));
                                     context.Post(async async => {
                                         await pixivServer.Init();
