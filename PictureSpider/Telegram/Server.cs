@@ -106,28 +106,7 @@ namespace PictureSpider.Telegram
                     return;
 
                 TdJsonClient.GlobalExecute("{\"@type\":\"setLogStream\",\"log_stream\":{\"@type\":\"logStreamEmpty\"}}");
-                var result = TdJsonClient.GlobalExecute(new JObject
-                {
-                    ["@type"] = "setLogStream",
-                    ["log_stream"] = new JObject
-                    {
-                        ["@type"] = "logStreamFile",
-                        ["path"] = Path.Combine(AppContext.BaseDirectory, "tdlib.log"),
-                        ["max_file_size"] = 10 * 1024 * 1024,
-                        ["redirect_stderr"] = false
-                    }
-                }.ToString(Formatting.None));
-                if ((string)JObject.Parse(result)["@type"] == "ok")
-                {
-                    result = TdJsonClient.GlobalExecute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":4}");
-                    if ((string)JObject.Parse(result)["@type"] != "ok")
-                    {
-                        TdJsonClient.GlobalExecute("{\"@type\":\"setLogStream\",\"log_stream\":{\"@type\":\"logStreamEmpty\"}}");
-                        Console.WriteLine($"G TDLib log level setup failed: {result}");
-                    }
-                }
-                else
-                    Console.WriteLine($"G TDLib file logging setup failed: {result}");
+                TdJsonClient.GlobalExecute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}");
                 tdLogConfigured = true;
             }
         }
@@ -292,7 +271,6 @@ namespace PictureSpider.Telegram
         }
         public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30)
         {
-            Log($"Load Album Caption {messageInfo.ChatId}/{messageInfo.MediaAlbumId}");
             //一组图中只有一个有captain文本
             //升序排列，一般文本在id最小的message上
             // albumid=0 不是相册，不能混入该频道的其他独立消息。
@@ -301,7 +279,6 @@ namespace PictureSpider.Telegram
             {
                 try
                 {
-                    Log($"Get Caption Message {_m.chat}/{_m.id}");
                     var info = await tgClient.GetMessageAsync(_m.chat, _m.id);
                     var content = info.Content;
                     var fieldInfo = content.GetType().GetProperty("Caption", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
@@ -345,7 +322,6 @@ namespace PictureSpider.Telegram
                 //    continue;
                 int ct = 0;
                 int ct2 = 0;
-                Log($"Load Waiting Messages {channel.title}({channel.id})");
                 var messages = database.Messages.Where(message => message.state == MessageState.Wait && message.chat == channel.id).ToList();
                 Log($"Loaded {messages.Count} Waiting Messages {channel.title}({channel.id})");
                 //var messages = database.Messages.Where(message => message.chat == channel.id&&message.timestamp>= 1728880449).ToList();
@@ -357,7 +333,6 @@ namespace PictureSpider.Telegram
                             TdApi.Message messageInfo;
                             try
                             {
-                                Log($"Get Message {message.chat}/{message.id}");
                                 messageInfo = await tgClient.GetMessageAsync(message.chat, message.id);
                             }
                             catch (TdLib.TdException e)
@@ -390,7 +365,6 @@ namespace PictureSpider.Telegram
                                 var content=messageInfo.Content as MessageText;
                                 if (content != null&& content.LinkPreview!=null&&content.LinkPreview.Url.Contains("https://telegra.ph"))
                                 {
-                                    Log($"Process Telegraph Message {message.chat}/{message.id}");
                                     var text = content.Text?.Text ?? "";
                                     // 不匹配正文中的裸链接，带链接的可见标题仍然属于正文。
                                     foreach (var entity in (content.Text?.Entities ?? Array.Empty<TextEntity>())
@@ -444,7 +418,6 @@ namespace PictureSpider.Telegram
                                         var replyto = cursor.ReplyTo as MessageReplyTo.MessageReplyToMessage;
                                         if (replyto is null)
                                             break;
-                                        Log($"Get Reply Message {replyto.ChatId}/{replyto.MessageId} for {message.chat}/{message.id}");
                                         cursor = await tgClient.GetMessageAsync(replyto.ChatId, replyto.MessageId);
                                     }
                                     if (cursor is null)
@@ -480,7 +453,6 @@ namespace PictureSpider.Telegram
                                 var fileRemoteId = file.Remote.Id;
                                 if (fileRemoteId is not null&&fileRemoteId!="")//注意id可能为空
                                 {
-                                    Log($"Check Downloaded File {file.Id} for {message.chat}/{message.id}");
                                     if(database.FinishedTasks.FirstOrDefault(ele => ele.fileid == fileRemoteId) != null)//重复
                                         message.state = MessageState.Dup;
                                     else
@@ -495,7 +467,6 @@ namespace PictureSpider.Telegram
                                             var filename = $"{filename_prefix}_{Path.GetFileName(downloadedFile.Local.Path)}";
                                             Util.ReplaceInvalidCharInFilename(ref filename);
                                             var target_path = Path.Combine(parent_dir, filename);
-                                            Log($"Move Downloaded File for {message.chat}/{message.id}: {target_path}");
                                             if (System.IO.File.Exists(target_path))//覆盖旧的
                                                 System.IO.File.Delete(target_path);
                                             System.IO.File.Move(downloadedFile.Local.Path,Path.Combine(parent_dir, filename));
@@ -516,7 +487,6 @@ namespace PictureSpider.Telegram
                                 {
                                     LogError($"Empty File ID {message.id}");
                                 }
-                                Log($"Save Message {message.chat}/{message.id} state={message.state}");
                                 database.SaveChanges();
                             }
                         }
@@ -525,7 +495,6 @@ namespace PictureSpider.Telegram
                             Log($"Fail to process Message {message.id}:{ex} from {channel.username}({channel.id})");
                         }
                     }
-                Log($"Save Channel Messages {channel.title}({channel.id})");
                 database.SaveChanges();
                 Log($"Channel Download Done {channel.title}({channel.id})");
                 if (ct > 0)
