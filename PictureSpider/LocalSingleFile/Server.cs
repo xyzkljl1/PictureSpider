@@ -122,6 +122,8 @@ namespace PictureSpider.LocalSingleFile
                 }
             }
             Log($"Weekly Task Done:Move {mv_ct}/Del {del_ct}.");
+            foreach (var dir in TmpDirs)
+                Util.ClearEmptyFolders(dir, DateTime.UtcNow.AddMonths(-1));
         }
 #pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行
         public async override Task<List<ExplorerQueue>> GetExplorerQueues()

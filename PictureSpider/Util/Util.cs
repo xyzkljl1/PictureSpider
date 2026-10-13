@@ -65,20 +65,34 @@ namespace PictureSpider
                 ret[i/2] += BitConverter.ToChar(bytes, i);
             return new string(ret);
         }
-        public static void ClearEmptyFolders(string dir)
+        public static void ClearEmptyFolders(string dir, DateTime? lastWriteBefore = null)
         {
-            int ct = 0;
-            do
+            try
             {
-                ct = 0;
-                foreach (var subdir in Directory.EnumerateDirectories(dir,"*",new EnumerationOptions { RecurseSubdirectories = true, ReturnSpecialDirectories=false }).ToList())
-                    if (Directory.GetFileSystemEntries(subdir).Length == 0)
-                    {
-                        Directory.Delete(subdir);
-                        ct++;
-                    }
+                if (!Directory.Exists(dir) || (File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+                    return;
+                int ct = 0;
+                do
+                {
+                    ct = 0;
+                    foreach (var subdir in Directory.EnumerateDirectories(dir,"*",new EnumerationOptions { RecurseSubdirectories = true, ReturnSpecialDirectories=false, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint }).ToList())
+                        if (Directory.GetFileSystemEntries(subdir).Length == 0
+                            && (!lastWriteBefore.HasValue || Directory.GetLastWriteTimeUtc(subdir) < lastWriteBefore.Value))
+                        {
+                            Directory.Delete(subdir);
+                            ct++;
+                        }
+                }
+                while (ct > 0);
             }
-            while (ct > 0);
+            catch (IOException ex)
+            {
+                Console.WriteLine($"Skip empty folder cleanup {dir}: {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Console.WriteLine($"Skip empty folder cleanup {dir}: {ex.Message}");
+            }
         }
         private static void ReplaceInvalidCharInPath(ref string filename)
         {

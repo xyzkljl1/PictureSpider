@@ -872,6 +872,7 @@ namespace PictureSpider.Pawchive
                 }
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
+                Util.ClearEmptyFolders(download_dir_tmp, DateTime.UtcNow.AddMonths(-1));
             }
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
