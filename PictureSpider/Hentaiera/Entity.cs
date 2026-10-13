@@ -11,7 +11,11 @@ using System.Threading.Tasks;
 namespace PictureSpider.Hentaiera
 {
     [Table("Works")]
-    public class Work : TypicalWork<WorkGroup> {}
+    public class Work : TypicalWork<WorkGroup>
+    {
+        [NotMapped]
+        public override string TmpSubPath { get => $"{workGroup.user.name.ReplaceInvalidCharInFilenameWithReturnValue()}/{base.TmpSubPath}"; }
+    }
     [Table("WorkGroups")]
     public class WorkGroup : TypicalWorkGroup<Work,User> {}
     [Table("Users")]

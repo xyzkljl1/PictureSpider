@@ -118,7 +118,7 @@ namespace PictureSpider
                     if (!work.downloaded)
                         if (!work.excluded) //没有排除
                             if (!downloadQueue.Contains(work)) //不在下载队列
-                                if (!File.Exists($"{download_dir_tmp}/{work.fileName}{work.ext}")) //不在本地
+                                if (!File.Exists(Path.Join(download_dir_tmp, work.TmpSubPath))) //不在本地
                                     downloadQueue.Add(work);
             if (downloadQueue.Count > tmp)
                 Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
