@@ -464,7 +464,7 @@ namespace PictureSpider.Hitomi
                                         .Include(x => x.illusts)
                                     where illustGroup.fetched
                                        && illustGroup.user.name==queue.id
-                                       && illustGroup.readed == false
+                                       && (!illustGroup.readed || illustGroup.fav)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {

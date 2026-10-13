@@ -943,7 +943,7 @@ namespace PictureSpider.Kemono
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && illustGroup.readed == false
+                                    where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
                                        && illustGroup.user.id == id && illustGroup.user.service == service
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
