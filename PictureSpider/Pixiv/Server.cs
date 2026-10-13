@@ -444,6 +444,7 @@ namespace PictureSpider.Pixiv
                         await ResetHttpClient();//由于不明原因，过数日后会一直请求失败，试试直接重置http client
                         last_daily_task = DateTime.Now.Day;
                         await DailyTask(startup_day_of_week);
+                        return;
                     }
                     //每半小时处理下载和更新队列
                     await ProcessIllustFetchQueue(process_speed);
