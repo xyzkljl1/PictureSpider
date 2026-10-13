@@ -25,7 +25,7 @@ namespace PictureSpider.AuthorHub
             modelBuilder.Entity<AuthorSource>().HasKey(x => new { x.Module, x.SourceKey });
             modelBuilder.Entity<AuthorSource>().Property(x => x.Module)
                 .HasConversion<string>()
-                .HasColumnType("enum('Pixiv','Twitter','Hitomi','Kemono','Pawchive')");
+                .HasColumnType("enum('Pixiv','Twitter','Hitomi','Kemono','Pawchive','LSF')");
             modelBuilder.Entity<AuthorSource>().Property(x => x.SourceKey)
                 .HasMaxLength(255)
                 .UseCollation("utf8mb4_0900_bin");

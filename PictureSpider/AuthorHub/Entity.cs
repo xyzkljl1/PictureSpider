@@ -6,7 +6,8 @@ namespace PictureSpider.AuthorHub
         Twitter,
         Hitomi,
         Kemono,
-        Pawchive
+        Pawchive,
+        LSF
     }
 
     public class Author
