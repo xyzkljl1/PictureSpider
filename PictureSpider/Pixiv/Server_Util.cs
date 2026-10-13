@@ -14,6 +14,8 @@ namespace PictureSpider.Pixiv
 {
     public partial class Server
     {
+        partial void SaveRateLimitResponse(string url, HttpResponseMessage response);
+
         /*
          * 下载
          */
@@ -44,6 +46,7 @@ namespace PictureSpider.Pixiv
                         if (response.StatusCode == HttpStatusCode.TooManyRequests)
                         {
                             LogError($"HTTP TooManyRequests: {url}");
+                            SaveRateLimitResponse(url, response);
                             return null;
                         }
                         //可能是作品已删除，此时仍然返回结果
