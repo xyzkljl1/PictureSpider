@@ -769,11 +769,11 @@ namespace PictureSpider.Hitomi
             }
             else if (url.StartsWith("https://hitomi.la/artist/"))
             {
-                var regex = new Regex("https://hitomi.la/artist/([0-9a-zA-Z ]+)-all.html");
+                var regex = new Regex(@"^https://hitomi\.la/artist/([^/?#]+)-all\.html(?:[?#].*)?$");
                 var results = regex.Match(url).Groups;
                 if (results.Count > 1)
                 {
-                    var id = results[1].Value;
+                    var id = Uri.UnescapeDataString(results[1].Value);
                     return await AddQueuedUser(id);
                 }
             }
