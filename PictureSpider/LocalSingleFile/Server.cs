@@ -158,8 +158,9 @@ namespace PictureSpider.LocalSingleFile
                 foreach (var group in existedFiles.Where(x => !readed.Contains(x))
                     .GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
                     .OrderBy(x => Path.GetRelativePath(dir, x.Key), NaturalStringComparer.Instance))
-                    result.Add(new ExplorerFile(group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
-                        .Select(x => Path.GetFullPath(x)),dir, false));
+                    foreach (var paths in group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
+                        .Select(x => Path.GetFullPath(x)).Chunk(500))
+                        result.Add(new ExplorerFile(paths,dir, false));
             }
             return result;
         }
@@ -170,8 +171,9 @@ namespace PictureSpider.LocalSingleFile
             var result = new List<ExplorerFileBase>();
             foreach (var group in GetFiles(dir).GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => Path.GetRelativePath(root, x.Key), NaturalStringComparer.Instance))
-                result.Add(new ExplorerFile(group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
-                    .Select(x => Path.GetFullPath(x)), root, true));
+                foreach (var paths in group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
+                    .Select(x => Path.GetFullPath(x)).Chunk(500))
+                    result.Add(new ExplorerFile(paths, root, true));
             return result;
         }
         //获取该目录及子目录下所有图片文件,为便于比较统一使用Path.GetFullPath
@@ -197,8 +199,11 @@ namespace PictureSpider.LocalSingleFile
         public override Task SetReaded(ExplorerFileBase file)
         {
             var group = (ExplorerFile)file;
-            foreach (var path in group.paths)
+            for (int page = 0; page < group.paths.Count; page++)
             {
+                if (group.pageBookmarks[page])
+                    continue;
+                var path = group.paths[page];
                 var pathraw = Util.String2Bytes(path);
                 var exists = (from illust in database.Waited
                               where illust.path_raw == pathraw
@@ -228,43 +233,45 @@ namespace PictureSpider.LocalSingleFile
             database.SaveChanges();
             return Task.CompletedTask;
         }
-        public override Task SetBookmarked(ExplorerFileBase file)
+        public override Task SwitchBookmark(ExplorerFileBase file, int page)
         {
             var group = (ExplorerFile)file;
-            foreach (var path in group.paths)
+            var path = group.paths[page];
+            var bookmarked = !group.pageBookmarks[page];
+            var pathraw = Util.String2Bytes(path);
+            var exists = (from illust in database.Waited
+                          where illust.path_raw == pathraw
+                          select illust).ToList<Illust>();
+            if (bookmarked)
             {
-                var pathraw = Util.String2Bytes(path);
-                var exists = (from illust in database.Waited
-                              where illust.path_raw == pathraw
-                              select illust).ToList<Illust>();
-                if (file.bookmarked)
+                if (exists.Count == 0)
+                    database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), true));
+                else//默认只有一个
                 {
-                    if (exists.Count == 0)
-                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), true));
-                    else//默认只有一个
+                    if(group.in_fav_dir)//原本在fav目录则无需操作，从队列里移除
+                        database.Waited.Remove(exists.First());
+                    else//原本不在则需要留在队列
                     {
-                        if(group.in_fav_dir)//原本在fav目录则无需操作，从队列里移除
-                            database.Waited.Remove(exists.First());
-                        else//原本不在则需要留在队列
-                        {
-                            exists.First().fav = true;
-                            exists.First().date = DateTime.Now;
-                        }
-                    }
-                }
-                else
-                {
-                    //被取消bookmark的图片一定是已读的，仍然需要删除
-                    if (exists.Count == 0)
-                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), false));
-                    else//默认只有一个
-                    {
-                        exists.First().fav = false;
+                        exists.First().fav = true;
                         exists.First().date = DateTime.Now;
                     }
                 }
             }
+            else
+            {
+                //被取消bookmark的图片一定是已读的，仍然需要删除
+                if (exists.Count == 0)
+                    database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), false));
+                else//默认只有一个
+                {
+                    exists.First().fav = false;
+                    exists.First().date = DateTime.Now;
+                }
+            }
             database.SaveChanges();
+            group.pageBookmarks[page] = bookmarked;
+            //全部收藏时才跳过整组已读处理，部分收藏时仍需处理其余图片。
+            group.bookmarked = group.pageBookmarks.All(x => x);
             return Task.CompletedTask;
         }
 

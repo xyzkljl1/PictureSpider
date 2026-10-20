@@ -51,6 +51,7 @@ namespace PictureSpider.LocalSingleFile
     public class ExplorerFile : ExplorerFileBase
     {
         public List<string> paths;
+        public bool[] pageBookmarks;
         //计算每张图片的相对路径，移动到fav时保留目录结构。
         public string root_path;
         //是否位于fav目录(即创建时的bookmarked值)，这会影响后续操作
@@ -60,12 +61,14 @@ namespace PictureSpider.LocalSingleFile
         public ExplorerFile(IEnumerable<string> _paths,string _root_path,bool _b)
         {
             paths = _paths.ToList();
+            pageBookmarks = Enumerable.Repeat(_b, paths.Count).ToArray();
             root_path = _root_path;
             description = Path.GetRelativePath(root_path, Path.GetDirectoryName(paths[0])).Replace("\\","<br>");
             in_fav_dir = bookmarked = _b;
             readed = false;
         }
         public override string FilePath(int page) { return paths[page]; }
+        public override BookmarkStatus GetBookmarkStatus(int page) { return pageBookmarks[page] ? BookmarkStatus.Public : BookmarkStatus.None; }
         public override int pageCount() { return paths.Count; }
         public override string WebsiteURL(int page) { return ""; }
         public override int validPageCount() { return paths.Count; }
