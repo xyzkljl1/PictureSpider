@@ -83,9 +83,12 @@ namespace PictureSpider
             {
                 if (file_list.Count == 0)
                     return Properties.Resources.NotFav;
-                if (file_list[index].bookmarked)
-                    return file_list[index].bookmarkPrivate ? Properties.Resources.FavPrivate : Properties.Resources.Fav;
-                return Properties.Resources.NotFav;
+                return file_list[index].GetBookmarkStatus(sub_index) switch
+                {
+                    BookmarkStatus.Public => Properties.Resources.Fav,
+                    BookmarkStatus.Private => Properties.Resources.FavPrivate,
+                    _ => Properties.Resources.NotFav
+                };
             }
         }
         [Bindable(true)]
@@ -429,8 +432,8 @@ namespace PictureSpider
                 this.NotifyChangeRange<string>(new List<string> { "IdText", "DescText", "TotalPageText" });
                 this.NotifyChange<string>("UserId");
                 this.NotifyChange<List<string>>("Tags");
-                this.NotifyChange<Bitmap>("FavIcon");
             }
+            this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");
             //载入相邻illustGroup的前n张图和当前illusgGroup浏览位置附近n张图
@@ -516,25 +519,14 @@ namespace PictureSpider
             if (index < 0 || index >= file_list.Count)
                 return;
             var illust = file_list[index];
-            if (args.Button == MouseButtons.Left)//左键切换整组是否收藏
+            if (args.Button == MouseButtons.Left)//左键切换收藏，具体范围由模块决定
                 await SwitchBookmarkStatusImpLeftClick(illust);
             else if (args.Button == MouseButtons.Right&&illust.bookmarked&&illust.validPageCount()>1)//右键切换单张收藏，不允许全部屏蔽
                 await SwitchBookmarkStatusImpRightClick(illust);
         }
         private async Task SwitchBookmarkStatusImpLeftClick(ExplorerFileBase illust)
         {
-            if (server.UsesTripleBookmark(illust))
-            {
-                if (!illust.bookmarked)//0->1
-                    illust.bookmarked = true;
-                else if (illust.bookmarkPrivate)//2->0
-                    illust.bookmarked = illust.bookmarkPrivate = false;
-                else//1->2
-                    illust.bookmarkPrivate = true;
-            }
-            else
-                illust.bookmarked = !illust.bookmarked;
-            await server.SetBookmarked(illust);
+            await server.SwitchBookmark(illust, sub_index);
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");

@@ -17,7 +17,7 @@ namespace PictureSpider
         {
             download_dir_unified_fav = Path.Combine(Path.GetFullPath(config.AuthorHubDownloadDir), "fav");
         }
-        public bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
+        protected bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
         public string logPrefix
         {
             get { return _logPrefix; }
@@ -74,7 +74,21 @@ namespace PictureSpider
             new_index = -1;
             new_sub_index = -1;
         }
-        public virtual bool UsesTripleBookmark(ExplorerFileBase file) { return tripleBookmarkState; }
+        public virtual Task SwitchBookmark(ExplorerFileBase file, int page)
+        {
+            if (tripleBookmarkState)
+            {
+                if (!file.bookmarked)//0->1
+                    file.bookmarked = true;
+                else if (file.bookmarkPrivate)//2->0
+                    file.bookmarked = file.bookmarkPrivate = false;
+                else//1->2
+                    file.bookmarkPrivate = true;
+            }
+            else
+                file.bookmarked = !file.bookmarked;
+            return SetBookmarked(file);
+        }
         public virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
         public virtual Task SetBookmarkEach(ExplorerFileBase file, int page) { return Task.CompletedTask; }

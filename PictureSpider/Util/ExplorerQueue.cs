@@ -8,6 +8,13 @@ using System.Threading.Tasks;
 
 namespace PictureSpider
 {
+    public enum BookmarkStatus
+    {
+        None,
+        Public,
+        Private
+    }
+
     public abstract class ExplorerFileBase
     {
         public string id;
@@ -24,6 +31,12 @@ namespace PictureSpider
         public abstract int validPageCount();
         public abstract string WebsiteURL(int page);
         public abstract string FilePath(int page);
+        public virtual BookmarkStatus GetBookmarkStatus(int page)
+        {
+            if (!bookmarked)
+                return BookmarkStatus.None;
+            return bookmarkPrivate ? BookmarkStatus.Private : BookmarkStatus.Public;
+        }
         public virtual bool isPageValid(int page) { return true; }
         public virtual void switchPageValid(int page) { }
     }

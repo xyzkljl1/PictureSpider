@@ -199,9 +199,9 @@ namespace PictureSpider.AuthorHub
             return null;
         }
 
-        public override bool UsesTripleBookmark(ExplorerFileBase file)
+        public override Task SwitchBookmark(ExplorerFileBase file, int page)
         {
-            return GetSourceServer(file)?.UsesTripleBookmark(file) ?? false;
+            return GetSourceServer(file)?.SwitchBookmark(file, page) ?? Task.CompletedTask;
         }
         public override Task SetReaded(ExplorerFileBase file)
         {
