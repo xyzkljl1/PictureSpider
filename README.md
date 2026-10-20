@@ -9,6 +9,8 @@
 8.Hentaiera
 9.Telegram
 
+LSF 按图片所在文件夹分组浏览，子文件夹独立成组，文件夹和图片均按自然顺序排序。收藏和已读操作作用于整组；组内翻页或离开图组时按默认浏览逻辑标记已读，未收藏的已读图片由定期清理删除。
+
 Telegram 支持通过数据库维护屏蔽词，在下载前检查相册和评论套图用于命名的短标题（说明先排除裸链接，再截取前30个字符并清理，保留带链接的可见文字），以及 Telegraph 消息正文和预览标题。匹配忽略大小写；独立散图和已下载文件不受影响。每轮下载开始时读取最新屏蔽词，命中的消息会永久忽略。移除屏蔽词不会自动恢复之前忽略的消息。
 
 AuthorHub 支持手动关联 Pixiv、X、Hitomi、Kemono 和 Pawchive 中的同一作者，通过统一队列浏览图片。需准备独立数据库并配置 `AuthorHubConnectStr`；Pixiv、Pawchive、Hitomi、X 和 Kemono 的统一收藏目录通过 `AuthorHubDownloadDir` 配置。

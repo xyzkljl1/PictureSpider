@@ -155,10 +155,12 @@ namespace PictureSpider.LocalSingleFile
                 var readed=database.Waited.Select(x => x.path).ToHashSet<String>();
                 var dir = queue.id;
                 var existedFiles = GetFiles(dir);
-                foreach (var path in existedFiles.OrderBy(x => Path.GetRelativePath(dir, x), NaturalStringComparer.Instance))
-                    if(!readed.Contains(path))
-                        result.Add(new ExplorerFile(Path.GetFullPath(path),dir, false));
-                    }
+                foreach (var group in existedFiles.Where(x => !readed.Contains(x))
+                    .GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => Path.GetRelativePath(dir, x.Key), NaturalStringComparer.Instance))
+                    result.Add(new ExplorerFile(group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
+                        .Select(x => Path.GetFullPath(x)),dir, false));
+            }
             return result;
         }
         private List<ExplorerFileBase> GetFavoriteFiles(string storageName = null)
@@ -166,8 +168,10 @@ namespace PictureSpider.LocalSingleFile
             var dir = storageName == null ? FavDir : Path.Combine(download_dir_unified_fav, storageName, "lsf");
             var root = storageName == null ? FavDir : download_dir_unified_fav;
             var result = new List<ExplorerFileBase>();
-            foreach (var path in GetFiles(dir).OrderBy(x => Path.GetRelativePath(root, x), NaturalStringComparer.Instance))
-                result.Add(new ExplorerFile(Path.GetFullPath(path), root, true));
+            foreach (var group in GetFiles(dir).GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => Path.GetRelativePath(root, x.Key), NaturalStringComparer.Instance))
+                result.Add(new ExplorerFile(group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
+                    .Select(x => Path.GetFullPath(x)), root, true));
             return result;
         }
         //获取该目录及子目录下所有图片文件,为便于比较统一使用Path.GetFullPath
@@ -192,108 +196,76 @@ namespace PictureSpider.LocalSingleFile
         }
         public override Task SetReaded(ExplorerFileBase file)
         {
-            var path= (file as ExplorerFile).path;
-            var pathraw = Util.String2Bytes(path);
-            var exists = (from illust in database.Waited
-                          where illust.path_raw == pathraw
-                          select illust).ToList<Illust>();
-            if (file.readed)
+            var group = (ExplorerFile)file;
+            foreach (var path in group.paths)
             {
-                if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, false));
-                else 
+                var pathraw = Util.String2Bytes(path);
+                var exists = (from illust in database.Waited
+                              where illust.path_raw == pathraw
+                              select illust).ToList<Illust>();
+                if (file.readed)
                 {
-                    exists.First().readed = true;//默认只有一个
-                    exists.First().date = DateTime.Now;
+                    if (exists.Count == 0)
+                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), false));
+                    else
+                    {
+                        exists.First().readed = true;//默认只有一个
+                        exists.First().date = DateTime.Now;
+                    }
                 }
-            }
-            else
-            {
-                if (exists.Count == 0)
+                else
                 {
-                    //Do Nothing，按理说不会出现此种情况
-                    throw new Exception("Why?");
+                    if (exists.Count == 0)
+                    {
+                        //Do Nothing，按理说不会出现此种情况
+                        throw new Exception("Why?");
+                    }
+                    else//应当直接从数据库里删除，因为数据库只存待删除/待移动的文件
+                        foreach (var illust in exists)
+                            database.Waited.Remove(illust);
                 }
-                else//应当直接从数据库里删除，因为数据库只存待删除/待移动的文件
-                    foreach (var illust in exists)
-                        database.Waited.Remove(illust);
             }
             database.SaveChanges();
             return Task.CompletedTask;
         }
         public override Task SetBookmarked(ExplorerFileBase file)
         {
-            var path = (file as ExplorerFile).path;
-            var pathraw = Util.String2Bytes(path);
-            var exists = (from illust in database.Waited
-                          where illust.path_raw == pathraw
-                          select illust).ToList<Illust>();
-            if (file.bookmarked)
+            var group = (ExplorerFile)file;
+            foreach (var path in group.paths)
             {
-                if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, true));
-                else//默认只有一个
+                var pathraw = Util.String2Bytes(path);
+                var exists = (from illust in database.Waited
+                              where illust.path_raw == pathraw
+                              select illust).ToList<Illust>();
+                if (file.bookmarked)
                 {
-                    if((file as ExplorerFile).in_fav_dir)//原本在fav目录则无需操作，从队列里移除
-                        database.Waited.Remove(exists.First());
-                    else//原本不在则需要留在队列
+                    if (exists.Count == 0)
+                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), true));
+                    else//默认只有一个
                     {
-                        exists.First().fav = true;
+                        if(group.in_fav_dir)//原本在fav目录则无需操作，从队列里移除
+                            database.Waited.Remove(exists.First());
+                        else//原本不在则需要留在队列
+                        {
+                            exists.First().fav = true;
+                            exists.First().date = DateTime.Now;
+                        }
+                    }
+                }
+                else
+                {
+                    //被取消bookmark的图片一定是已读的，仍然需要删除
+                    if (exists.Count == 0)
+                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), false));
+                    else//默认只有一个
+                    {
+                        exists.First().fav = false;
                         exists.First().date = DateTime.Now;
                     }
                 }
             }
-            else
-            {
-                //被取消bookmark的图片一定是已读的，仍然需要删除
-                if (exists.Count == 0)
-                    database.Waited.Add(new Illust((file as ExplorerFile).path, (file as ExplorerFile).sub_path, false));
-                else//默认只有一个
-                {
-                    exists.First().fav = false;
-                    exists.First().date = DateTime.Now;
-                }
-            }
             database.SaveChanges();
             return Task.CompletedTask;
-        }
-        public override void ExplorerQueueSwitchVertical(List<ExplorerFileBase> file_list,bool manually,int offset, int cur_index, int cur_sub_index, bool to_end, out int new_index, out int new_sub_index)
-        {
-            if (Math.Abs(offset) > 1) throw new NotImplementedException("");
-            if (Math.Abs(offset) == 0) throw new NotImplementedException("");
-            new_sub_index = 0;
-            if (cur_index < 0 || cur_index >= file_list.Count)
-            {
-                new_index = -1;
-                return;
-            }
-            var start_file = file_list[cur_index] as ExplorerFile;
-            string cur_subpath = "";
-            if (start_file.sub_path.Contains("\\"))
-                cur_subpath = start_file.sub_path.Split("\\")[0];
-            //被slideHorizon触发时,或处于根目录下时，和正常一样切到下一张
-            if (cur_subpath==""||!manually)
-            {
-                new_index = cur_index + offset;
-                if (new_index < 0 || new_index >= file_list.Count)
-                    new_index = -1;
-                return;
-            }
-
-            //手动slideVertical时，直接直接切到下一个子文件夹
-            for(new_index=cur_index+offset;new_index >= 0 && new_index < file_list.Count;new_index+=offset)
-            {
-                var file = file_list[new_index] as ExplorerFile;
-                string subpath = "";
-                if (file.sub_path.Contains("\\"))
-                    subpath = file.sub_path.Split("\\")[0];
-                if(subpath!=cur_subpath)
-                    return;
-            }
-            //到队尾都没找到下一个文件夹，则返回队尾
-            new_index = Math.Max(new_index, 0);
-            new_index = Math.Min(new_index, file_list.Count-1);
-            return;
         }
 
     }
