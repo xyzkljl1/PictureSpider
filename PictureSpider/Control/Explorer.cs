@@ -454,11 +454,7 @@ namespace PictureSpider
         private async Task MarkReaded(int _index)
         {
             var eFile = file_list[_index];
-            if ((!eFile.bookmarked) && !eFile.readed)
-            {
-                eFile.readed = true;
-                await server.SetReaded(eFile);
-            }
+            await server.SwitchReaded(eFile, _index == index ? sub_index : -1);
             await Task.CompletedTask;
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
@@ -535,8 +531,7 @@ namespace PictureSpider
         private async Task SwitchBookmarkStatusImpRightClick(ExplorerFileBase illust)
         {
             int i_index = (int)this.Image.Tag;
-            illust.switchPageValid(i_index);
-            await server.SetBookmarkEach(illust, i_index);
+            await server.SwitchBookmarkEach(illust, i_index);
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");

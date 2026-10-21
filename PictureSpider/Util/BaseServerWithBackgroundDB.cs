@@ -38,7 +38,7 @@ namespace PictureSpider
                 Value = (int)userEx.FollowQueueStatus
             });
         }
-        public override Task SetReaded(ExplorerFileBase file)
+        protected override Task SetReaded(ExplorerFileBase file)
         {
             var fileEx = (ExplorerFileBaseEx)file;
             return QueuePendingUiOperation(new PendingUiOperation
@@ -49,7 +49,7 @@ namespace PictureSpider
             });
         }
 
-        public override Task SetBookmarked(ExplorerFileBase file)
+        protected override Task SetBookmarked(ExplorerFileBase file)
         {
             var fileEx = (ExplorerFileBaseEx)file;
             return QueuePendingUiOperation(new PendingUiOperation
@@ -60,7 +60,7 @@ namespace PictureSpider
             });
         }
 
-        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
+        protected override Task SetBookmarkEach(ExplorerFileBase file, int page)
         {
             var fileEx = (ExplorerFileBaseEx)file;
             if (page < 0 || page >= fileEx.pageCount())

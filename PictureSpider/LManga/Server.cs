@@ -54,7 +54,7 @@ namespace PictureSpider.LManga
             return Task.FromResult(result);
         }
 
-        public override Task SetReaded(ExplorerFileBase file)
+        protected override Task SetReaded(ExplorerFileBase file)
         {
             var chapter = (ExplorerFile)file;
             if (file.readed)

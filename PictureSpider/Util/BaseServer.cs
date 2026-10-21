@@ -89,9 +89,23 @@ namespace PictureSpider
                 file.bookmarked = !file.bookmarked;
             return SetBookmarked(file);
         }
-        public virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
-        public virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
-        public virtual Task SetBookmarkEach(ExplorerFileBase file, int page) { return Task.CompletedTask; }
+        //page为-1表示跨组跳转时经过的图组，没有实际浏览的页。
+        public virtual async Task SwitchReaded(ExplorerFileBase file, int page)
+        {
+            if (!file.bookmarked && !file.readed)
+            {
+                file.readed = true;
+                await SetReaded(file);
+            }
+        }
+        public virtual Task SwitchBookmarkEach(ExplorerFileBase file, int page)
+        {
+            file.switchPageValid(page);
+            return SetBookmarkEach(file, page);
+        }
+        protected virtual Task SetReaded(ExplorerFileBase file) { return Task.CompletedTask; }
+        protected virtual Task SetBookmarked(ExplorerFileBase file) { return Task.CompletedTask; }
+        protected virtual Task SetBookmarkEach(ExplorerFileBase file, int page) { return Task.CompletedTask; }
         public virtual BaseUser GetUserById(string id) { return null; }
         public virtual Task SetUserFollowOrQueue(BaseUser user) { return Task.CompletedTask; }
         public virtual Dictionary<string, TagStatus> GetAllTagsStatus() { return new Dictionary<string, TagStatus>(); }

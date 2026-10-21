@@ -203,17 +203,13 @@ namespace PictureSpider.AuthorHub
         {
             return GetSourceServer(file)?.SwitchBookmark(file, page) ?? Task.CompletedTask;
         }
-        public override Task SetReaded(ExplorerFileBase file)
+        public override Task SwitchReaded(ExplorerFileBase file, int page)
         {
-            return GetSourceServer(file)?.SetReaded(file) ?? Task.CompletedTask;
+            return GetSourceServer(file)?.SwitchReaded(file, page) ?? Task.CompletedTask;
         }
-        public override Task SetBookmarked(ExplorerFileBase file)
+        public override Task SwitchBookmarkEach(ExplorerFileBase file, int page)
         {
-            return GetSourceServer(file)?.SetBookmarked(file) ?? Task.CompletedTask;
-        }
-        public override Task SetBookmarkEach(ExplorerFileBase file, int page)
-        {
-            return GetSourceServer(file)?.SetBookmarkEach(file, page) ?? Task.CompletedTask;
+            return GetSourceServer(file)?.SwitchBookmarkEach(file, page) ?? Task.CompletedTask;
         }
         public override BaseUser GetUserById(string id, ExplorerFileBase file)
         {

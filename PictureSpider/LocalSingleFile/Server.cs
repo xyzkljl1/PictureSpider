@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.ClearScript.V8;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -196,41 +197,17 @@ namespace PictureSpider.LocalSingleFile
         {
             return null;
         }
-        public override Task SetReaded(ExplorerFileBase file)
+        public override Task SwitchReaded(ExplorerFileBase file, int page)
         {
             var group = (ExplorerFile)file;
-            for (int page = 0; page < group.paths.Count; page++)
-            {
-                if (group.pageBookmarks[page])
-                    continue;
-                var path = group.paths[page];
-                var pathraw = Util.String2Bytes(path);
-                var exists = (from illust in database.Waited
-                              where illust.path_raw == pathraw
-                              select illust).ToList<Illust>();
-                if (file.readed)
-                {
-                    if (exists.Count == 0)
-                        database.Waited.Add(new Illust(path, Path.GetRelativePath(group.root_path, path), false));
-                    else
-                    {
-                        exists.First().readed = true;//默认只有一个
-                        exists.First().date = DateTime.Now;
-                    }
-                }
-                else
-                {
-                    if (exists.Count == 0)
-                    {
-                        //Do Nothing，按理说不会出现此种情况
-                        throw new Exception("Why?");
-                    }
-                    else//应当直接从数据库里删除，因为数据库只存待删除/待移动的文件
-                        foreach (var illust in exists)
-                            database.Waited.Remove(illust);
-                }
-            }
-            database.SaveChanges();
+            if (page < 0 || group.pageBookmarks[page])
+                return Task.CompletedTask;
+            var path = group.paths[page];
+            var illust = new Illust(path, Path.GetRelativePath(group.root_path, path), false);
+            //路径已存在时保留原操作，尤其不能覆盖待收藏记录。
+            database.Database.ExecuteSqlInterpolated($@"INSERT INTO `Waited` (`path_raw`, `sub_path_raw`, `date`, `fav`)
+                VALUES ({illust.path_raw}, {illust.sub_path_raw}, {illust.date}, {illust.fav})
+                ON DUPLICATE KEY UPDATE `path_raw` = `path_raw`");
             return Task.CompletedTask;
         }
         public override Task SwitchBookmark(ExplorerFileBase file, int page)
@@ -270,7 +247,7 @@ namespace PictureSpider.LocalSingleFile
             }
             database.SaveChanges();
             group.pageBookmarks[page] = bookmarked;
-            //全部收藏时才跳过整组已读处理，部分收藏时仍需处理其余图片。
+            //保留整组收藏状态供公共浏览逻辑使用，逐页状态由pageBookmarks提供。
             group.bookmarked = group.pageBookmarks.All(x => x);
             return Task.CompletedTask;
         }

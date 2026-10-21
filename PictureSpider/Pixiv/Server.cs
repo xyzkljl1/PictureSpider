@@ -316,7 +316,7 @@ namespace PictureSpider.Pixiv
             }
             return result;
         }
-        public override Task SetBookmarked(ExplorerFileBase file)
+        protected override Task SetBookmarked(ExplorerFileBase file)
         {
             return QueuePendingUiOperation(new PendingUiOperation
             {
