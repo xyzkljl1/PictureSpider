@@ -89,7 +89,7 @@ namespace PictureSpider
                 file.bookmarked = !file.bookmarked;
             return SetBookmarked(file);
         }
-        //page为-1表示跨组跳转时经过的图组，没有实际浏览的页。
+        //page为-1表示处理整个图组；指定页号时，是否按单页处理由模块决定。
         public virtual async Task SwitchReaded(ExplorerFileBase file, int page)
         {
             if (!file.bookmarked && !file.readed)

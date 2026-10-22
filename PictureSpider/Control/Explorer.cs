@@ -451,10 +451,10 @@ namespace PictureSpider
         {
             return MarkReaded(this.index);
         }
-        private async Task MarkReaded(int _index)
+        private async Task MarkReaded(int _index, bool wholeGroup=false)
         {
             var eFile = file_list[_index];
-            await server.SwitchReaded(eFile, _index == index ? sub_index : -1);
+            await server.SwitchReaded(eFile, _index == index && !wholeGroup ? sub_index : -1);
             await Task.CompletedTask;
         }
         //切图的UI响应,通过UI切图时先将当前标记为已读
@@ -469,7 +469,7 @@ namespace PictureSpider
             //不考虑循环，如果index从3->5,就认为[3,5)已读,不考虑从3向前切换经过队头达到5的情况
             for(int i = Math.Min(new_index,index);i<= Math.Max(new_index, index);++i)
                 if(i!=new_index)
-                    await MarkReaded(i);
+                    await MarkReaded(i, manually && offset > 0);
             SlideTo(new_index, new_sub_index);
             return true;
         }

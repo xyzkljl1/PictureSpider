@@ -200,14 +200,17 @@ namespace PictureSpider.LocalSingleFile
         public override Task SwitchReaded(ExplorerFileBase file, int page)
         {
             var group = (ExplorerFile)file;
-            if (page < 0 || group.pageBookmarks[page])
-                return Task.CompletedTask;
-            var path = group.paths[page];
-            var illust = new Illust(path, Path.GetRelativePath(group.root_path, path), false);
-            //路径已存在时保留原操作，尤其不能覆盖待收藏记录。
-            database.Database.ExecuteSqlInterpolated($@"INSERT INTO `Waited` (`path_raw`, `sub_path_raw`, `date`, `fav`)
-                VALUES ({illust.path_raw}, {illust.sub_path_raw}, {illust.date}, {illust.fav})
-                ON DUPLICATE KEY UPDATE `path_raw` = `path_raw`");
+            for (int i = page < 0 ? 0 : page; i < (page < 0 ? group.paths.Count : page + 1); i++)
+            {
+                if (group.pageBookmarks[i])
+                    continue;
+                var path = group.paths[i];
+                var illust = new Illust(path, Path.GetRelativePath(group.root_path, path), false);
+                //路径已存在时保留原操作，尤其不能覆盖待收藏记录。
+                database.Database.ExecuteSqlInterpolated($@"INSERT INTO `Waited` (`path_raw`, `sub_path_raw`, `date`, `fav`)
+                    VALUES ({illust.path_raw}, {illust.sub_path_raw}, {illust.date}, {illust.fav})
+                    ON DUPLICATE KEY UPDATE `path_raw` = `path_raw`");
+            }
             return Task.CompletedTask;
         }
         public override Task SwitchBookmark(ExplorerFileBase file, int page)
