@@ -37,6 +37,7 @@ namespace PictureSpider.Telegram
     [Table("Messages")]
     [PrimaryKey(nameof(id), nameof(chat))]
     [Index(nameof(albumid))]
+    [Index(nameof(chat), nameof(state))]
     public class Message
     {
         //注意id并非唯一，id+chatId才是唯一的
