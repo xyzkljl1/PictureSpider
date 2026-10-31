@@ -388,6 +388,10 @@ namespace PictureSpider.Telegram
                                         database.FinishedTasks.Add(new FinishedTask { url=content.LinkPreview.Url , title=content.LinkPreview.Title ,comment=$"Download telegraph from {message.id} in {channel.title} at {DateTime.Now}"});
                                         ct++;
                                     }
+                                    else
+                                    {
+                                        message.state = MessageState.Wait;
+                                    }
                                     database.SaveChanges();
                                 }
                             }
