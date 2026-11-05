@@ -323,7 +323,6 @@ namespace PictureSpider.Telegram
                 int ct = 0;
                 int ct2 = 0;
                 var messages = database.Messages.Where(message => message.state == MessageState.Wait && message.chat == channel.id).ToList();
-                Log($"Loaded {messages.Count} Waiting Messages {channel.title}({channel.id})");
                 //var messages = database.Messages.Where(message => message.chat == channel.id&&message.timestamp>= 1728880449).ToList();
                 foreach (var message in messages)
                     if(message.state == MessageState.Wait)//有的下载会改变其它message的状态，此处还要再判断一次state
@@ -500,7 +499,6 @@ namespace PictureSpider.Telegram
                         }
                     }
                 database.SaveChanges();
-                Log($"Channel Download Done {channel.title}({channel.id})");
                 if (ct > 0)
                     Log($"Process {ct} Download Request in {channel.title}");
                 if (ct2 > 0)
