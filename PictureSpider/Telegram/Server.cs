@@ -64,6 +64,7 @@ namespace PictureSpider.Telegram
         private int apiId = 0;
         private string apiHash = "";
         private string myDownloadServerAddr = "";
+        public Func<Task<Func<string, (string AuthorName, string WorkName)?>>> CreateAuthorMatcherAsync { get; set; }
         private string loginProxy = ""; // http proxy like "host:port",see Login()
         private TdClient tgClient;
         private HttpClient localHttpClient;
@@ -314,7 +315,10 @@ namespace PictureSpider.Telegram
             Log("Start Download Try");
             var blockedKeywords = database.BlockedKeywords.Select(x => x.keyword).ToList()
                 .Where(x => !String.IsNullOrWhiteSpace(x)).ToList();
-            foreach (var channel in database.Channels.ToList())//要tolist获得一份拷贝，否则database会处于占用中
+            var channels = database.Channels.ToList();
+            var matchAuthor = CreateAuthorMatcherAsync != null && channels.Any(x => x.download_telegraph)
+                ? await CreateAuthorMatcherAsync() : null;
+            foreach (var channel in channels)//要tolist获得一份拷贝，否则database会处于占用中
             {
                 if (!(channel.download_telegraph || channel.download_video || channel.download_illust || channel.download_comments))
                     continue;
@@ -380,16 +384,31 @@ namespace PictureSpider.Telegram
                                     {
                                         message.state = MessageState.Dup;
                                     }
-                                    else if (await RequestGetAsync($"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.LinkPreview.Url)}"))
-                                    {
-                                        message.state = MessageState.Done;
-                                        Log($"Send Task to MyDownload Server:{message.id} / {content.LinkPreview.Title} / {content.LinkPreview.Url}");
-                                        database.FinishedTasks.Add(new FinishedTask { url=content.LinkPreview.Url , title=content.LinkPreview.Title ,comment=$"Download telegraph from {message.id} in {channel.title} at {DateTime.Now}"});
-                                        ct++;
-                                    }
                                     else
                                     {
-                                        message.state = MessageState.Wait;
+                                        var requestUrl = $"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.LinkPreview.Url)}";
+                                        var title = content.LinkPreview.Title ?? "";
+                                        var match = matchAuthor?.Invoke(title);
+                                        if (match is { } matched)
+                                        {
+                                            var authorName = matched.AuthorName.NormalizeDirectoryName();
+                                            var workName = matched.WorkName.NormalizeDirectoryName();
+                                            if (workName.Length == 0)
+                                                workName = title.NormalizeDirectoryName();
+                                            if (authorName.Length > 0 && workName.Length > 0)
+                                                requestUrl += "&dir=" + System.Web.HttpUtility.UrlEncode($"{authorName}/{workName}");
+                                        }
+                                        if (await RequestGetAsync(requestUrl))
+                                        {
+                                            message.state = MessageState.Done;
+                                            Log($"Send Task to MyDownload Server:{message.id} / {content.LinkPreview.Title} / {content.LinkPreview.Url}");
+                                            database.FinishedTasks.Add(new FinishedTask { url=content.LinkPreview.Url , title=content.LinkPreview.Title ,comment=$"Download telegraph from {message.id} in {channel.title} at {DateTime.Now}"});
+                                            ct++;
+                                        }
+                                        else
+                                        {
+                                            message.state = MessageState.Wait;
+                                        }
                                     }
                                     database.SaveChanges();
                                 }

@@ -6,6 +6,8 @@ namespace PictureSpider.AuthorHub
     {
         public DbSet<Author> Authors { get; set; }
         public DbSet<AuthorSource> AuthorSources { get; set; }
+        public DbSet<MatchAuthor> MatchAuthors { get; set; }
+        public DbSet<AuthorAlias> AuthorAliases { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -31,6 +33,11 @@ namespace PictureSpider.AuthorHub
                 .UseCollation("utf8mb4_0900_bin");
             // 来源映射由应用检查；AuthorId 按要求不建立外键。
             modelBuilder.Entity<AuthorSource>().HasIndex(x => x.AuthorId);
+
+            modelBuilder.Entity<MatchAuthor>().Property(x => x.IsFallback).HasDefaultValue(false);
+
+            modelBuilder.Entity<AuthorAlias>().HasOne<MatchAuthor>().WithMany()
+                .HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

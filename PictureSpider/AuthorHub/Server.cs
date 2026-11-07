@@ -34,6 +34,33 @@ namespace PictureSpider.AuthorHub
             }
         }
 
+        public async Task<Func<string, (string AuthorName, string WorkName)?>> CreateAuthorMatcherAsync()
+        {
+            if (string.IsNullOrWhiteSpace(connectStr))
+                return null;
+            try
+            {
+                using var db = new Database { ConnStr = connectStr, ReadOnly = true };
+                var aliases = await (from alias in db.AuthorAliases.AsNoTracking()
+                                     join author in db.MatchAuthors.AsNoTracking() on alias.AuthorId equals author.Id
+                                     select new { alias.AuthorId, alias.Name, alias.AllowAutoMatch, author.IsFallback, AuthorName = author.Name }).ToListAsync();
+                var authorNames = aliases.DistinctBy(x => x.AuthorId).ToDictionary(x => x.AuthorId, x => x.AuthorName);
+                var matchAuthor = AuthorMatcher.CreateMatcher(aliases.Select(x => (x.AuthorId, x.Name, x.AllowAutoMatch, x.IsFallback)));
+                return title =>
+                {
+                    var match = matchAuthor(title);
+                    return match.Status == AuthorMatchStatus.Matched
+                        ? (authorNames[match.AuthorId.Value], match.WorkName) : null;
+                };
+            }
+            catch (Exception ex) when (ex is MySqlException or ArgumentException
+                or InvalidOperationException { InnerException: MySqlException })
+            {
+                LogError("Failed to load author aliases.");
+                return null;
+            }
+        }
+
         public override async Task<List<ExplorerQueue>> GetExplorerQueues()
         {
             var result = new List<ExplorerQueue>();

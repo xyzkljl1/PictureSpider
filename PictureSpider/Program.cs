@@ -53,7 +53,8 @@ namespace PictureSpider
                                 {
                                     var commonServers = new List<BaseServer> { hitomiServer, lsfServer, tgServer, kemonoServer, hentaieraServer, twitterServer, lmangaServer, manhuaguiServer, pawchiveServer };
                                     if (!string.IsNullOrWhiteSpace(config.AuthorHubConnectStr))
-                                        commonServers.Add(new AuthorHub.Server(config,
+                                    {
+                                        var authorHubServer = new AuthorHub.Server(config,
                                             new Dictionary<AuthorHub.SourceModule, BaseServer>
                                             {
                                                 { AuthorHub.SourceModule.Pixiv, pixivServer },
@@ -62,7 +63,10 @@ namespace PictureSpider
                                                 { AuthorHub.SourceModule.Kemono, kemonoServer },
                                                 { AuthorHub.SourceModule.Pawchive, pawchiveServer },
                                                 { AuthorHub.SourceModule.LSF, lsfServer }
-                                            }));
+                                            });
+                                        commonServers.Add(authorHubServer);
+                                        tgServer.CreateAuthorMatcherAsync = authorHubServer.CreateAuthorMatcherAsync;
+                                    }
                                     context.Post(async async => {
                                         await pixivServer.Init();
                                         foreach(var commonServer in commonServers)

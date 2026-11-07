@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PictureSpider
@@ -113,6 +114,13 @@ namespace PictureSpider
         {
             ReplaceInvalidCharInFilename(ref filename);
             return filename;
+        }
+        public static string NormalizeDirectoryName(this string directoryName)
+        {
+            directoryName = directoryName.ReplaceInvalidCharInFilenameWithReturnValue().TrimEnd(' ', '.');
+            if (Regex.IsMatch(directoryName, @"^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                directoryName = "_" + directoryName;
+            return directoryName;
         }
         // 不会修改this的值！！
         public static string ReplaceInvalidCharInPathWithReturnValue(this string filename)
