@@ -51,7 +51,7 @@ namespace PictureSpider
                 var leadingJoinedMatcher = joinedMatcher == null ? null : new Regex(
                     joinedMatcher.ToString().TrimEnd('$') + @"(?=$|[\s_:\-])",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-                return (Lookup: lookup, Matcher: matcher, JoinedMatcher: joinedMatcher, LeadingJoinedMatcher: leadingJoinedMatcher);
+                return (Lookup: lookup, Pattern: pattern, Matcher: matcher, JoinedMatcher: joinedMatcher, LeadingJoinedMatcher: leadingJoinedMatcher);
             }).ToArray();
             var fallbackPattern = string.Join("|", matchers[1].Lookup
                 .Where(x => x.Any(a => a.AllowAutoMatch) && x.Select(a => a.AuthorId).Distinct().Count() == 1
@@ -63,6 +63,13 @@ namespace PictureSpider
             var repeatedFallbackPrefix = fallbackPattern.Length == 0 ? null : new Regex(
                 @"^(?:(?:" + fallbackPattern + @")(?=[\s_:\-]|$)[\s_:\-]*|\[(?:Fanbox|Fantia|Patreon|Pixiv|Twitter|"
                     + fallbackPattern + @")\][\s_:\-]*)+",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            var datedAuthorMatcher = matchers[0].Pattern.Length == 0 ? null : new Regex(
+                @"^(?<work>[0-9]+(?:-[0-9]+)*-{3,}.+?)-(?<author>" + matchers[0].Pattern
+                    + @")(?<date>-(?:0?[1-9]|1[0-2])-(?:0?[1-9]|[12][0-9]|3[01]))$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            var brandedAuthorMatcher = fallbackPattern.Length == 0 || matchers[0].Pattern.Length == 0 ? null : new Regex(
+                @"^(?:" + fallbackPattern + @")(?<author>" + matchers[0].Pattern + @")-{3,}(?<work>.+)$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             var cache = new Dictionary<string, AuthorMatchResult>(StringComparer.Ordinal);
             return originalName =>
@@ -132,6 +139,23 @@ namespace PictureSpider
                             item = prefixMatch with { WorkName = (authorText.Substring(0, prefixLength) + prefixMatch.WorkName).TrimEnd(' ', '-', '_', ':') };
                             break;
                         }
+                    }
+                }
+                if (item.Status != AuthorMatchStatus.Matched)
+                {
+                    // 编号---作品-作者-日期，或品牌作者---作品：只补救完整格式，保留作品字段中的其它名字。
+                    foreach (var matcher in new[] { datedAuthorMatcher, brandedAuthorMatcher })
+                    {
+                        var match = matcher?.Match(authorText);
+                        if (match == null || !match.Success)
+                            continue;
+                        var hits = matchers[0].Lookup[match.Groups["author"].Value].ToList();
+                        item = item with { Status = AuthorMatchStatus.NeedsReview };
+                        if (hits.Select(x => x.AuthorId).Distinct().Count() != 1 || !hits.Any(x => x.AllowAutoMatch))
+                            continue;
+                        item = item with { Status = AuthorMatchStatus.Matched, AuthorId = hits[0].AuthorId,
+                            WorkName = (match.Groups["work"].Value + match.Groups["date"].Value).Trim(' ', '-', '_', ':') };
+                        break;
                     }
                 }
                 if (item.Status == AuthorMatchStatus.Unmatched)
