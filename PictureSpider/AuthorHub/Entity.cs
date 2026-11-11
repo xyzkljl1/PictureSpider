@@ -16,7 +16,8 @@ namespace PictureSpider.AuthorHub
     public class Author
     {
         public long Id { get; set; }
-        public string Name { get; set; } = "";
+        [Required, MaxLength(255)]
+        public string DisplayName { get; set; } = "";
         public string StorageName { get; set; } = "";
     }
 

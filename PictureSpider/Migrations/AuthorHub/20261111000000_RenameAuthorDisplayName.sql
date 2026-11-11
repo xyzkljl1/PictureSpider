@@ -1,0 +1,1 @@
+ALTER TABLE Authors RENAME COLUMN Name TO DisplayName;

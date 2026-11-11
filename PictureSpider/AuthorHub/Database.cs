@@ -17,7 +17,6 @@ namespace PictureSpider.AuthorHub
 
             modelBuilder.Entity<Author>().ToTable("Authors");
             modelBuilder.Entity<Author>().HasKey(x => x.Id);
-            modelBuilder.Entity<Author>().Property(x => x.Name).IsRequired().HasMaxLength(255);
             modelBuilder.Entity<Author>().Property(x => x.StorageName)
                 .IsRequired().HasMaxLength(128)
                 .UseCollation("utf8mb4_0900_as_ci");

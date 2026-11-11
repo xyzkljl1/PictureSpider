@@ -72,8 +72,8 @@ namespace PictureSpider.AuthorHub
             try
             {
                 using var db = new Database { ConnStr = connectStr, ReadOnly = true };
-                authors = await db.Authors.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
-                    .Select(x => new Author { Id = x.Id, Name = x.Name }).ToListAsync();
+                authors = await db.Authors.AsNoTracking().OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
+                    .Select(x => new Author { Id = x.Id, DisplayName = x.DisplayName }).ToListAsync();
                 sources = await db.AuthorSources.AsNoTracking().ToListAsync();
             }
             catch (Exception ex) when (ex is MySqlException
@@ -137,7 +137,7 @@ namespace PictureSpider.AuthorHub
                 {
                     result.Add(new ExplorerQueue(ExplorerQueue.QueueType.User,
                         author.Id.ToString(CultureInfo.InvariantCulture),
-                        $"A · {author.Name}"));
+                        $"A · {author.DisplayName}"));
                 }
             }
             return result;
