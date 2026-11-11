@@ -79,48 +79,50 @@ namespace PictureSpider.LocalSingleFile
                           select illust).ToList<Illust>();
             int del_ct = 0;
             int mv_ct = 0;
-            foreach(var illust in illusts)
+            foreach(var batch in illusts.Chunk(200))
             {
-                if (!File.Exists(illust.path))
-                    continue;
-                if(illust.fav)
+                foreach(var illust in batch)
                 {
-                    var filename = Path.GetFileName(illust.path);
-                    var dest_path = Path.Combine(FavDir, illust.sub_path);
-                    var dest_dir= Path.GetDirectoryName(dest_path);
-                    while (File.Exists(dest_path))
-                    {//如果目的地存在同名文件就一直加_直到不重名
-                        filename = $"_{filename}";
-                        dest_path=Path.Combine(dest_dir,filename);
-                    }
-                    if(!Directory.Exists(dest_dir))
-                        Directory.CreateDirectory(dest_dir);
-                    try
+                    if (!File.Exists(illust.path))
+                        continue;
+                    if(illust.fav)
                     {
-                        File.Move(illust.path, dest_path);
-                        database.Waited.Remove(illust);
-                        database.SaveChanges();
-                        mv_ct++;
+                        var filename = Path.GetFileName(illust.path);
+                        var dest_path = Path.Combine(FavDir, illust.sub_path);
+                        var dest_dir= Path.GetDirectoryName(dest_path);
+                        while (File.Exists(dest_path))
+                        {//如果目的地存在同名文件就一直加_直到不重名
+                            filename = $"_{filename}";
+                            dest_path=Path.Combine(dest_dir,filename);
+                        }
+                        if(!Directory.Exists(dest_dir))
+                            Directory.CreateDirectory(dest_dir);
+                        try
+                        {
+                            File.Move(illust.path, dest_path);
+                            database.Waited.Remove(illust);
+                            mv_ct++;
+                        }
+                        catch (System.IO.IOException)
+                        {
+                            //说明文件被占用，忽略
+                        }
                     }
-                    catch (System.IO.IOException)
+                    else
                     {
-                        //说明文件被占用，忽略
+                        try
+                        {
+                            File.Delete(illust.path);
+                            database.Waited.Remove(illust);
+                            del_ct++;
+                        }
+                        catch (System.IO.IOException)
+                        {
+                            //说明文件被占用，忽略
+                        }
                     }
                 }
-                else
-                {
-                    try
-                    {
-                        File.Delete(illust.path);
-                        database.Waited.Remove(illust);
-                        database.SaveChanges();
-                        del_ct++;
-                    }
-                    catch (System.IO.IOException)
-                    {
-                        //说明文件被占用，忽略
-                    }
-                }
+                database.SaveChanges();
             }
             Log($"Weekly Task Done:Move {mv_ct}/Del {del_ct}.");
             foreach (var dir in TmpDirs)
