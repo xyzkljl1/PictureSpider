@@ -528,73 +528,72 @@ namespace PictureSpider.Pixiv
                 var followed_user = new HashSet<int>();
                 foreach (var user in await database.GetFollowedUser())
                     followed_user.Add(user.userId);
-                var followed_tags=await database.GetFollowedTagsOrdered();
+                var followed_tags=(await database.GetFollowedTagsOrdered()).ToHashSet();
+                var now = DateTime.Now;
 
                 var tmp = new List<List<Illust>> {list_private, list_nonprivate };
                 for(int i=0;i<2;++i)
                 {
                     int FOLLOWED_USER_MAGIC_NUMBER = 1000000;//关注作者对illust分数的加算加成
                     var illust_list = tmp[i];
-                    int follow_ct = 0;
+                    var scores = new Dictionary<Illust, double>();
                     //关注作者最优先
                     //收藏、点赞高的优先，浏览量低的优先，时间近的优先
                     foreach (var illust in illust_list)
                     {
-                        illust.score = 0;
-                        if (followed_user.Contains(illust.userId))
-                        {
-                            follow_ct++;
-                            illust.score += FOLLOWED_USER_MAGIC_NUMBER;
-                            illust.debugMsg += "Followed ";
-                        }
-                        int years = (int)(DateTime.Now - illust.uploadDate).TotalDays / 365;
+                        double days = Math.Max(0, (now - illust.uploadDate).TotalDays);
                         //暂定：浏览量是后加入数据库的，很多图片尚未获取为默认值0，为了让已获取浏览量的图片排在前面，统一将旧图片按200k浏览量计算
                         var viewCount=illust.viewCount==0?200000:illust.viewCount;
-                        illust.score += (int)(((illust.bookmarkCount + illust.likeCount / 2)-viewCount/50)*((20-years)/10.0));
-                        illust.debugMsg += $"{illust.score}={illust.bookmarkCount}+{illust.likeCount}-{viewCount}*{years};  ";
+                        double view_penalty = Math.Sqrt(1 + 8 * Math.Clamp(viewCount / 200000.0, 0, 1));
+                        double time_penalty = Math.Sqrt(1 + 8 * Math.Min(days / 540.0, 1));
+                        scores[illust] = (illust.bookmarkCount + illust.likeCount / 2.0) / view_penalty / time_penalty;
+                        illust.debugMsg = $"Days: {days:F2}; Views: {illust.viewCount} (used: {viewCount});</br>"
+                            + $"View penalty: {view_penalty:F4}; Time penalty: {time_penalty:F4};</br>"
+                            + $"Base: {scores[illust]:F2} = ({illust.bookmarkCount} + {illust.likeCount} / 2) / {view_penalty:F4} / {time_penalty:F4};</br>";
+                        if (followed_user.Contains(illust.userId))
+                            scores[illust] += FOLLOWED_USER_MAGIC_NUMBER;
                     }
-                    illust_list.Sort((l, r) => r.score.CompareTo(l.score));
+                    illust_list.Sort((l, r) => scores[r].CompareTo(scores[l]));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
-                     * 根据每张图所具有的最弱势已关注标签对分数进行乘算加成，标准是每个标签下非关注作者的第一名至少能超过无补偿队列中非关注作者的第200名
+                     * 将各关注标签下非关注作者的最高分抬至无补偿队列中非关注作者的第200名。
+                     * 按各标签自己的基础分排名衰减倍率，多标签取最高倍率，不叠加。
                     */
-                    if(illust_list.Count>1000&&illust_list.Count> follow_ct+201)
+                    var unfollowed_illusts = illust_list.Where(x => !followed_user.Contains(x.userId)).ToList();
+                    var addition_in_tag = new Dictionary<string, double>();
+                    if(illust_list.Count>1000&&unfollowed_illusts.Count>=200)
                     {
-                        int baseline = illust_list[follow_ct+200].score;
-                        var addition_in_tag = new Dictionary<string, float>();
+                        double baseline = scores[unfollowed_illusts[199]];
                         foreach (var tag in followed_tags)
-                            addition_in_tag.Add(tag, 1.0f);
+                            addition_in_tag.Add(tag, 0);
                         //先用addition_in_tag记下每个标签的最高分
-                        foreach (var illust in illust_list)
-                            if (illust.score< FOLLOWED_USER_MAGIC_NUMBER)
-                                foreach (var tag in illust.tags)
-                                    if (followed_tags.Contains(tag))
-                                        if (addition_in_tag[tag] < illust.score)
-                                            addition_in_tag[tag] = illust.score;
+                        foreach (var illust in unfollowed_illusts)
+                            foreach (var tag in illust.tags)
+                                if (followed_tags.Contains(tag))
+                                    if (addition_in_tag[tag] < scores[illust])
+                                        addition_in_tag[tag] = scores[illust];
                         foreach (var tag in followed_tags)
-                            addition_in_tag[tag] =Math.Max((float)baseline/ addition_in_tag[tag],1.0f);
-                        foreach (var illust in illust_list)
-                            if (illust.score < FOLLOWED_USER_MAGIC_NUMBER)
-                            {
-                                float max_addup = 1.0f;
-                                string max_tag="";
-                                foreach (var tag in illust.tags)
-                                    if (followed_tags.Contains(tag))
-                                        if(addition_in_tag[tag]>max_addup)
-                                        {
-                                            max_tag = tag;
-                                            max_addup = addition_in_tag[tag];
-                                        }
-                                /*
-                                 * 补偿系数逐渐衰减，防止很多低分数图跟着鸡犬升天
-                                 */
-                                if(max_tag!="")
-                                    addition_in_tag[max_tag] = (addition_in_tag[max_tag] - 1.0f) * 0.9f + 1.0f;
-                                illust.debugMsg = $"{(int)((float)illust.score * max_addup)}:{illust.score}*{max_addup};  {illust.debugMsg}";
-                                illust.score = (int)((float)illust.score*max_addup);
-                            }
-                        //重新排序
-                        illust_list.Sort((l, r) => r.score.CompareTo(l.score));
+                            addition_in_tag[tag] = addition_in_tag[tag] > 0 ? Math.Max(baseline / addition_in_tag[tag], 1) : 1;
                     }
+                    foreach (var illust in illust_list)
+                    {
+                        double max_addup = 1;
+                        int follow_bonus = followed_user.Contains(illust.userId) ? FOLLOWED_USER_MAGIC_NUMBER : 0;
+                        if (follow_bonus == 0)
+                            foreach (var tag in illust.tags.Distinct())
+                            {
+                                if (addition_in_tag.TryGetValue(tag, out var addition))
+                                {
+                                    max_addup = Math.Max(max_addup, addition);
+                                    addition_in_tag[tag] = (addition - 1) * 0.9 + 1;
+                                }
+                            }
+                        double base_score = scores[illust] - follow_bonus;
+                        illust.score = (int)Math.Round(base_score * max_addup + follow_bonus, MidpointRounding.AwayFromZero);
+                        illust.debugMsg = $"Score: {illust.score}; Compensation: {max_addup:F4}; Followed bonus: {follow_bonus};</br>"
+                            + $"Round({base_score:F2} * {max_addup:F4} + {follow_bonus}) = {illust.score};</br>" + illust.debugMsg;
+                    }
+                    //重新排序
+                    illust_list.Sort((l, r) => r.score.CompareTo(l.score));
                     /*
                      * 不能用illust_list = illust_list.Take<Illust>(Math.Min(MaxSize, illust_list.Count)).ToList<Illust>();
                      * 这样不会修改list_nonprivate/list_private的值
