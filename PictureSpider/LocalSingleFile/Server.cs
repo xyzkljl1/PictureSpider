@@ -190,7 +190,7 @@ namespace PictureSpider.LocalSingleFile
                     result.Add(path);
             }
             foreach (var path in Directory.GetDirectories(dir))
-                result=result.Union(GetFiles(path)).ToHashSet<string>();
+                result.UnionWith(GetFiles(path));
             return result;
         }
         public override BaseUser GetUserById(string id)
