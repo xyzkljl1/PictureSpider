@@ -68,7 +68,7 @@ namespace PictureSpider.Pawchive
 
             download_dir_root = config.PawchiveDownloadDir;
             download_dir_fav = Path.Combine(download_dir_unified_fav, "Pawchive");
-            download_dir_tmp = Path.Combine(download_dir_root, "tmp");
+            download_dir_tmp = download_dir_root;
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);

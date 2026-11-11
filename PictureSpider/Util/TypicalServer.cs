@@ -54,7 +54,7 @@ namespace PictureSpider
 
                 download_dir_root = Path.Combine(config.TypicalDownloadDir, name);
                 download_dir_fav = Path.Combine(download_dir_root, "fav");
-                download_dir_tmp = Path.Combine(download_dir_root, "tmp");
+                download_dir_tmp = download_dir_root;
                 foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })
                     if (!Directory.Exists(dir))
                         Directory.CreateDirectory(dir);

@@ -51,7 +51,7 @@ namespace PictureSpider.Twitter
 
             request_proxy = config.ProxyGo;
             download_dir_root = config.TwitterDownloadDir;
-            download_dir_tmp = Path.Combine(download_dir_root, "tmp");
+            download_dir_tmp = download_dir_root;
             download_dir_private = Path.Combine(download_dir_unified_fav, "Twitter");
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_private);
 
