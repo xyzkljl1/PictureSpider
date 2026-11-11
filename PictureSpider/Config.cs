@@ -38,7 +38,7 @@ namespace PictureSpider
         public string PawchiveConnectStr = "";
         public string PawchiveDownloadDir = "./";
         public string AuthorHubConnectStr = "";
-        public string AuthorHubDownloadDir = "";
+        public string AuthorHubFavDir = "";
         public string MyDownloadServerAddress = "";
         public string LMangaRootDir = "./";
         public string ManhuaguiConnectStr = "";

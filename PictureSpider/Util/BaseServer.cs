@@ -15,7 +15,7 @@ namespace PictureSpider
         protected string download_dir_unified_fav;
         protected BaseServer(Config config)
         {
-            download_dir_unified_fav = Path.Combine(Path.GetFullPath(config.AuthorHubDownloadDir), "fav");
+            download_dir_unified_fav = Path.GetFullPath(config.AuthorHubFavDir);
         }
         protected bool tripleBookmarkState = false;//如果为否则bookmark只有是否两种状态，bookmarkPrivate无效
         public string logPrefix
