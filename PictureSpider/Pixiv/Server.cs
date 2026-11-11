@@ -568,9 +568,9 @@ namespace PictureSpider.Pixiv
                         double view_penalty = Math.Sqrt(1 + 8 * Math.Clamp(viewCount / 200000.0, 0, 1));
                         double time_penalty = Math.Sqrt(1 + 8 * Math.Min(days / 540.0, 1));
                         scores[illust] = (illust.bookmarkCount + illust.likeCount / 2.0) / view_penalty / time_penalty;
-                        illust.debugMsg = $"Days: {days:F2}; Views: {illust.viewCount} (used: {viewCount});</br>"
-                            + $"View penalty: {view_penalty:F4}; Time penalty: {time_penalty:F4};</br>"
-                            + $"Base: {scores[illust]:F2} = ({illust.bookmarkCount} + {illust.likeCount} / 2) / {view_penalty:F4} / {time_penalty:F4};</br>";
+                        illust.debugMsg = $"收藏加分：{illust.bookmarkCount:#,0}<br>点赞加分：{illust.likeCount / 2.0:#,0.#}<br>"
+                            + $"发布：{days:#,0} 天（×{1 / time_penalty:0.##}）<br>"
+                            + $"浏览：{viewCount:#,0}{(illust.viewCount == 0 ? "（估）" : "")}（×{1 / view_penalty:0.##}）<br>";
                         if (followed_user.Contains(illust.userId))
                             scores[illust] += FOLLOWED_USER_MAGIC_NUMBER;
                     }
@@ -610,8 +610,7 @@ namespace PictureSpider.Pixiv
                             }
                         double base_score = scores[illust] - follow_bonus;
                         illust.score = (int)Math.Round(base_score * max_addup + follow_bonus, MidpointRounding.AwayFromZero);
-                        illust.debugMsg = $"Score: {illust.score}; Compensation: {max_addup:F4}; Followed bonus: {follow_bonus};</br>"
-                            + $"Round({base_score:F2} * {max_addup:F4} + {follow_bonus}) = {illust.score};</br>" + illust.debugMsg;
+                        illust.debugMsg = $"评分：{illust.score:#,0}<br>小众补偿：{max_addup:#,0.##}<br>" + illust.debugMsg;
                     }
                     //重新排序
                     illust_list.Sort((l, r) => r.score.CompareTo(l.score));

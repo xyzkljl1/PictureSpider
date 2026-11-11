@@ -50,6 +50,11 @@ namespace PictureSpider
             SwitchBookmarkButton.Location = new System.Drawing.Point(SwitchBookmarkButton.Location.X - MainExplorer.Location.X, SwitchBookmarkButton.Location.Y - MainExplorer.Location.Y);
             BookmarkPageLabel.Parent = SwitchBookmarkButton;
             BookmarkPageLabel.Location = new System.Drawing.Point(0, 0);
+            EventHandler resizeDescription = (s, e) =>
+                DescBrowser.Height = Math.Max(DescBrowser.MinimumSize.Height, DescBrowser.Parent.ClientSize.Height - DescBrowser.Top);
+            DescBrowser.Parent.SizeChanged += resizeDescription;
+            DescBrowser.LocationChanged += resizeDescription;
+            resizeDescription(null, EventArgs.Empty);
             //设置事件
             MainExplorer.CurrentFileChanged += (s, e) =>
             {
@@ -183,7 +188,7 @@ namespace PictureSpider
             flowLayoutPanel1.Location = new System.Drawing.Point(12, 125);
             flowLayoutPanel1.Margin = new System.Windows.Forms.Padding(0);
             flowLayoutPanel1.Name = "flowLayoutPanel1";
-            flowLayoutPanel1.Size = new System.Drawing.Size(164, 469);
+            flowLayoutPanel1.Size = new System.Drawing.Size(164, 481);
             flowLayoutPanel1.TabIndex = 14;
             // 
             // InitButton
