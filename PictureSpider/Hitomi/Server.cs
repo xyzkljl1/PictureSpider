@@ -174,16 +174,21 @@ namespace PictureSpider.Hitomi
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                     select illustGroup).ToList();
                 var tmp = downloadQueue.Count;
-                foreach (var illustGroup in illustGroups)//如果收藏或未读的作品
+                var downloadOrder = new Dictionary<int, int>();
+                foreach (var illustGroup in illustGroups
+                    .OrderBy(x => x.user.followed && !x.readed && !x.fav ? 0 : x.user.queued ? 1 : 2)
+                    .ThenBy(x => x.title).ThenBy(x => x.Id))//Main、作者队列、其它作品
                 {
-                    foreach (var illust in illustGroup.illusts)
+                    foreach (var illust in illustGroup.illusts.OrderBy(x => x.index))
                     {
+                        downloadOrder[illust.Id] = downloadOrder.Count;
                         if (illustGroup.fav==false || illust.excluded==false)//没有排除
                             if (!downloadQueue.Contains(illust.Id)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
                                     downloadQueue.Add(illust.Id);
                     }
                 }
+                downloadQueue = downloadQueue.OrderBy(id => downloadOrder.GetValueOrDefault(id, int.MaxValue)).ToList();
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
             }
