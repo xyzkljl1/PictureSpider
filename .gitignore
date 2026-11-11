@@ -24,4 +24,5 @@
 /AGENTS.md
 /TODO.md
 /PictureSpider/Pixiv/Server_LocalDiagnostics.cs
+/PictureSpider/LocalQueueDebug.cs
 .diagnostics/

@@ -27,6 +27,7 @@ namespace PictureSpider
             InitializeComponent();
             //初始化
             InitButton.Visible = config.ShowInitButton;
+            InitializeLocalDebug(_pixiv_server);
             servers.Add(_pixiv_server);
             servers.AddRange(other_servers);
             //servers.Add(_twitter_server);
@@ -86,6 +87,7 @@ namespace PictureSpider
             Deactivate += (s, e) => pressedBrowserKeys.Clear();
             Disposed += (s, e) => Application.RemoveMessageFilter(this);
         }
+        partial void InitializeLocalDebug(Pixiv.Server pixiv_server);
         private void OnClose(object sender, FormClosingEventArgs e)
         {
             e.Cancel = true;

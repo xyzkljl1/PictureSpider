@@ -441,6 +441,7 @@ namespace PictureSpider.Pixiv
         }
         /*Query开头的函数供UI从主线程调用,此处应该只进行数据库操作从而避免线程安全问题*/
 
+        partial void ConfigureLocalDebug(ref Func<Task> runPendingStep);
         private async Task RunSchedule(bool enableScheduleTasks)
         {
             int last_daily_task = DateTime.Now.Day;
@@ -453,8 +454,10 @@ namespace PictureSpider.Pixiv
                 foreach (var id in await database.Illusts.Where(x => !x.readed).Select(x => x.id).ToListAsync())
                     illust_download_queue.Add(id);
             }
+            Func<Task> runPendingStep = ApplyPendingUiOperations;
+            ConfigureLocalDebug(ref runPendingStep);
             await RunPendingAndScheduleLoop(
-                ApplyPendingUiOperations,
+                runPendingStep,
                 async () =>
                 {
                     if(DateTime.Now.Day!=last_daily_task)
@@ -573,14 +576,14 @@ namespace PictureSpider.Pixiv
                     }
                     illust_list.Sort((l, r) => scores[r].CompareTo(scores[l]));
                     /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
-                     * 将各关注标签下非关注作者的最高分抬至无补偿队列中非关注作者的第200名。
+                     * 将各关注标签下非关注作者的最高分抬至无补偿队列中非关注作者的第150名。
                      * 按各标签自己的基础分排名衰减倍率，多标签取最高倍率，不叠加。
                     */
                     var unfollowed_illusts = illust_list.Where(x => !followed_user.Contains(x.userId)).ToList();
                     var addition_in_tag = new Dictionary<string, double>();
-                    if(illust_list.Count>1000&&unfollowed_illusts.Count>=200)
+                    if(illust_list.Count>1000&&unfollowed_illusts.Count>=150)
                     {
-                        double baseline = scores[unfollowed_illusts[199]];
+                        double baseline = scores[unfollowed_illusts[149]];
                         foreach (var tag in followed_tags)
                             addition_in_tag.Add(tag, 0);
                         //先用addition_in_tag记下每个标签的最高分
