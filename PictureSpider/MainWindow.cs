@@ -18,6 +18,7 @@ namespace PictureSpider
         private ListenerServer listenerServer = null;
         private readonly Dictionary<Keys, Keys> pressedBrowserKeys = new Dictionary<Keys, Keys>();
         private readonly SemaphoreSlim browserKeyLock = new SemaphoreSlim(1, 1);
+        private int queueLoadVersion;
         //生成64位程序会导致无法用设计器编辑
         public MainWindow(Config config, Pixiv.Server _pixiv_server, List<BaseServer> other_servers)
         {
@@ -35,7 +36,7 @@ namespace PictureSpider
                 MainExplorer.SetSpecialDir(Path.Combine(config.PixivDownloadDir, "special"));
                 TagBox.SetClient(servers[0]);
                 AuthorBox.SetClient(servers[0]);
-                queueComboBox.SetClient(servers);
+                queueTreeView.SetClient(servers);
             }
             //UI
             //parent为主窗口的话，透明时会透出主窗口的背景，而主窗口背景不能设为透明，所以需要更改parent
@@ -50,11 +51,6 @@ namespace PictureSpider
             SwitchBookmarkButton.Location = new System.Drawing.Point(SwitchBookmarkButton.Location.X - MainExplorer.Location.X, SwitchBookmarkButton.Location.Y - MainExplorer.Location.Y);
             BookmarkPageLabel.Parent = SwitchBookmarkButton;
             BookmarkPageLabel.Location = new System.Drawing.Point(0, 0);
-            EventHandler resizeDescription = (s, e) =>
-                DescBrowser.Height = Math.Max(DescBrowser.MinimumSize.Height, DescBrowser.Parent.ClientSize.Height - DescBrowser.Top);
-            DescBrowser.Parent.SizeChanged += resizeDescription;
-            DescBrowser.LocationChanged += resizeDescription;
-            resizeDescription(null, EventArgs.Empty);
             //设置事件
             MainExplorer.CurrentFileChanged += (s, e) =>
             {
@@ -69,8 +65,8 @@ namespace PictureSpider
             idLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInBrowser);
             OpenLocalLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInLocal);
             SwitchBookmarkButton.MouseClick += new MouseEventHandler(MainExplorer.SwitchBookmarkStatus);
-            queueComboBox.QueueChanged += async (s, e) => { await OnQueueComboBoxChangedAsync(s, e); };
-            AuthorBox.AuthorModified += (object sender, EventArgs e) => queueComboBox.UpdateContent();
+            queueTreeView.QueueChanged += async (s, e) => { await OnQueueChangedAsync(s, e); };
+            AuthorBox.AuthorModified += (object sender, EventArgs e) => queueTreeView.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             //InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
             SystemTrayIcon.DoubleClick += (object sender, EventArgs e) => this.Visible = !this.Visible;
@@ -78,7 +74,9 @@ namespace PictureSpider
             //绑定属性
             PageLabel.DataBindings.Add(new Binding("Text", MainExplorer.GetBindHandle<string>("IndexText"), "Content"));
             DescBrowser.DataBindings.Add(new Binding("DocumentText", MainExplorer.GetBindHandle<string>("DescText"), "Content"));
-            PlayButton.DataBindings.Add(new Binding("Text", MainExplorer.GetBindHandle<string>("TotalPageText"), "Content"));
+            var playBinding = new Binding("Text", MainExplorer.GetBindHandle<string>("TotalPageText"), "Content", true);
+            playBinding.Format += (s, e) => e.Value = e.Value?.ToString().Replace("\n", "  ");
+            PlayButton.DataBindings.Add(playBinding);
             idLabel.DataBindings.Add(new Binding("Text", MainExplorer.GetBindHandle<string>("IdText"), "Content"));
             SwitchBookmarkButton.DataBindings.Add(new Binding("Image", MainExplorer.GetBindHandle<System.Drawing.Bitmap>("FavIcon"), "Content"));
             BookmarkPageLabel.DataBindings.Add(new Binding("Visible", MainExplorer.GetBindHandle<bool>("PageInvalid"), "Content"));
@@ -108,7 +106,7 @@ namespace PictureSpider
             if (!Visible || Form.ActiveForm != this || msg.Msg < WM_KEYDOWN || msg.Msg > WM_UNICHAR)
                 return false;
 
-            // 在控件预处理前拦截全部键盘消息，包括下拉列表和嵌入网页的默认快捷键。
+            // 在控件预处理前拦截全部键盘消息，包括队列树和嵌入网页的默认快捷键。
             var key = (Keys)msg.WParam.ToInt32() & Keys.KeyCode;
             if (msg.Msg == WM_KEYDOWN || msg.Msg == WM_SYSKEYDOWN)
             {
@@ -139,10 +137,14 @@ namespace PictureSpider
                 browserKeyLock.Release();
             }
         }
-        private async Task OnQueueComboBoxChangedAsync(object sender, QueueChangeEventArgs e)
+        private async Task OnQueueChangedAsync(object sender, QueueChangeEventArgs e)
         {
+            int version = ++queueLoadVersion;
             var server = servers[e.ServerIndex];
-            MainExplorer.SetList(server, await server.GetExplorerQueueItems(e.Item).ConfigureAwait(true),
+            var files = await server.GetExplorerQueueItems(e.Item).ConfigureAwait(true);
+            if (IsDisposed || version != queueLoadVersion)
+                return;
+            MainExplorer.SetList(server, files,
                 e.Item.type == ExplorerQueue.QueueType.User ? e.Item.id : "");
         }
 
@@ -150,10 +152,11 @@ namespace PictureSpider
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
+            System.Windows.Forms.TableLayoutPanel sidePanel;
             PictureSpider.BindHandleProvider bindHandleProvider1 = new PictureSpider.BindHandleProvider();
             this.InitButton = new System.Windows.Forms.Button();
-            this.queueComboBox = new PictureSpider.QueueComboBox();
+            this.queueTreeView = new PictureSpider.QueueTreeView();
+            this.QueueTools = new System.Windows.Forms.FlowLayoutPanel();
             this.AuthorBox = new PictureSpider.AuthorBox();
             this.TagBox = new PictureSpider.TagBox();
             this.DescBrowser = new System.Windows.Forms.WebBrowser();
@@ -169,62 +172,75 @@ namespace PictureSpider
             this.SystemTrayIcon = new System.Windows.Forms.NotifyIcon(this.components);
             this.SystemTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.ExitAction = new System.Windows.Forms.ToolStripMenuItem();
-            flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
-            flowLayoutPanel1.SuspendLayout();
+            sidePanel = new System.Windows.Forms.TableLayoutPanel();
+            sidePanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).BeginInit();
             this.SystemTrayMenu.SuspendLayout();
             this.SuspendLayout();
             // 
-            // flowLayoutPanel1
+            // sidePanel
             // 
-            flowLayoutPanel1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            sidePanel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
             | System.Windows.Forms.AnchorStyles.Left)));
-            flowLayoutPanel1.BackColor = System.Drawing.Color.Transparent;
-            flowLayoutPanel1.Controls.Add(this.InitButton);
-            flowLayoutPanel1.Controls.Add(this.queueComboBox);
-            flowLayoutPanel1.Controls.Add(this.AuthorBox);
-            flowLayoutPanel1.Controls.Add(this.TagBox);
-            flowLayoutPanel1.Controls.Add(this.DescBrowser);
-            flowLayoutPanel1.Location = new System.Drawing.Point(12, 125);
-            flowLayoutPanel1.Margin = new System.Windows.Forms.Padding(0);
-            flowLayoutPanel1.Name = "flowLayoutPanel1";
-            flowLayoutPanel1.Size = new System.Drawing.Size(164, 481);
-            flowLayoutPanel1.TabIndex = 14;
+            sidePanel.BackColor = System.Drawing.Color.Transparent;
+            sidePanel.ColumnCount = 1;
+            sidePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
+            sidePanel.RowCount = 5;
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 100));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 200));
+            sidePanel.Controls.Add(this.QueueTools, 0, 0);
+            sidePanel.Controls.Add(this.queueTreeView, 0, 1);
+            sidePanel.Controls.Add(this.AuthorBox, 0, 2);
+            sidePanel.Controls.Add(this.TagBox, 0, 3);
+            sidePanel.Controls.Add(this.DescBrowser, 0, 4);
+            sidePanel.Location = new System.Drawing.Point(12, 73);
+            sidePanel.Margin = new System.Windows.Forms.Padding(0);
+            sidePanel.Name = "sidePanel";
+            sidePanel.Size = new System.Drawing.Size(200, 533);
+            sidePanel.TabIndex = 14;
+            //
+            // QueueTools
+            //
+            this.QueueTools.AutoSize = true;
+            this.QueueTools.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.QueueTools.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.QueueTools.Margin = new System.Windows.Forms.Padding(0);
+            this.QueueTools.Name = "QueueTools";
+            this.QueueTools.Controls.Add(this.InitButton);
             // 
             // InitButton
             // 
             this.InitButton.Location = new System.Drawing.Point(3, 3);
             this.InitButton.Name = "InitButton";
-            this.InitButton.Size = new System.Drawing.Size(158, 74);
+            this.InitButton.Size = new System.Drawing.Size(120, 24);
             this.InitButton.TabIndex = 20;
             this.InitButton.Text = "RunInitTask";
             this.InitButton.UseVisualStyleBackColor = true;
             this.InitButton.Visible = false;
             // 
-            // queueComboBox
+            // queueTreeView
             // 
-            this.queueComboBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.queueComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.queueComboBox.FormattingEnabled = true;
-            this.queueComboBox.Location = new System.Drawing.Point(3, 83);
-            this.queueComboBox.Name = "queueComboBox";
-            this.queueComboBox.Size = new System.Drawing.Size(158, 28);
-            this.queueComboBox.TabIndex = 19;
+            this.queueTreeView.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.queueTreeView.Margin = new System.Windows.Forms.Padding(0);
+            this.queueTreeView.Name = "queueTreeView";
+            this.queueTreeView.Size = new System.Drawing.Size(200, 260);
+            this.queueTreeView.TabIndex = 19;
             // 
             // AuthorBox
             // 
-            this.AuthorBox.Location = new System.Drawing.Point(4, 179);
-            this.AuthorBox.Margin = new System.Windows.Forms.Padding(4, 65, 4, 5);
+            this.AuthorBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.AuthorBox.Margin = new System.Windows.Forms.Padding(4, 6, 4, 6);
             this.AuthorBox.Name = "AuthorBox";
-            this.AuthorBox.Size = new System.Drawing.Size(154, 20);
+            this.AuthorBox.Size = new System.Drawing.Size(192, 20);
             this.AuthorBox.TabIndex = 12;
             this.AuthorBox.UserId = "";
             // 
             // TagBox
             // 
-            this.TagBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.TagBox.Dock = System.Windows.Forms.DockStyle.Fill;
             this.TagBox.AutoScroll = true;
             this.TagBox.BackColor = System.Drawing.Color.Transparent;
             this.TagBox.CausesValidation = false;
@@ -232,7 +248,7 @@ namespace PictureSpider
             this.TagBox.Location = new System.Drawing.Point(0, 204);
             this.TagBox.Margin = new System.Windows.Forms.Padding(0);
             this.TagBox.Name = "TagBox";
-            this.TagBox.Size = new System.Drawing.Size(161, 108);
+            this.TagBox.Size = new System.Drawing.Size(200, 100);
             this.TagBox.TabIndex = 9;
             this.TagBox.Tags = null;
             this.TagBox.WrapContents = false;
@@ -240,26 +256,25 @@ namespace PictureSpider
             // DescBrowser
             // 
             this.DescBrowser.AllowWebBrowserDrop = false;
-            this.DescBrowser.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.DescBrowser.Dock = System.Windows.Forms.DockStyle.Fill;
             this.DescBrowser.CausesValidation = false;
             this.DescBrowser.IsWebBrowserContextMenuEnabled = false;
             this.DescBrowser.Location = new System.Drawing.Point(0, 312);
             this.DescBrowser.Margin = new System.Windows.Forms.Padding(0);
             this.DescBrowser.MinimumSize = new System.Drawing.Size(20, 20);
             this.DescBrowser.Name = "DescBrowser";
-            this.DescBrowser.ScrollBarsEnabled = false;
-            this.DescBrowser.Size = new System.Drawing.Size(164, 255);
+            this.DescBrowser.ScrollBarsEnabled = true;
+            this.DescBrowser.Size = new System.Drawing.Size(200, 200);
             this.DescBrowser.TabIndex = 7;
             this.DescBrowser.TabStop = false;
             // 
             // PlayButton
             // 
             this.PlayButton.CausesValidation = false;
-            this.PlayButton.Font = new System.Drawing.Font("宋体", 24F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.PlayButton.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.PlayButton.Location = new System.Drawing.Point(12, 35);
             this.PlayButton.Name = "PlayButton";
-            this.PlayButton.Size = new System.Drawing.Size(164, 87);
+            this.PlayButton.Size = new System.Drawing.Size(200, 32);
             this.PlayButton.TabIndex = 0;
             this.PlayButton.Text = "Go1/1";
             this.PlayButton.UseVisualStyleBackColor = true;
@@ -270,7 +285,7 @@ namespace PictureSpider
             this.PageLabel.AutoSize = true;
             this.PageLabel.BackColor = System.Drawing.Color.Transparent;
             this.PageLabel.Font = new System.Drawing.Font("仿宋", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.PageLabel.Location = new System.Drawing.Point(182, 530);
+            this.PageLabel.Location = new System.Drawing.Point(218, 530);
             this.PageLabel.Name = "PageLabel";
             this.PageLabel.Size = new System.Drawing.Size(154, 80);
             this.PageLabel.TabIndex = 6;
@@ -295,7 +310,7 @@ namespace PictureSpider
             | System.Windows.Forms.AnchorStyles.Left)));
             this.PrevButton.BackColor = System.Drawing.Color.Transparent;
             this.PrevButton.Font = new System.Drawing.Font("宋体", 48F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.PrevButton.Location = new System.Drawing.Point(182, 9);
+            this.PrevButton.Location = new System.Drawing.Point(218, 9);
             this.PrevButton.Name = "PrevButton";
             this.PrevButton.Size = new System.Drawing.Size(60, 511);
             this.PrevButton.TabIndex = 9;
@@ -351,10 +366,10 @@ namespace PictureSpider
             this.MainExplorer.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.MainExplorer.Location = new System.Drawing.Point(182, 12);
+            this.MainExplorer.Location = new System.Drawing.Point(218, 12);
             this.MainExplorer.Name = "MainExplorer";
             this.MainExplorer.provider = bindHandleProvider1;
-            this.MainExplorer.Size = new System.Drawing.Size(850, 582);
+            this.MainExplorer.Size = new System.Drawing.Size(814, 582);
             this.MainExplorer.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.MainExplorer.TabIndex = 2;
             this.MainExplorer.TabStop = false;
@@ -385,7 +400,7 @@ namespace PictureSpider
             this.ClientSize = new System.Drawing.Size(1044, 606);
             this.Controls.Add(this.BookmarkPageLabel);
             this.Controls.Add(this.OpenLocalLabel);
-            this.Controls.Add(flowLayoutPanel1);
+            this.Controls.Add(sidePanel);
             this.Controls.Add(this.SwitchBookmarkButton);
             this.Controls.Add(this.idLabel);
             this.Controls.Add(this.PageLabel);
@@ -397,7 +412,8 @@ namespace PictureSpider
             this.KeyPreview = true;
             this.Name = "MainWindow";
             this.Load += new System.EventHandler(this.MainWindow_Load);
-            flowLayoutPanel1.ResumeLayout(false);
+            sidePanel.ResumeLayout(false);
+            sidePanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.MainExplorer)).EndInit();
             this.SystemTrayMenu.ResumeLayout(false);
             this.ResumeLayout(false);
@@ -415,7 +431,8 @@ namespace PictureSpider
         private LinkLabel OpenLocalLabel;
         private TagBox TagBox;
         private AuthorBox AuthorBox;
-        private QueueComboBox queueComboBox;
+        private QueueTreeView queueTreeView;
+        private FlowLayoutPanel QueueTools;
         private Label BookmarkPageLabel;
         private Button InitButton;
         private NotifyIcon SystemTrayIcon;

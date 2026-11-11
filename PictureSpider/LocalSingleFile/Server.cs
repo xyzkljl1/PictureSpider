@@ -131,9 +131,9 @@ namespace PictureSpider.LocalSingleFile
 #pragma warning restore CS1998
         {
             var ret = new List<ExplorerQueue>();
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "LSF-Fav"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
             foreach (var dir in TmpDirs)
-                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, dir,$"LSF-{Path.GetFileName(dir)}"));
+                ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, dir,Path.GetFileName(dir)));
             return ret;
         }
 #pragma warning disable CS1998 // 此异步方法缺少 "await" 运算符，将以同步方式运行

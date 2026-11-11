@@ -26,7 +26,7 @@ namespace PictureSpider.LManga
             var result = new List<ExplorerQueue>();
             if (Directory.Exists(rootDir))
                 foreach (var mangaDir in Directory.GetDirectories(rootDir).OrderBy(Path.GetFileName))
-                    result.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, Path.GetFullPath(mangaDir), $"LManga-{Path.GetFileName(mangaDir)}"));
+                    result.Add(new ExplorerQueue(ExplorerQueue.QueueType.Folder, Path.GetFullPath(mangaDir), Path.GetFileName(mangaDir)));
             return Task.FromResult(result);
         }
 

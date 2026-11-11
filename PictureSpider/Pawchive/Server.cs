@@ -879,8 +879,8 @@ namespace PictureSpider.Pawchive
         public async override Task<List<ExplorerQueue>> GetExplorerQueues()
         {
             var ret = new List<ExplorerQueue>();
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Pawchive-Fav"));
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Pawchive-Main"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Main"));
             using var db = NewDbContext(true);
             foreach (var user in db.Users.AsNoTracking().Where(x => x.queued).ToList())
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, $"{user.service}/{user.id}", user.displayId));

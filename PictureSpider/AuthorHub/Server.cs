@@ -137,7 +137,7 @@ namespace PictureSpider.AuthorHub
                 {
                     result.Add(new ExplorerQueue(ExplorerQueue.QueueType.User,
                         author.Id.ToString(CultureInfo.InvariantCulture),
-                        $"A · {author.DisplayName}"));
+                        author.DisplayName));
                 }
             }
             return result;

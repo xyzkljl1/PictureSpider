@@ -417,8 +417,8 @@ namespace PictureSpider.Hitomi
 #pragma warning restore CS0162
         {
             var ret=new List<ExplorerQueue>();
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Hitomi-Fav"));
-            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Hitomi-Main"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Fav, "0", "Fav"));
+            ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Main"));
             using var db = NewDbContext(true);
             foreach (var user in db.Users.AsNoTracking().Where(x => x.queued).OrderBy(x => x.name).ToList())
                 ret.Add(new ExplorerQueue(ExplorerQueue.QueueType.User, user.name, user.name));
