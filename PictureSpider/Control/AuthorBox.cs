@@ -63,6 +63,7 @@ namespace PictureSpider
                 followCheckBox.Text = "";
             }
             frozen = false;
+            Visible = user != null;
         }
 
         private async void OnCheckedChange(object sender, EventArgs e)

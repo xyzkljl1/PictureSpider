@@ -52,6 +52,7 @@ namespace PictureSpider
         }
         private void SetTags(List<string> tags)
         {
+            Visible = tags != null && tags.Count > 0;
             if (tags is null)
                 return;
             blockSignal = true;

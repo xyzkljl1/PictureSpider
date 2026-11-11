@@ -19,6 +19,7 @@ namespace PictureSpider
         private readonly Dictionary<Keys, Keys> pressedBrowserKeys = new Dictionary<Keys, Keys>();
         private readonly SemaphoreSlim browserKeyLock = new SemaphoreSlim(1, 1);
         private int queueLoadVersion;
+        private bool queueCollapsed;
         //生成64位程序会导致无法用设计器编辑
         public MainWindow(Config config, Pixiv.Server _pixiv_server, List<BaseServer> other_servers)
         {
@@ -66,6 +67,24 @@ namespace PictureSpider
             OpenLocalLabel.LinkClicked += new LinkLabelLinkClickedEventHandler(MainExplorer.OpenInLocal);
             SwitchBookmarkButton.MouseClick += new MouseEventHandler(MainExplorer.SwitchBookmarkStatus);
             queueTreeView.QueueChanged += async (s, e) => { await OnQueueChangedAsync(s, e); };
+            queueTreeView.AfterSelect += UpdateSidePanelLayout;
+            string queueTopNode = null;
+            queueHeader.Click += (s, e) =>
+            {
+                if (!queueCollapsed)
+                    queueTopNode = queueTreeView.TopNode?.Name;
+                queueCollapsed = !queueCollapsed;
+                sidePanel.SuspendLayout();
+                queueTreeView.Visible = !queueCollapsed;
+                UpdateSidePanelLayout(s, e);
+                sidePanel.ResumeLayout();
+                if (!queueCollapsed && queueTopNode != null)
+                {
+                    var nodes = queueTreeView.Nodes.Find(queueTopNode, true);
+                    if (nodes.Length > 0)
+                        queueTreeView.TopNode = nodes[0];
+                }
+            };
             AuthorBox.AuthorModified += (object sender, EventArgs e) => queueTreeView.UpdateContent();
             PlayButton.Click += (object sender, EventArgs e) => MainExplorer.Play();
             //InitButton.Click += (object sender, EventArgs e) =>_pixiv_server.InitTask().Wait();
@@ -83,6 +102,8 @@ namespace PictureSpider
             TagBox.DataBindings.Add(new Binding("Tags", MainExplorer.GetBindHandle<List<string>>("Tags"), "Content"));
             AuthorBox.DataBindings.Add(new Binding("UserId", MainExplorer.GetBindHandle<string>("UserId"), "Content"));
             DataBindings.Add(new Binding("Text", _pixiv_server.GetBindHandle<string>("VerifyState"), "Content"));
+            sidePanel.Layout += UpdateSidePanelLayout;
+            UpdateSidePanelLayout(this, EventArgs.Empty);
 
             //onListCheckBoxClick(null,null);
             listenerServer = new ListenerServer(servers);
@@ -91,6 +112,30 @@ namespace PictureSpider
             Disposed += (s, e) => Application.RemoveMessageFilter(this);
         }
         partial void InitializeLocalDebug(Pixiv.Server pixiv_server);
+        private void UpdateSidePanelLayout(object sender, EventArgs e)
+        {
+            var selected = queueTreeView.SelectedNode;
+            queueHeader.Text = (queueCollapsed ? "▸ 队列" : "▾ 队列")
+                + (selected == null ? "" : $"：{selected.Parent?.Text} / {selected.Text}");
+            int authorHeight = LogicalToDeviceUnits(32);
+            int tagHeight = LogicalToDeviceUnits(100);
+            //按两栏都显示时的原始列表高度计算，隐藏的空间全部留给描述栏。
+            float queueHeight = Math.Max(0, sidePanel.ClientSize.Height - sidePanel.GetRowHeights()[0]
+                - authorHeight - tagHeight - LogicalToDeviceUnits(200)) * 0.8f;
+            queueHeight = queueHeader.Height + (queueCollapsed ? 0 : queueHeight);
+            if (!AuthorBox.Visible)
+                authorHeight = 0;
+            if (!TagBox.Visible)
+                tagHeight = 0;
+            if (sidePanel.RowStyles[1].Height == queueHeight && sidePanel.RowStyles[2].Height == authorHeight
+                && sidePanel.RowStyles[3].Height == tagHeight)
+                return;
+            sidePanel.SuspendLayout();
+            sidePanel.RowStyles[1].Height = queueHeight;
+            sidePanel.RowStyles[2].Height = authorHeight;
+            sidePanel.RowStyles[3].Height = tagHeight;
+            sidePanel.ResumeLayout();
+        }
         private void OnClose(object sender, FormClosingEventArgs e)
         {
             e.Cancel = true;
@@ -152,10 +197,11 @@ namespace PictureSpider
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.Windows.Forms.TableLayoutPanel sidePanel;
             PictureSpider.BindHandleProvider bindHandleProvider1 = new PictureSpider.BindHandleProvider();
             this.InitButton = new System.Windows.Forms.Button();
             this.queueTreeView = new PictureSpider.QueueTreeView();
+            this.queueHeader = new System.Windows.Forms.Label();
+            var queuePanel = new System.Windows.Forms.Panel();
             this.QueueTools = new System.Windows.Forms.FlowLayoutPanel();
             this.AuthorBox = new PictureSpider.AuthorBox();
             this.TagBox = new PictureSpider.TagBox();
@@ -187,12 +233,12 @@ namespace PictureSpider
             sidePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
             sidePanel.RowCount = 5;
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
-            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 0));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 100));
-            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 200));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
             sidePanel.Controls.Add(this.QueueTools, 0, 0);
-            sidePanel.Controls.Add(this.queueTreeView, 0, 1);
+            sidePanel.Controls.Add(queuePanel, 0, 1);
             sidePanel.Controls.Add(this.AuthorBox, 0, 2);
             sidePanel.Controls.Add(this.TagBox, 0, 3);
             sidePanel.Controls.Add(this.DescBrowser, 0, 4);
@@ -220,6 +266,23 @@ namespace PictureSpider
             this.InitButton.Text = "RunInitTask";
             this.InitButton.UseVisualStyleBackColor = true;
             this.InitButton.Visible = false;
+            //
+            // queuePanel
+            //
+            queuePanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            queuePanel.Margin = new System.Windows.Forms.Padding(0);
+            queuePanel.Name = "queuePanel";
+            queuePanel.Controls.Add(this.queueTreeView);
+            queuePanel.Controls.Add(this.queueHeader);
+            this.queueHeader.Dock = System.Windows.Forms.DockStyle.Top;
+            this.queueHeader.Height = 24;
+            this.queueHeader.Name = "queueHeader";
+            this.queueHeader.Text = "▾ 队列";
+            this.queueHeader.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.queueHeader.AutoEllipsis = true;
+            this.queueHeader.UseMnemonic = false;
+            this.queueHeader.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.queueHeader.AccessibleRole = System.Windows.Forms.AccessibleRole.PushButton;
             // 
             // queueTreeView
             // 
@@ -237,6 +300,7 @@ namespace PictureSpider
             this.AuthorBox.Size = new System.Drawing.Size(192, 20);
             this.AuthorBox.TabIndex = 12;
             this.AuthorBox.UserId = "";
+            this.AuthorBox.Visible = false;
             // 
             // TagBox
             // 
@@ -251,6 +315,7 @@ namespace PictureSpider
             this.TagBox.Size = new System.Drawing.Size(200, 100);
             this.TagBox.TabIndex = 9;
             this.TagBox.Tags = null;
+            this.TagBox.Visible = false;
             this.TagBox.WrapContents = false;
             // 
             // DescBrowser
@@ -432,6 +497,8 @@ namespace PictureSpider
         private TagBox TagBox;
         private AuthorBox AuthorBox;
         private QueueTreeView queueTreeView;
+        private Label queueHeader;
+        private TableLayoutPanel sidePanel;
         private FlowLayoutPanel QueueTools;
         private Label BookmarkPageLabel;
         private Button InitButton;
