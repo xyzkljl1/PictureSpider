@@ -62,6 +62,7 @@ namespace PictureSpider.Pixiv
         //public event PropertyChangedEventHandler PropertyChanged = delegate { };
 
         private Dictionary<int,string> illust_debug_msg= new Dictionary<int,string>();//only for debug
+        private readonly string debug_msg_path = Path.Combine(AppContext.BaseDirectory, "pixiv_queue_scores.json");
 
         /*
          * 代理：
@@ -100,6 +101,23 @@ namespace PictureSpider.Pixiv
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
         public override async Task Init()
         {
+            try
+            {
+                if (File.Exists(debug_msg_path))
+                    illust_debug_msg = JsonConvert.DeserializeObject<Dictionary<int, string>>(await File.ReadAllTextAsync(debug_msg_path)) ?? new Dictionary<int, string>();
+            }
+            catch (IOException e)
+            {
+                LogError($"Load queue scores failed: {e.Message}");
+            }
+            catch (UnauthorizedAccessException e)
+            {
+                LogError($"Load queue scores failed: {e.Message}");
+            }
+            catch (JsonException e)
+            {
+                LogError($"Load queue scores failed: {e.Message}");
+            }
             banned_keyword = await database.GetBannedKeyword();
             await database.EnsureUserAgentCache();
             pixiv_user_agent = await database.GetUserAgent(DefaultPixivUserAgent);
@@ -297,8 +315,8 @@ namespace PictureSpider.Pixiv
             var result = new List<ExplorerFileBase>();
             foreach(var illust in illusts)
             {
-                if(illust_debug_msg.ContainsKey(illust.id))//debug code
-                    illust.debugMsg= illust_debug_msg[illust.id];
+                if(illust_debug_msg.TryGetValue(illust.id, out var debugMsg))//debug code
+                    illust.debugMsg= debugMsg;
                 result.Add(new ExplorerFile(illust, download_dir_main));
                 //已删除(valid=false)的图也加入队列，以防止valid=0&readed=0且没有下载的图越来越多每次都要检查
                 /*
@@ -606,14 +624,26 @@ namespace PictureSpider.Pixiv
                 foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
                     queue += " " + illust.id;
                 //debug code
-                {
-                    illust_debug_msg.Clear();
-                    foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
-                        illust_debug_msg.Add(illust.id,illust.debugMsg);
-                    foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
-                        illust_debug_msg.Add(illust.id, illust.debugMsg);
-                }
+                var debug_messages = new Dictionary<int, string>();
+                foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
+                    debug_messages.Add(illust.id, illust.debugMsg);
+                foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
+                    debug_messages.Add(illust.id, illust.debugMsg);
                 await database.UpdateQueue(queue);
+                illust_debug_msg = debug_messages;
+                try
+                {
+                    await File.WriteAllTextAsync(debug_msg_path + ".tmp", JsonConvert.SerializeObject(debug_messages));
+                    File.Move(debug_msg_path + ".tmp", debug_msg_path, true);
+                }
+                catch (IOException e)
+                {
+                    LogError($"Save queue scores failed: {e.Message}");
+                }
+                catch (UnauthorizedAccessException e)
+                {
+                    LogError($"Save queue scores failed: {e.Message}");
+                }
                 Log("Generate Queue Done");
             }
         }
