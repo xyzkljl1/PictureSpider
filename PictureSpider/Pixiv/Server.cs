@@ -508,7 +508,7 @@ namespace PictureSpider.Pixiv
         private async Task GenerateExplorerQueue(bool force=false)
         {
             const int UpdateInterval = 7;//单位:天，达到这个时间才刷新,
-            const int MaxSize = 10000;
+            const int MaxSize = 3000;
             if (force||(await database.GetQueueUpdateInterval())>=UpdateInterval||(await database.GetQueue()).Length<2)
             {
                 var list_nonprivate = new List<Illust>();
