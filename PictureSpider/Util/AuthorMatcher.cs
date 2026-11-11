@@ -71,6 +71,8 @@ namespace PictureSpider
             var brandedAuthorMatcher = fallbackPattern.Length == 0 || matchers[0].Pattern.Length == 0 ? null : new Regex(
                 @"^(?:" + fallbackPattern + @")(?<author>" + matchers[0].Pattern + @")-{3,}(?<work>.+)$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            var leadingAliasMatcher = matchers[0].Pattern.Length == 0 ? null : new Regex(
+                @"^(?:" + matchers[0].Pattern + @")", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             var cache = new Dictionary<string, AuthorMatchResult>(StringComparer.Ordinal);
             return originalName =>
             {
@@ -160,6 +162,13 @@ namespace PictureSpider
                 }
                 if (item.Status == AuthorMatchStatus.Unmatched)
                     item = MatchAliases(originalName, text, matchers[1].Lookup, matchers[1].Matcher);
+                if (item.Status == AuthorMatchStatus.Unmatched)
+                {
+                    // 仅补救名称开头的连写；别名已按长度降序排列，保留原规则的匹配和待确认结果。
+                    var leading = leadingAliasMatcher?.Match(authorText);
+                    if (leading != null && leading.Success)
+                        item = MatchAliases(originalName, authorText.Insert(leading.Length, " "), matchers[0].Lookup, matchers[0].Matcher);
+                }
                 cache.Add(name, item);
                 return item;
             };
