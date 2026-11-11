@@ -80,8 +80,8 @@ namespace PictureSpider.Pixiv
             base.logPrefix = "P";
 
             download_dir_root = config.PixivDownloadDir;
-            download_dir_bookmark_pub = Path.Combine(download_dir_root, "pub");
-            download_dir_bookmark_private = Path.Combine(download_dir_root, "private");
+            download_dir_bookmark_pub = Path.Combine(download_dir_unified_fav, "Pixiv", "pub");
+            download_dir_bookmark_private = Path.Combine(download_dir_unified_fav, "Pixiv", "private");
             download_dir_main = Path.Combine(download_dir_root, "tmp");
             download_dir_ugoira_tmp = Path.Combine(download_dir_root, "ugoira_tmp");
             special_dir = Path.Combine(download_dir_root, "special");

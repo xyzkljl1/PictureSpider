@@ -59,7 +59,7 @@ namespace PictureSpider.Hitomi
             //httpClient.DefaultRequestHeaders.Referrer=new Uri("https://hitomi.la/artist/muk-all.html?page=3");            
 
             download_dir_root = config.HitomiDownloadDir;
-            download_dir_fav = Path.Combine(download_dir_root, "fav");
+            download_dir_fav = Path.Combine(download_dir_unified_fav, "Hitomi");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
             downloader = new Aria2DownloadQueue(Downloader.DownloaderPostfix.Hitomi, config.Proxy, "https://hitomi.la",1);
             foreach (var dir in new List<string> { download_dir_root, download_dir_tmp, download_dir_fav })

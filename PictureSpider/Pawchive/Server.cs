@@ -67,7 +67,7 @@ namespace PictureSpider.Pawchive
             httpClient.DefaultRequestHeaders.Referrer=new Uri($"{baseUrl}/fanbox/user/7349257");
 
             download_dir_root = config.PawchiveDownloadDir;
-            download_dir_fav = Path.Combine(download_dir_root, "fav");
+            download_dir_fav = Path.Combine(download_dir_unified_fav, "Pawchive");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;

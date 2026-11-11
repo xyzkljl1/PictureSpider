@@ -66,7 +66,7 @@ namespace PictureSpider.Kemono
             httpClient.DefaultRequestHeaders.Referrer=new Uri($"{baseUrl}/fanbox/user/7349257");
 
             download_dir_root = config.KemonoDownloadDir;
-            download_dir_fav = Path.Combine(download_dir_root, "fav");
+            download_dir_fav = Path.Combine(download_dir_unified_fav, "Kemono");
             download_dir_tmp = Path.Combine(download_dir_root, "tmp");
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
