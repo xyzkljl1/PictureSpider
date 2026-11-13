@@ -28,7 +28,7 @@ namespace PictureSpider.Hitomi
         public int index { get; set; } = -1;
         //文件名,应当考虑到使用其它方式浏览时的排序
         public string fileName { get; set; }
-        //排除，只有对于fav的IllustGroup的Illust，这一项才有效
+        //排除的图片不下载、不展示，也不复制到收藏目录；包括手动排除和hash去重。
         public bool excluded { get; set; }=false;
         //外键
         public virtual IllustGroup illustGroup { get; set; }

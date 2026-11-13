@@ -182,7 +182,7 @@ namespace PictureSpider.Hitomi
                     foreach (var illust in illustGroup.illusts.OrderBy(x => x.index))
                     {
                         downloadOrder[illust.Id] = downloadOrder.Count;
-                        if (illustGroup.fav==false || illust.excluded==false)//没有排除
+                        if (illust.excluded==false)//没有排除
                             if (!downloadQueue.Contains(illust.Id)) //不在下载队列
                                 if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
                                     downloadQueue.Add(illust.Id);
@@ -280,7 +280,7 @@ namespace PictureSpider.Hitomi
                         illustList.Remove(illustId);
                         continue;
                     }
-                    if (illust.illustGroup.fav && illust.excluded)
+                    if (illust.excluded)
                     {
                         illustList.Remove(illustId);
                         continue;
@@ -477,6 +477,7 @@ namespace PictureSpider.Hitomi
                     result.Add(exploreFile);
                 }
             }
+            result.RemoveAll(x => x.validPageCount() == 0);
             if (queue.type == ExplorerQueue.QueueType.Fav)
                 result = result.OrderBy(x => ((ExplorerFile)x).illustGroup.user.displayText)
                     .ThenBy(x => ((ExplorerFile)x).illustGroup.Id).ToList();
@@ -539,17 +540,36 @@ namespace PictureSpider.Hitomi
                 var hashs = engine.Script.myhash;
                 illustGroup.title = engine.Script.mytitle;
                 illustGroup.isCollection = engine.Script.myartists.length > 5;
-                foreach(var illust in illustGroup.illusts)
-                        database.Illusts.Remove(illust);
-                illustGroup.illusts.Clear();//注意Clear并不会删除illust行
+                var hashes = new List<string>();
                 for (var i = 0; i < hashs.length; ++i)
+                    hashes.Add(hashs[i] as string);
+                //批量查重；已有未排除的最早记录保留，全部排除的hash不自动恢复。
+                var existingIllusts = await database.Illusts.Where(x => hashes.Contains(x.hash))
+                    .Select(x => new { x.Id, x.hash, x.excluded }).ToListAsync();
+                var owners = existingIllusts.GroupBy(x => x.hash).ToDictionary(x => x.Key,
+                    x => x.Where(y => !y.excluded).Select(y => y.Id).DefaultIfEmpty(0).Min());
+                var oldIllusts = illustGroup.illusts.ToDictionary(x => (x.index, x.hash));
+                var seenHashes = new HashSet<string>();
+                for (var i = 0; i < hashes.Count; ++i)
                 {
-                    var illust = new Illust();
-                    //url随时间变化，下载时再计算
-                    illust.hash = hashs[i] as string;
-                    illust.index = i;//有序
-                    illust.fileName = $"{illustGroup.Id}_{i:000}";
-                    illustGroup.illusts.Add(illust);
+                    if (!oldIllusts.Remove((i, hashes[i]), out var illust))
+                    {
+                        illust = new Illust();
+                        //url随时间变化，下载时再计算
+                        illust.hash = hashes[i];
+                        illust.index = i;//保留原页号，排除的图片也保留记录
+                        illust.fileName = $"{illustGroup.Id}_{i:000}";
+                        illustGroup.illusts.Add(illust);
+                    }
+                    if (owners.TryGetValue(illust.hash, out var ownerId))
+                        illust.excluded |= illust.Id == 0 || illust.Id != ownerId;
+                    else
+                        illust.excluded |= !seenHashes.Add(illust.hash);
+                }
+                foreach (var illust in oldIllusts.Values)
+                {
+                    database.Illusts.Remove(illust);
+                    illustGroup.illusts.Remove(illust);
                 }
             }
             illustGroup.fetched = true;
