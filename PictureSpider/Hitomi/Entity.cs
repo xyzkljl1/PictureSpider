@@ -42,6 +42,12 @@ namespace PictureSpider.Hitomi
             return true;
         }
     }
+    public enum LanguageCheckState
+    {
+        Allowed,
+        Pending,
+        Excluded
+    }
     [Table("IllustGroups")]
     public class IllustGroup : IHasReadFav
     {
@@ -52,6 +58,9 @@ namespace PictureSpider.Hitomi
         public bool fav { get; set; } = false;
         //已经fetch过
         public bool fetched { get; set; } = false;
+        //旧图组无需检查，只有新入库的图组检查语言。
+        [Column(TypeName = "enum('Allowed','Pending','Excluded')")]
+        public LanguageCheckState languageCheckState { get; set; } = LanguageCheckState.Pending;
         // 作者超过 5 位的合集不下载。
         public bool isCollection { get; set; } = false;
         //一对多外键(导航属性),自动创建不需要显示声明[ForeignKey()]和UserId,必须是virtual

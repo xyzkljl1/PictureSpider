@@ -515,6 +515,26 @@ namespace PictureSpider.Hitomi
             using (var engine=new V8ScriptEngine())
             {
                 engine.Execute(groupJS);
+                //仅检查新图组，复用原有详情请求；旧图组不受限制。
+                if (illustGroup.languageCheckState == LanguageCheckState.Pending)
+                {
+                    var language = JObject.Parse((string)engine.Evaluate("JSON.stringify({language:galleryinfo.language})"))["language"];
+                    //明确的null表示未标注语言；字段缺失或异常值不能视作无语言。
+                    if (language is null || (language.Type != JTokenType.Null &&
+                        (language.Type != JTokenType.String || string.IsNullOrWhiteSpace(language.Value<string>()))))
+                    {
+                        LogError($"Unknown IllustGroup language:{illustGroup.Id}");
+                        return;
+                    }
+                    if (language.Type != JTokenType.Null && language.Value<string>() is not
+                        ("chinese" or "japanese" or "english" or "textless narrative"))
+                    {
+                        illustGroup.languageCheckState = LanguageCheckState.Excluded;
+                        await database.SaveChangesAsync();
+                        Log($"Skip IllustGroup:{illustGroup.Id}, language:{language.Value<string>()}");
+                        return;
+                    }
+                }
                 //illustGroup有tag，但是既然不做随机浏览队列，tag并没有用处
                 var hashs = engine.Script.myhash;
                 illustGroup.title = engine.Script.mytitle;
@@ -533,6 +553,7 @@ namespace PictureSpider.Hitomi
                 }
             }
             illustGroup.fetched = true;
+            illustGroup.languageCheckState = LanguageCheckState.Allowed;
             await database.SaveChangesAsync();
             Log($"Fetch IllustGroup Done:{illustGroup.Id} {illustGroup.title}");
         }
@@ -562,6 +583,7 @@ namespace PictureSpider.Hitomi
             foreach (var illustGroup in (from illustGroup in database.IllustGroups
                                              .Include(x => x.illusts)
                                          where illustGroup.fetched == false && (illustGroup.user.followed == true || illustGroup.user.queued == true)
+                                            && illustGroup.languageCheckState != LanguageCheckState.Excluded
                                          select illustGroup).ToList())
             {
                 await FetchIllustGroupById(illustGroup);

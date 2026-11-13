@@ -21,6 +21,8 @@ namespace PictureSpider.Hitomi
                 .WithMany(e => e.illusts)
                 .OnDelete(DeleteBehavior.Cascade);
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<IllustGroup>().Property(x => x.languageCheckState)
+                .HasConversion<string>().HasDefaultValue(LanguageCheckState.Allowed);
             // 跨库外键在迁移中建立，这里只映射本库字段。
             modelBuilder.Entity<User>().Property(x => x.AuthorStorageName)
                 .HasMaxLength(128).HasCharSet("utf8mb4")

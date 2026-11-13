@@ -75,6 +75,12 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.Property<bool>("isCollection")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("languageCheckState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("enum('Allowed','Pending','Excluded')")
+                        .HasDefaultValue("Allowed");
+
                     b.Property<bool>("readed")
                         .HasColumnType("tinyint(1)");
 
