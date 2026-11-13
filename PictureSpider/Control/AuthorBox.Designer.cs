@@ -29,7 +29,7 @@
         private void InitializeComponent()
         {
             this.followCheckBox = new System.Windows.Forms.CheckBox();
-            this.nameLabel = new System.Windows.Forms.Label();
+            this.nameLabel = new SingleLineLabel();
             this.SuspendLayout();
             // 
             // followCheckBox

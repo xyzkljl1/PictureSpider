@@ -867,7 +867,13 @@ namespace PictureSpider.Pixiv
                         {
                             string src = Path.Combine(download_dir_main, file_name);
                             if (CopyFile(src, dest) == 0 && item.AuthorStorageName != null)
-                                unifiedCopyFailed = true;
+                            {
+                                if (!illust.valid && !File.Exists(src))
+                                    existedFiles.RemoveWhere(path => string.Equals(
+                                        Path.GetFileName(path), file_name, StringComparison.OrdinalIgnoreCase));
+                                else
+                                    unifiedCopyFailed = true;
+                            }
                         }
                     }
             }

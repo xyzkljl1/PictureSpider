@@ -14,6 +14,16 @@ namespace PictureSpider
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     partial class AuthorBox : UserControl
     {
+        private class SingleLineLabel : Label
+        {
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle,
+                    Enabled ? ForeColor : SystemColors.GrayText,
+                    TextFormatFlags.SingleLine | (UseMnemonic ? TextFormatFlags.Default : TextFormatFlags.NoPrefix));
+            }
+        }
+
         public event EventHandler AuthorModified;
         public string UserId
         {
