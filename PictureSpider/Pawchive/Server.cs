@@ -92,8 +92,9 @@ namespace PictureSpider.Pawchive
 #endif
             return Task.CompletedTask;
         }
-        private async Task ParseGroupContent(WorkGroup workGroup)
+        private async Task<bool> ParseGroupContent(WorkGroup workGroup)
         {
+            bool googleDriveImageZip = workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
             var doc = new HtmlDocument();
             doc.LoadHtml(workGroup.desc ?? "");
             // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
@@ -102,7 +103,7 @@ namespace PictureSpider.Pawchive
                 .Max(x => (int?)x.index) ?? 0) + 1;
             var anodes = doc.DocumentNode.SelectNodes("//a");
             if (anodes is null)
-                return;
+                return true;
             foreach (var anode in anodes)
                 if (anode.Attributes["href"] is not null)
                 {
@@ -114,7 +115,7 @@ namespace PictureSpider.Pawchive
                         //包含一个mega文件夹
                         //patreon/user/3659577/post/117461502/revision/9878902
                         //<p><img src=\"/05/68/0568e59bd4bfdea28e3b3183046b81668dc841dfd5bcdc847612248a161138f2.webp\"></p><p>Hi guys!</p><p><a href=\"https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ\" rel=\"noopener noreferrer\">DOWNLOAD</a>&nbsp;(Watermark-free)</p>
-                        if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/folder/"))//Mega folder
+                        if (!googleDriveImageZip && anode.Attributes["href"].Value.StartsWith("https://mega.nz/folder/"))//Mega folder
                         {
                             var rootUri = new Uri(url);
                             foreach (var meganode in await mega.GetNodesFromLinkAsync(rootUri))//GetNodesFromLinkAsync是递归的
@@ -125,12 +126,24 @@ namespace PictureSpider.Pawchive
                         {
                             type = ExternalWork.ExternalWorkType.GoogleDrive;
                             foreach (var file in await googleDriveDownloader.GetFilesAsync(url))
-                                if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
+                            {
+                                if (googleDriveImageZip)
+                                {
+                                    if (!String.Equals(Path.GetExtension(file.name), ".zip", StringComparison.OrdinalIgnoreCase))
+                                        continue;
+                                    var check = await googleDriveDownloader.CheckImageZipAsync(file.url);
+                                    if (!check.success)
+                                        return false;
+                                    if (check.imagesOnly)
+                                        files.Add(file);
+                                }
+                                else if (Path.GetExtension(file.name).ToLowerInvariant().IsVideo())
                                     files.Add(file);
+                            }
                         }
                         //单个mega文件 patreon/user/8693043/post/75248472
                         //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
-                        else if (anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
+                        else if (!googleDriveImageZip && anode.Attributes["href"].Value.StartsWith("https://mega.nz/file/"))
                         {
                             var node = await mega.GetNodeFromLinkAsync(new Uri(url));
                             if (node is not null && Path.GetExtension(node.Name).IsVideo())//暂时只处理video
@@ -195,6 +208,7 @@ namespace PictureSpider.Pawchive
                         throw;
                     }
                 }
+            return true;
         }
         private Uri GetMegaLink(INode node,Uri root)
         {
@@ -579,12 +593,13 @@ namespace PictureSpider.Pawchive
                 }
                 index++;
             }
+            bool parsedExternalWorks = true;
             try
             {
                 if (illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
                     await ParseKeyZipMega(illustGroup, attachments);
-                if(illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.DirectExternal)
-                    await ParseGroupContent(illustGroup);
+                if(illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.DirectExternal or User.DownloadExternalWorkType.GoogleDriveImageZip)
+                    parsedExternalWorks = await ParseGroupContent(illustGroup);
             }
             catch (Exception e)
             {
@@ -594,7 +609,7 @@ namespace PictureSpider.Pawchive
                 LogError($"Fail ParseExternalWork {illustGroup.service}/{illustGroup.id}: {e.Message}");
                 return;
             }
-            illustGroup.fetched = true;
+            illustGroup.fetched = parsedExternalWorks;
             await SplitNonImageWorks(illustGroup);
             await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
@@ -674,7 +689,8 @@ namespace PictureSpider.Pawchive
         }
         private async Task<bool> PostProcessExternalZip(ExternalWork work, string archivePath)
         {
-            bool createImageGroup = work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
+            bool googleDriveImageZip = work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
+            bool createImageGroup = googleDriveImageZip || work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
             var destinationDirectory = Path.Combine(Path.GetDirectoryName(archivePath),
                 Path.GetFileNameWithoutExtension(archivePath) + "_images");
             string archiveId = null;
@@ -685,7 +701,7 @@ namespace PictureSpider.Pawchive
                     Encoding.UTF8.GetBytes($"{work.type}/{work.id}")));
             }
             var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory,
-                Util.imageExtensions, flatFileName: archiveId);
+                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: googleDriveImageZip);
             if (!success)
                 return false;
             if (createImageGroup && files.Count > 0)
@@ -903,7 +919,8 @@ namespace PictureSpider.Pawchive
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.followed
                                        && (illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
-                                            : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
+                                            : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega
+                                                || illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -944,7 +961,7 @@ namespace PictureSpider.Pawchive
                 foreach (var illustGroup in illustGroups)
                 {
                     if ((illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
-                        : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega) && illustGroup.works.Count > 0)
+                        : illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip) && illustGroup.works.Count > 0)
                     {
                         var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                         if (exploreFile.validPageCount() > 0)
@@ -1158,7 +1175,17 @@ namespace PictureSpider.Pawchive
                     }
                     else if ((ext.IsVideo() || ext.IsZip()) && work is ExternalWork)
                     {
-                        if (!File.Exists(path))
+                        if (group.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip)
+                        {
+                            if (((ExternalWork)work).type != ExternalWork.ExternalWorkType.GoogleDrive || ext != ".zip")
+                            {
+                                ignore_illusts.Add(key);
+                                continue;
+                            }
+                            if (!File.Exists(path))
+                                await googleDriveDownloader.Add(work.DownloadURL, dir, filename, true);
+                        }
+                        else if (!File.Exists(path))
                             if (await downloader.Add(work, download_dir_tmp) == DownloadAddResult.TryLater)
                                 continue;
                     }

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
@@ -39,6 +40,9 @@ namespace PictureSpider
         }
 
         public override Task<DownloadAddResult> Add(string url, string dir, string file_name)
+            => Add(url, dir, file_name, false);
+
+        public Task<DownloadAddResult> Add(string url, string dir, string file_name, bool requireImagesOnly)
         {
             try
             {
@@ -46,7 +50,7 @@ namespace PictureSpider
                 ArgumentException.ThrowIfNullOrWhiteSpace(file_name);
                 var path = Path.GetFullPath(Path.Combine(dir, file_name));
                 lock (downloading)
-                    downloading.Add(DownloadTask(fileId, path, resourceKey));
+                    downloading.Add(DownloadTask(fileId, path, resourceKey, requireImagesOnly));
                 return Task.FromResult(DownloadAddResult.Added);
             }
             catch (Exception e)
@@ -152,6 +156,57 @@ namespace PictureSpider
             return files;
         }
 
+        public async Task<(bool success, bool imagesOnly, EntityTagHeaderValue etag)> CheckImageZipAsync(string url)
+        {
+            string error;
+            try
+            {
+                var (fileId, resourceKey) = ParseLink(url);
+                var file = await RequestMetadataAsync(
+                    $"/{Uri.EscapeDataString(fileId)}?fields=id,name,size&supportsAllDrives=true", fileId, resourceKey);
+                var length = file.Value<long?>("size");
+                if (file.Value<string>("id") != fileId || !String.Equals(Path.GetExtension(file.Value<string>("name")), ".zip", StringComparison.OrdinalIgnoreCase)
+                    || length is null || length <= 0 || length > ArchiveExtractor.MaxArchiveBytes)
+                    throw new InvalidDataException("Unsupported image ZIP metadata or archive size.");
+                EntityTagHeaderValue etag = null;
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+                var entries = await Pawchive.HttpZipEntriesReader.ReadEntries(length.Value, async (from, to, token) =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get,
+                        $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(fileId)}?alt=media&supportsAllDrives=true");
+                    if (etag is not null)
+                        request.Headers.IfRange = new RangeConditionHeaderValue(etag);
+                    if (!String.IsNullOrWhiteSpace(resourceKey))
+                        request.Headers.Add("X-Goog-Drive-Resource-Keys", $"{fileId}/{resourceKey}");
+                    return await Pawchive.HttpZipEntriesReader.ReadRange(httpClient, request, from, to, length.Value, token, response =>
+                    {
+                        if (etag is not null && !etag.Equals(response.Headers.ETag))
+                            throw new IOException("Google Drive ZIP changed during inspection.");
+                        if (response.Headers.ETag is { IsWeak: false } tag)
+                            etag = tag;
+                    });
+                }, timeout.Token);
+                var files = entries.Where(x => !x.IsDirectory).ToList();
+                if (files.Count == 0 || entries.Any(x => x.IsEncrypted)
+                    || files.Any(x => !Path.GetExtension(x.FullName).IsImage()))
+                {
+                    Console.WriteLine($"[GoogleDrive] Skip ZIP containing no images, non-image files or encrypted entries: {url}");
+                    return (true, false, etag);
+                }
+                return (true, true, etag);
+            }
+            catch (HttpRequestException e) { error = e.Message; }
+            catch (InvalidDataException e) { error = e.Message; }
+            catch (IOException e) { error = e.Message; }
+            catch (JsonException e) { error = e.Message; }
+            catch (ArgumentException e) { error = e.Message; }
+            catch (NotSupportedException e) { error = e.Message; }
+            catch (OperationCanceledException e) { error = e.Message; }
+            catch (OverflowException e) { error = e.Message; }
+            Console.Error.WriteLine($"[GoogleDrive] Image ZIP rejected {url}: {error}");
+            return (false, false, null);
+        }
+
         private async Task<JObject> RequestMetadataAsync(string path, string fileId, string resourceKey)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://www.googleapis.com/drive/v3/files" + path);
@@ -202,7 +257,7 @@ namespace PictureSpider
             }
         }
 
-        private async Task DownloadTask(string fileId, string path, string resourceKey)
+        private async Task DownloadTask(string fileId, string path, string resourceKey, bool requireImagesOnly)
         {
             await downloadLock.WaitAsync().ConfigureAwait(false);
             try
@@ -210,7 +265,7 @@ namespace PictureSpider
                 if (File.Exists(path))
                     return;
                 using var timeout = new CancellationTokenSource(TimeSpan.FromHours(1));
-                await DownloadAsync(fileId, path, resourceKey, timeout.Token).ConfigureAwait(false);
+                await DownloadAsync(fileId, path, resourceKey, timeout.Token, requireImagesOnly).ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -224,10 +279,23 @@ namespace PictureSpider
         }
 
         // https://developers.google.com/workspace/drive/api/guides/manage-downloads
-        private async Task DownloadAsync(string fileId, string path, string resourceKey, CancellationToken cancellationToken)
+        private async Task DownloadAsync(string fileId, string path, string resourceKey, CancellationToken cancellationToken, bool requireImagesOnly)
         {
+            EntityTagHeaderValue etag = null;
+            if (requireImagesOnly)
+            {
+                var url = $"https://drive.google.com/file/d/{fileId}/view";
+                if (!String.IsNullOrWhiteSpace(resourceKey))
+                    url += "?resourcekey=" + Uri.EscapeDataString(resourceKey);
+                var check = await CheckImageZipAsync(url).ConfigureAwait(false);
+                if (!check.success || !check.imagesOnly)
+                    return;
+                etag = check.etag;
+            }
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(fileId)}?alt=media&supportsAllDrives=true");
+            if (etag is not null)
+                request.Headers.IfMatch.Add(etag);
             if (!string.IsNullOrWhiteSpace(resourceKey))
                 request.Headers.Add("X-Goog-Drive-Resource-Keys", $"{fileId}/{resourceKey}");
 

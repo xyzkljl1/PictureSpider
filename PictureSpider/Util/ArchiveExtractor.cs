@@ -30,7 +30,8 @@ namespace PictureSpider
 
         // flatFileName非空时，按原路径排序，以“页号_文件名.扩展名”平铺到目标目录。
         public static async Task<(bool success, List<string> files)> ExtractFiles(string archivePath, string destinationDirectory,
-            IEnumerable<string> allowedExtensions, CancellationToken cancellationToken = default, string flatFileName = null)
+            IEnumerable<string> allowedExtensions, CancellationToken cancellationToken = default, string flatFileName = null,
+            bool requireImagesOnly = false)
         {
             string stagingRoot = null;
             try
@@ -75,7 +76,11 @@ namespace PictureSpider
                     if (entry.IsDirectory)
                         continue;
                     if (!IsAllowedFile(entry.Key))
+                    {
+                        if (requireImagesOnly)
+                            throw new InvalidDataException("Image archive contains a non-image file.");
                         continue;
+                    }
                     if (!String.IsNullOrEmpty(entry.LinkTarget) || entry.IsEncrypted || entry.IsSplitAfter)
                         throw new InvalidDataException("Archive entry type is not supported.");
                     if (entry.Size < 0 || entry.CompressedSize < 0 || entry.Size > MaxSingleFileBytes)

@@ -18,6 +18,7 @@ namespace PictureSpider.Pawchive
         public long CompressedLength { get; set; }
         public long Length { get; set; }
         public bool IsDirectory { get; set; }
+        public bool IsEncrypted { get; set; }
     }
 
     public class HttpZipEntriesReader : IDisposable
@@ -117,10 +118,27 @@ namespace PictureSpider.Pawchive
                 lastModified = response.Content.Headers.LastModified;
             }
 
+            return await ReadEntries(contentLength, async (from, to, token) =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                if (etag is not null && !etag.IsWeak)
+                    request.Headers.IfRange = new RangeConditionHeaderValue(etag);
+                else if (lastModified.HasValue)
+                    request.Headers.IfRange = new RangeConditionHeaderValue(lastModified.Value);
+                return await ReadRange(httpClient, request, from, to, contentLength, token,
+                    response => ValidateUri(response.RequestMessage.RequestUri));
+            }, cancellationToken);
+        }
+
+        internal static async Task<List<RemoteZipEntry>> ReadEntries(long contentLength,
+            Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default)
+        {
+            if (contentLength <= EocdFixedLength)
+                throw new InvalidDataException("Remote ZIP is too small.");
             // 至少保留一个字节不读取，禁止在服务端文件很小时退化为完整下载。
             var tailLength = (int)Math.Min(MaxEocdLength, contentLength - 1);
             var tailStart = contentLength - tailLength;
-            var tail = await ReadRange(uri, tailStart, contentLength - 1, contentLength, etag, lastModified, cancellationToken);
+            var tail = await readRange(tailStart, contentLength - 1, cancellationToken);
             var eocdOffset = FindEocd(tail);
             if (eocdOffset < 0)
                 throw new InvalidDataException("ZIP end of central directory was not found.");
@@ -152,33 +170,28 @@ namespace PictureSpider.Pawchive
                 if (centralDirectoryLength == 0)
                     centralDirectory = Array.Empty<byte>();
                 else
-                    centralDirectory = await ReadRange(uri, centralDirectoryOffset, centralDirectoryEnd - 1,
-                        contentLength, etag, lastModified, cancellationToken);
+                    centralDirectory = await readRange(centralDirectoryOffset, centralDirectoryEnd - 1, cancellationToken);
             }
             return ParseCentralDirectory(centralDirectory, entryCount);
         }
 
-        private async Task<byte[]> ReadRange(Uri uri, long from, long to, long totalLength,
-            EntityTagHeaderValue etag, DateTimeOffset? lastModified, CancellationToken cancellationToken)
+        internal static async Task<byte[]> ReadRange(HttpClient client, HttpRequestMessage request,
+            long from, long to, long totalLength, CancellationToken cancellationToken,
+            Action<HttpResponseMessage> validateResponse)
         {
             var expectedLength = checked(to - from + 1);
             if (expectedLength <= 0 || expectedLength > MaxCentralDirectoryLength)
                 throw new InvalidDataException("Invalid remote ZIP byte range.");
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Range = new RangeHeaderValue(from, to);
             request.Headers.AcceptEncoding.ParseAdd("identity");
-            if (etag is not null && !etag.IsWeak)
-                request.Headers.IfRange = new RangeConditionHeaderValue(etag);
-            else if (lastModified.HasValue)
-                request.Headers.IfRange = new RangeConditionHeaderValue(lastModified.Value);
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (response.StatusCode != HttpStatusCode.PartialContent)
             {
                 if (!response.IsSuccessStatusCode)
                     throw new HttpRequestException($"Remote ZIP HTTP {(int)response.StatusCode}", null, response.StatusCode);
                 throw new IOException($"Remote ZIP ignored the byte range request: {(int)response.StatusCode}");
             }
-            ValidateUri(response.RequestMessage.RequestUri);
+            validateResponse(response);
             var contentRange = response.Content.Headers.ContentRange;
             if (contentRange is null || contentRange.From != from || contentRange.To != to || contentRange.Length != totalLength)
                 throw new InvalidDataException("Remote ZIP returned an unexpected content range.");
@@ -189,14 +202,7 @@ namespace PictureSpider.Pawchive
 
             var result = new byte[expectedLength];
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var offset = 0;
-            while (offset < result.Length)
-            {
-                var read = await stream.ReadAsync(result.AsMemory(offset, result.Length - offset), cancellationToken);
-                if (read == 0)
-                    throw new EndOfStreamException("Remote ZIP range ended early.");
-                offset += read;
-            }
+            await stream.ReadExactlyAsync(result, cancellationToken);
             var extra = new byte[1];
             if (await stream.ReadAsync(extra.AsMemory(0, 1), cancellationToken) != 0)
                 throw new InvalidDataException("Remote ZIP range exceeded the requested length.");
@@ -256,7 +262,8 @@ namespace PictureSpider.Pawchive
                     FullName = name,
                     CompressedLength = compressedLength,
                     Length = length,
-                    IsDirectory = name.EndsWith("/") || name.EndsWith("\\")
+                    IsDirectory = name.EndsWith("/") || name.EndsWith("\\"),
+                    IsEncrypted = (flags & 0x41) != 0
                 });
                 offset += totalEntryLength;
             }

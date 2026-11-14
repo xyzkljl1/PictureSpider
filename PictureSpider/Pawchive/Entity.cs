@@ -214,10 +214,11 @@ namespace PictureSpider.Pawchive
         {
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
-                ((IsChild && !isNonImage ? user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega : work.coverGroup == this || user.downloadAttachmentImages)
+                ((IsChild && !isNonImage ? user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip : work.coverGroup == this || user.downloadAttachmentImages)
                     && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
             if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
-                selected = selected.Concat(externalWorks);
+                selected = selected.Concat(user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip
+                    ? externalWorks.Where(x => x.type == ExternalWork.ExternalWorkType.GoogleDrive && x.Ext == ".zip") : externalWorks);
             return selected.Where(work => !fav || !work.excluded);
         }
     }
@@ -232,6 +233,7 @@ namespace PictureSpider.Pawchive
             None=0,
             DirectExternal=1,
             KeyZipMega=2,
+            GoogleDriveImageZip=3,
         }
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理
