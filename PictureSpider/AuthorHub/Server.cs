@@ -86,13 +86,11 @@ namespace PictureSpider.AuthorHub
                 return result;
 
             List<Author> authors;
-            List<AuthorSource> sources;
             try
             {
                 using var db = new Database { ConnStr = connectStr, ReadOnly = true };
                 authors = await db.Authors.AsNoTracking().OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
                     .Select(x => new Author { Id = x.Id, DisplayName = x.DisplayName }).ToListAsync();
-                sources = await db.AuthorSources.AsNoTracking().ToListAsync();
             }
             catch (Exception ex) when (ex is MySqlException
                 or InvalidOperationException { InnerException: MySqlException })
@@ -103,61 +101,10 @@ namespace PictureSpider.AuthorHub
                 return result;
             }
 
-            return BuildExplorerQueues(authors, sources);
-        }
-
-        internal List<ExplorerQueue> BuildExplorerQueues(List<Author> authors, List<AuthorSource> sources)
-        {
-            var result = new List<ExplorerQueue>();
-            var sourcesByAuthor = sources.ToLookup(x => x.AuthorId);
             foreach (var author in authors)
-            {
-                var authorSources = sourcesByAuthor[author.Id].ToList();
-                if (authorSources.Select(x => x.Module).Distinct().Count() < 2)
-                    continue;
-
-                var modules = new HashSet<SourceModule>();
-                bool followed = false;
-                bool failed = false;
-                foreach (var source in authorSources)
-                {
-                    if (string.IsNullOrWhiteSpace(source.SourceKey)
-                        || !sourceServers.TryGetValue(source.Module, out var server))
-                        continue;
-
-                    BaseUser user;
-                    try
-                    {
-                        user = server.GetUserById(source.SourceKey);
-                    }
-                    catch (Exception ex) when (ex is MySqlException
-                        or MySql.Data.MySqlClient.MySqlException
-                        or InvalidOperationException { InnerException: MySqlException })
-                    {
-                        var number = ex switch
-                        {
-                            MySqlException error => error.Number,
-                            MySql.Data.MySqlClient.MySqlException error => error.Number,
-                            _ => ((MySqlException)ex.InnerException).Number
-                        };
-                        LogError($"Failed to read {source.Module} author {author.Id}: MySQL {number}.");
-                        failed = true;
-                        break;
-                    }
-                    if (user is null)
-                        continue;
-
-                    modules.Add(source.Module);
-                    followed |= user.followed;
-                }
-
-                if (!failed && followed && modules.Count >= 2)
-                {
-                    result.Add(new ExplorerQueue(ExplorerQueue.QueueType.User,
-                        author.Id.ToString(CultureInfo.InvariantCulture),
-                        author.DisplayName));
-                }
-            }
+                result.Add(new ExplorerQueue(ExplorerQueue.QueueType.User,
+                    author.Id.ToString(CultureInfo.InvariantCulture),
+                    author.DisplayName));
             return result;
         }
 
