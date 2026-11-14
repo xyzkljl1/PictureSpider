@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.IO;
+using Microsoft.EntityFrameworkCore;
 
 namespace PictureSpider.Twitter
 {
@@ -17,6 +18,7 @@ namespace PictureSpider.Twitter
      * 属性分为Base和Extra部分，Base是可以从远端直接/间接获取的属性，Extra是由我赋予的属性
      */
     [Table("user")]
+    [Index(nameof(AuthorStorageName))]
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "X";
@@ -38,6 +40,9 @@ namespace PictureSpider.Twitter
         [MaxLength(64)]
         public virtual string api_latest_tweet_id { get; set; } = "0";
         public virtual bool invalid { get; set; } = false;
+        [MaxLength(128)]
+        [MySqlCharSet("utf8mb4")]
+        [MySqlCollation("utf8mb4_0900_as_ci")]
         public virtual string AuthorStorageName { get; set; }
 
         public User() { }

@@ -17,9 +17,6 @@ namespace PictureSpider.AuthorHub
 
             modelBuilder.Entity<Author>().ToTable("Authors");
             modelBuilder.Entity<Author>().HasKey(x => x.Id);
-            modelBuilder.Entity<Author>().Property(x => x.StorageName)
-                .IsRequired().HasMaxLength(128)
-                .UseCollation("utf8mb4_0900_as_ci");
             modelBuilder.Entity<Author>().HasAlternateKey(x => x.StorageName);
 
             modelBuilder.Entity<AuthorSource>().ToTable("AuthorSources");
@@ -27,9 +24,6 @@ namespace PictureSpider.AuthorHub
             modelBuilder.Entity<AuthorSource>().Property(x => x.Module)
                 .HasConversion<string>()
                 .HasColumnType("enum('Pixiv','Twitter','Hitomi','Kemono','Pawchive','LSF')");
-            modelBuilder.Entity<AuthorSource>().Property(x => x.SourceKey)
-                .HasMaxLength(255)
-                .UseCollation("utf8mb4_0900_bin");
             // 来源映射由应用检查；AuthorId 按要求不建立外键。
             modelBuilder.Entity<AuthorSource>().HasIndex(x => x.AuthorId);
 

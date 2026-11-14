@@ -34,6 +34,24 @@ namespace PictureSpider.AuthorHub
             }
         }
 
+        public HashSet<string> GetStorageNames()
+        {
+            if (string.IsNullOrWhiteSpace(connectStr))
+                return null;
+            try
+            {
+                using var db = new Database { ConnStr = connectStr, ReadOnly = true };
+                return db.Authors.Select(x => x.StorageName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is MySqlException
+                or InvalidOperationException { InnerException: MySqlException })
+            {
+                var error = ex as MySqlException ?? (MySqlException)ex.InnerException;
+                LogError($"Failed to read author storage names: MySQL {error.Number}.");
+                return null;
+            }
+        }
+
         public async Task<Func<string, (string AuthorName, string WorkName)?>> CreateAuthorMatcherAsync()
         {
             if (string.IsNullOrWhiteSpace(connectStr))

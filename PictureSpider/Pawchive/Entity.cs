@@ -223,6 +223,7 @@ namespace PictureSpider.Pawchive
     }
     [Table("Users")]
     [PrimaryKey(nameof(id), nameof(service))]
+    [Index(nameof(AuthorStorageName))]
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "PW";
@@ -237,6 +238,9 @@ namespace PictureSpider.Pawchive
         public string id { get;set; }
         public string service { get; set; }
         //public string relation_id { get; set; }//用途不明
+        [MaxLength(128)]
+        [MySqlCharSet("utf8mb4")]
+        [MySqlCollation("utf8mb4_0900_as_ci")]
         public string AuthorStorageName { get; set; }
         public DownloadExternalWorkType dowloadExternalWorks { get; set; } = DownloadExternalWorkType.None;
         //public bool dowloadCover { get; set; } = false;

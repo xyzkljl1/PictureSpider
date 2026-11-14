@@ -39,6 +39,7 @@ namespace PictureSpider.LocalSingleFile
 
         private string FavDir;
         private List<string> TmpDirs;
+        public Func<HashSet<string>> GetAuthorStorageNames;
         public static HashSet<string> valid_exts = new HashSet<string>{".jpg",".png",".webp",".gif", ".jpeg" };
         public Server(Config config):base(config, config.LSFConnectStr)
         {
@@ -77,6 +78,7 @@ namespace PictureSpider.LocalSingleFile
         {
             var illusts = (from illust in database.Waited
                           select illust).ToList<Illust>();
+            var storageNames = GetAuthorStorageNames?.Invoke();
             int del_ct = 0;
             int mv_ct = 0;
             foreach(var batch in illusts.Chunk(200))
@@ -87,8 +89,13 @@ namespace PictureSpider.LocalSingleFile
                         continue;
                     if(illust.fav)
                     {
+                        if (GetAuthorStorageNames != null && storageNames == null)
+                            continue;
                         var filename = Path.GetFileName(illust.path);
                         var dest_path = Path.Combine(FavDir, illust.sub_path);
+                        var parts = illust.sub_path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 3);
+                        if (parts.Length == 3 && storageNames?.Contains(parts[0]) == true)
+                            dest_path = Path.Combine(download_dir_unified_fav, parts[0], "lsf", parts[1], parts[2]);
                         var dest_dir= Path.GetDirectoryName(dest_path);
                         while (File.Exists(dest_path))
                         {//如果目的地存在同名文件就一直加_直到不重名

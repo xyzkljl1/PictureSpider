@@ -14,7 +14,7 @@ namespace PictureSpider.Hentaiera
     public class Work : TypicalWork<WorkGroup>
     {
         [NotMapped]
-        public override string TmpSubPath { get => $"{workGroup.user.name.ReplaceInvalidCharInFilenameWithReturnValue()}/{base.TmpSubPath}"; }
+        public override string TmpSubPath { get => $"{(workGroup.user.AuthorStorageName ?? workGroup.user.name).ReplaceInvalidCharInFilenameWithReturnValue()}/{base.TmpSubPath}"; }
     }
     [Table("WorkGroups")]
     public class WorkGroup : TypicalWorkGroup<Work,User> {}

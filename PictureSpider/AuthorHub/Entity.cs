@@ -18,12 +18,16 @@ namespace PictureSpider.AuthorHub
         public long Id { get; set; }
         [Required, MaxLength(255)]
         public string DisplayName { get; set; } = "";
+        [Required, MaxLength(128)]
+        [MySqlCollation("utf8mb4_0900_as_ci")]
         public string StorageName { get; set; } = "";
     }
 
     public class AuthorSource
     {
         public SourceModule Module { get; set; }
+        [MaxLength(255)]
+        [MySqlCollation("utf8mb4_0900_bin")]
         public string SourceKey { get; set; } = "";
         public long AuthorId { get; set; }
     }

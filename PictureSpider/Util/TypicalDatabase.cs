@@ -63,11 +63,16 @@ namespace PictureSpider
         //外键, 实际存储的类型，子类如果使用了TypicalWork的子类，则应当新建一个NotMapped的works属性用于返回TypicalWork的子类
         public virtual ICollection<WorkType> works { get; set; }
     }
+    [Index(nameof(AuthorStorageName))]
     public class TypicalUser<WorkGroupType> : TypicalUserBase where WorkGroupType : TypicalWorkGroupBase
     {
         [Key]
         public virtual int Id { get; set; }
         public virtual string name { get; set; }
+        [MaxLength(128)]
+        [MySqlCharSet("utf8mb4")]
+        [MySqlCollation("utf8mb4_0900_as_ci")]
+        public string AuthorStorageName { get; set; }
         //一对多外键，需要virtual ICollection
         public virtual ICollection<WorkGroupType> workGroups { get; set; }
         public TypicalUser() { }

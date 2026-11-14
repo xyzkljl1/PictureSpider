@@ -66,6 +66,7 @@ namespace PictureSpider
                                             });
                                         commonServers.Add(authorHubServer);
                                         tgServer.CreateAuthorMatcherAsync = authorHubServer.CreateAuthorMatcherAsync;
+                                        lsfServer.GetAuthorStorageNames = authorHubServer.GetStorageNames;
                                     }
                                     context.Post(async async => {
                                         await pixivServer.Init();

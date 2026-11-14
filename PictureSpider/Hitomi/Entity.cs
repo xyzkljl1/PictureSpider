@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace PictureSpider.Hitomi
 {
@@ -69,6 +70,7 @@ namespace PictureSpider.Hitomi
         public virtual ICollection<Illust> illusts { get; set; }
     }
     [Table("Users")]
+    [Index(nameof(AuthorStorageName))]
     public class User : BaseUserEx
     {
         public override string ModuleAbbreviation => "HT";
@@ -76,6 +78,9 @@ namespace PictureSpider.Hitomi
         [Key]
         [DbKey]
         public string name { get; set; }
+        [MaxLength(128)]
+        [MySqlCharSet("utf8mb4")]
+        [MySqlCollation("utf8mb4_0900_as_ci")]
         public string AuthorStorageName { get; set; }
         //一对多外键，需要virtual ICollection
         public virtual ICollection<IllustGroup> illustGroups { get; set; }

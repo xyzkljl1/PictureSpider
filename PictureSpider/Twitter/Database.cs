@@ -21,11 +21,6 @@ namespace PictureSpider.Twitter
 
             modelBuilder.Entity<User>().ToTable("user");
             modelBuilder.Entity<User>().HasKey(x => x.id);
-            // 跨库外键在迁移中建立，这里只映射本库字段。
-            modelBuilder.Entity<User>().Property(x => x.AuthorStorageName)
-                .HasMaxLength(128).HasCharSet("utf8mb4")
-                .UseCollation("utf8mb4_0900_as_ci");
-            modelBuilder.Entity<User>().HasIndex(x => x.AuthorStorageName);
             modelBuilder.Entity<User>().HasIndex(x => x.name).IsUnique();
             // BaseUser display fields are UI-only and are not stored in the Twitter tables.
             modelBuilder.Entity<User>().Ignore(x => x.displayId);
