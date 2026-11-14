@@ -11,6 +11,13 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Telegram
 {
+    [Table("IgnoredTitleTags")]
+    public class IgnoredTitleTag
+    {
+        [Key]
+        [StringLength(255)]
+        public string tag { get; set; }
+    }
     [Table("BlockedKeywords")]
     public class BlockedKeyword
     {

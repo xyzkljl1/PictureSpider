@@ -17,6 +17,7 @@ using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -266,11 +267,23 @@ namespace PictureSpider.Telegram
                 Log($"Fetch {ct} Messages from {channel.title}");
             }
         }
+        private static string CleanWorkTitle(string title, ISet<string> ignoredTags, bool removeTagMarkers = false)
+        {
+            var value = AuthorMatcher.NormalizeName(title);
+            //只删除完整的类别标签，保留作者、角色及其它主题标签供匹配和命名。
+            value = Regex.Replace(value, @"(?<![\p{L}\p{N}_])#([\p{L}\p{N}_]+)",
+                match => ignoredTags.Contains(match.Groups[1].Value) ? " " : match.Value);
+            if (string.IsNullOrWhiteSpace(value))
+                return AuthorMatcher.NormalizeName(title);
+            if (removeTagMarkers)
+                value = Regex.Replace(value, @"#(?=[\p{L}\p{N}_])", "");
+            return Regex.Replace(value, @"\s+", " ").Trim();
+        }
         private static string FindBlockedKeyword(IEnumerable<string> keywords, params string[] texts)
         {
             return keywords.FirstOrDefault(word => texts.Any(text => (text ?? "").Contains(word, StringComparison.OrdinalIgnoreCase)));
         }
-        public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30)
+        public async Task<string> GetAlbumCaptionText(TdApi.Message messageInfo,int length_limit=30, bool fullText=false)
         {
             //一组图中只有一个有captain文本
             //升序排列，一般文本在id最小的message上
@@ -293,6 +306,8 @@ namespace PictureSpider.Telegram
                             foreach (var entity in (captionText.Entities ?? Array.Empty<TextEntity>())
                                 .Where(x => x.Type is TextEntityType.TextEntityTypeUrl).OrderByDescending(x => x.Offset))
                                 ret = ret.Remove(entity.Offset, entity.Length).Insert(entity.Offset, " ");
+                            if (fullText)
+                                return ret;
                             if (ret.Length > length_limit)
                                 ret = ret.Substring(0, length_limit);
                             Util.ReplaceInvalidCharInFilename(ref ret);
@@ -315,8 +330,9 @@ namespace PictureSpider.Telegram
             Log("Start Download Try");
             var blockedKeywords = database.BlockedKeywords.Select(x => x.keyword).ToList()
                 .Where(x => !String.IsNullOrWhiteSpace(x)).ToList();
+            var ignoredTitleTags = database.IgnoredTitleTags.Select(x => x.tag).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var channels = database.Channels.ToList();
-            var matchAuthor = CreateAuthorMatcherAsync != null && channels.Any(x => x.download_telegraph)
+            var matchAuthor = CreateAuthorMatcherAsync != null && channels.Any(x => x.download_telegraph || x.download_comments)
                 ? await CreateAuthorMatcherAsync() : null;
             foreach (var channel in channels)//要tolist获得一份拷贝，否则database会处于占用中
             {
@@ -387,14 +403,14 @@ namespace PictureSpider.Telegram
                                     else
                                     {
                                         var requestUrl = $"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.LinkPreview.Url)}";
-                                        var title = content.LinkPreview.Title ?? "";
+                                        var title = CleanWorkTitle(content.LinkPreview.Title ?? "", ignoredTitleTags);
                                         var match = matchAuthor?.Invoke(title);
                                         if (match is { } matched)
                                         {
                                             var authorName = matched.AuthorName.NormalizeDirectoryName();
-                                            var workName = matched.WorkName.NormalizeDirectoryName();
+                                            var workName = CleanWorkTitle(matched.WorkName, ignoredTitleTags, true).NormalizeDirectoryName();
                                             if (workName.Length == 0)
-                                                workName = title.NormalizeDirectoryName();
+                                                workName = CleanWorkTitle(title, ignoredTitleTags, true).NormalizeDirectoryName();
                                             if (authorName.Length > 0 && workName.Length > 0)
                                                 requestUrl += "&dir=" + System.Web.HttpUtility.UrlEncode($"{authorName}/{workName}");
                                         }
@@ -444,11 +460,20 @@ namespace PictureSpider.Telegram
                                     }
                                     if (cursor is null)
                                         continue;
-                                    var album_title = await GetAlbumCaptionText(cursor);
-                                    comment_title=album_title;
-
+                                    var caption = await GetAlbumCaptionText(cursor, fullText:true);
+                                    //屏蔽词仍匹配原有的30字符标题，不受新的目录命名规则影响。
+                                    comment_title = caption.Substring(0, Math.Min(30, caption.Length))
+                                        .ReplaceInvalidCharInFilenameWithReturnValue().Replace("[", "").Replace("]", "")
+                                        .Trim(new char[] { ' ', '#' });
+                                    var title = CleanWorkTitle(caption, ignoredTitleTags);
+                                    var match = matchAuthor?.Invoke(title);
+                                    var workName = string.IsNullOrWhiteSpace(match?.WorkName) ? title : match.Value.WorkName;
+                                    var album_title = CleanWorkTitle(workName, ignoredTitleTags, true);
+                                    album_title = album_title.Substring(0, Math.Min(50, album_title.Length)).NormalizeDirectoryName();
                                     if (album_title != "")
-                                        parent_dir = Path.Combine(download_dir_organized, album_title);
+                                        parent_dir = match is { } matched
+                                            ? Path.Combine(download_dir_organized, matched.AuthorName.NormalizeDirectoryName(), album_title)
+                                            : Path.Combine(download_dir_organized, album_title);
                                     else//找不到描述的视同散图
                                         parent_dir = Path.Combine(download_dir_other, $"{channel.id}");
                                 }
