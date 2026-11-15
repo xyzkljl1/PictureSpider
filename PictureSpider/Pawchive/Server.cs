@@ -633,6 +633,55 @@ namespace PictureSpider.Pawchive
             await database.SaveChangesAsync();
             //Log($"Fetch IllustGroup Done:{illustGroup.id} {illustGroup.title}");
         }
+#if DEBUG
+        public async Task<bool> DebugDownloadKeyZipMega(string service, string userId, string postId)
+        {
+            var group = await database.WorkGroups.FirstOrDefaultAsync(x => x.id == postId
+                && x.user.id == userId && x.user.service == service && x.parentId == null);
+            if (group is null || group.user.dowloadExternalWorks != User.DownloadExternalWorkType.KeyZipMega)
+            {
+                LogError($"KeyZipMega test requires an existing post with KeyZipMega enabled: {service}/{userId}/{postId}");
+                return false;
+            }
+            // 强制重新读取原帖附件并调用原解析流程，不重建普通图片或改变阅读、收藏状态。
+            Log($"KeyZipMega test start: {service}/{userId}/{postId}");
+            var post = await HttpGetJson($"{baseAPIUrl}/{service}/user/{userId}/post/{postId}");
+            if (post?.Value<string>("id") != postId)
+            {
+                LogError("KeyZipMega test could not fetch the requested post.");
+                return false;
+            }
+            await ParseKeyZipMega(group, (post["attachments"] ?? new JArray()).ToList());
+            await SplitNonImageWorks(group);
+            await database.SaveChangesAsync();
+            var works = group.externalWorks.Concat(group.children.SelectMany(x => x.externalWorks))
+                .Where(x => x.type == ExternalWork.ExternalWorkType.Mega && !x.DettachDownloaded).ToList();
+            if (works.Count == 0)
+            {
+                LogError("KeyZipMega test has no unfinished MEGA archive after parsing; download was not started.");
+                return false;
+            }
+            // 原下载流程会清理根目录 aria2 文件；定向测试遇到这些文件时停止。
+            if (Directory.EnumerateFiles(download_dir_tmp, "*.aria2").Any())
+            {
+                LogError("KeyZipMega test stopped because the download root contains aria2 files.");
+                return false;
+            }
+            var keys = works.Select(GetDownloadQueueKey).ToList();
+            Log($"KeyZipMega test queued {keys.Count} archives through the normal download pipeline.");
+            await ProcessIllustDownloadQueue(keys);
+            using var db = NewDbContext(true);
+            var ids = works.Select(x => x.id).ToList();
+            var completed = await db.ExternalWorks.CountAsync(x => x.type == ExternalWork.ExternalWorkType.Mega
+                && ids.Contains(x.id) && x.readed);
+            var images = (await db.Works.Include(x => x.workGroup).ThenInclude(x => x.user)
+                .Where(x => x.service == service && x.workGroup.parentId == postId).ToListAsync())
+                .Where(x => ids.Any(id => x.urlPath.StartsWith($"Mega/{id}/", StringComparison.Ordinal))).ToList();
+            var missing = images.Count(x => !File.Exists(Path.Combine(download_dir_tmp, x.TmpSubPath)));
+            Log($"KeyZipMega test result: {completed}/{works.Count} archives completed, {images.Count} image records, {missing} missing files, {keys.Count} tasks remaining.");
+            return keys.Count == 0 && completed == works.Count && images.Count > 0 && missing == 0;
+        }
+#endif
         private async Task ParseKeyZipMega(WorkGroup workGroup, List<JToken> attachments)
         {
             var keyFiles = attachments
@@ -654,14 +703,17 @@ namespace PictureSpider.Pawchive
             };
             var (success, entries) = await httpArchiveEntriesReader.GetEntries(keyWork.DownloadURL);
             if (!success)
+            {
+                LogError($"KeyZipMega directory read failed: {workGroup.service}/{workGroup.id}");
                 return;
+            }
             var files = entries.Where(x => !x.IsDirectory && !String.IsNullOrWhiteSpace(x.FullName)
                 && !x.FullName.Contains('/') && !x.FullName.Contains('\\')
                 && Path.GetExtension(x.FullName).IsImage()
                 && Regex.IsMatch(Path.GetFileNameWithoutExtension(x.FullName), "^[A-Za-z0-9_-]{8}#[A-Za-z0-9_-]{43}$")).ToList();
             if (files.Count != 1)
             {
-                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}");
+                LogError($"Invalid KeyZipMega {workGroup.service}/{workGroup.id}: expected one MEGA entry, found {files.Count} in {entries.Count} archive entries");
                 return;
             }
             var token = Path.GetFileNameWithoutExtension(files[0].FullName);

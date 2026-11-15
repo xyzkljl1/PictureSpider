@@ -23,6 +23,29 @@ namespace PictureSpider
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         static void Main(string[] args)
         {
+#if DEBUG
+            if (args.FirstOrDefault() == "--paw-keyzip-test")
+            {
+                try
+                {
+                    if (args.Length != 4)
+                    {
+                        Console.Error.WriteLine("Usage: --paw-keyzip-test <service> <userId> <postId>");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
+                    using var server = new Pawchive.Server(LoadConfig());
+                    Environment.ExitCode = server.DebugDownloadKeyZipMega(args[1], args[2], args[3])
+                        .GetAwaiter().GetResult() ? 0 : 1;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Paw KeyZipMega test failed: {ex}");
+                    Environment.ExitCode = 1;
+                }
+                return;
+            }
+#endif
             // don't dispatch exceptions to Application.ThreadException 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
