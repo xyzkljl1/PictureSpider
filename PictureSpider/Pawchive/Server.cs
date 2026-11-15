@@ -687,24 +687,33 @@ namespace PictureSpider.Pawchive
             await database.SaveChangesAsync();
             Log($"Parse KeyZipMega: {workGroup.service}/{workGroup.id} => {name} ({node.Size} bytes)");
         }
-        private async Task<bool> PostProcessExternalZip(ExternalWork work, string archivePath)
+        private async Task<bool> PostProcessZip(PawchiveBaseWork work, string archivePath)
         {
-            bool googleDriveImageZip = work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
-            bool createImageGroup = googleDriveImageZip || work.workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
+            var attachment = work as Work;
+            var external = work as ExternalWork;
+            var group = attachment?.GetGroup ?? external.workGroup;
+            var parent = group.ParentGroup;
+            bool googleDriveImageZip = external != null && group.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
+            bool createImageGroup = attachment != null || googleDriveImageZip
+                || group.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
             var destinationDirectory = Path.Combine(Path.GetDirectoryName(archivePath),
                 Path.GetFileNameWithoutExtension(archivePath) + "_images");
             string archiveId = null;
+            string imageKeyPrefix = null;
             if (createImageGroup)
             {
                 destinationDirectory = Path.GetDirectoryName(archivePath);
                 archiveId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                    Encoding.UTF8.GetBytes($"{work.type}/{work.id}")));
+                    Encoding.UTF8.GetBytes(attachment != null
+                        ? $"Attachment/{attachment.service}/{attachment.urlPath}" : $"{external.type}/{external.id}")));
+                // 外链沿用原标识；附件路径可能很长，使用固定长度的来源标识。
+                imageKeyPrefix = attachment != null ? $"Attachment/{archiveId}" : $"{external.type}/{external.id}";
             }
             var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory,
-                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: googleDriveImageZip);
+                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: attachment != null || googleDriveImageZip);
             if (!success)
                 return false;
-            if (createImageGroup && files.Count > 0)
+            if (createImageGroup)
             {
                 try
                 {
@@ -712,17 +721,16 @@ namespace PictureSpider.Pawchive
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    LogError($"Archive cleanup failed {work.service}/{work.id}: {e.Message}");
+                    LogError($"Archive cleanup failed {GetDownloadQueueKey(work)}: {e.Message}");
                     return false;
                 }
-                var parent = work.workGroup.ParentGroup;
                 var imageGroup = new WorkGroup
                 {
                     id = await database.GetNextChildId(),
                     parent = parent,
                     parentId = parent.id,
                     user = parent.user,
-                    title = $"{parent.title} [{Path.GetFileNameWithoutExtension(work.name)}]",
+                    title = $"{parent.title} [{Path.GetFileNameWithoutExtension(attachment?.name ?? external.name)}]",
                     fetched = true
                 };
                 int index = 1;
@@ -730,8 +738,8 @@ namespace PictureSpider.Pawchive
                 {
                     imageGroup.works.Add(new Work
                     {
-                        service = work.service,
-                        urlPath = $"{work.type}/{work.id}/{index}",
+                        service = group.service,
+                        urlPath = $"{imageKeyPrefix}/{index}",
                         name = archiveId + Path.GetExtension(file),
                         index = index++,
                         workGroup = imageGroup
@@ -740,7 +748,7 @@ namespace PictureSpider.Pawchive
                 database.WorkGroups.Add(imageGroup);
                 // 调用方将图片组、图片和压缩包下载完成标记在同一次SaveChanges中提交。
             }
-            Log($"Extract ExternalWork: {work.workGroup.service}/{work.workGroup.id} {files.Count} images");
+            Log($"Extract archive: {group.service}/{parent.id} {files.Count} images");
             return true;
         }
         public override bool ListenerUtil_IsValidUrl(string url)
@@ -826,7 +834,7 @@ namespace PictureSpider.Pawchive
                                     var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
                                     if (work is Work preview && preview.DownloadPreview && preview.GetLocalPath(download_dir_tmp) != "")
                                         continue;
-                                    if (work.Dettached || !File.Exists(path) || File.Exists(path + ".aria2"))
+                                    if (work.Dettached || !File.Exists(path))
                                         downloadQueue.Add(key);
                                 }
                     } 
@@ -1189,10 +1197,22 @@ namespace PictureSpider.Pawchive
                             if (await downloader.Add(work, download_dir_tmp) == DownloadAddResult.TryLater)
                                 continue;
                     }
-                    else if (ext.IsZip())
+                    else if (ext.IsZip() && work is Work zip)
                     {
-                        ignore_illusts.Add(key);//暂定：直接忽略压缩包
-                        continue;
+                        if (!File.Exists(path))
+                        {
+                            var check = await PostDownloadPolicy.ClassifyAttachments(new[] { (zip.name, zip.urlPath) }, httpZipEntriesReader.GetEntries);
+                            if (!check.success)
+                                continue;
+                            if (check.content.Kind != PostDownloadKind.ImageArchives)
+                            {
+                                ignore_illusts.Add(key);
+                                continue;
+                            }
+                            await Task.Delay(TimeSpan.FromSeconds(2));
+                            if (await downloader.Add(Downloader.DownloaderType.Aria2DownloadQueue, work.DownloadURL, dir, filename) == DownloadAddResult.TryLater)
+                                continue;
+                        }
                     }
                     else
                     {
@@ -1218,10 +1238,10 @@ namespace PictureSpider.Pawchive
                     foreach (var (key, illust) in download_illusts)
                     {
                         var path = Path.Combine(download_dir_tmp, illust is Work attachment ? attachment.DownloadSubPath : illust.TmpSubPath);
-                        var localComplete = File.Exists(path) && !File.Exists(path + ".aria2");
-                        if (localComplete && illust.Ext.IsZip() && illust is ExternalWork externalWork)
-                            localComplete = await PostProcessExternalZip(externalWork, path);
-                        if (File.Exists(path + ".aria2") || !localComplete)//存在.aria2说明下载未完成
+                        var localComplete = File.Exists(path);
+                        if (localComplete && illust.Ext.IsZip())
+                            localComplete = await PostProcessZip(illust, path);
+                        if (!localComplete)
                         {
 //                            Log($"Download Fail: {illust.url}");
                             if (illust is Work failed && failed.Ext.IsImage() && !failed.GetGroup.IsChild)

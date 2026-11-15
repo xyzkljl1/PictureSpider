@@ -171,7 +171,7 @@ namespace PictureSpider
                     foreach (var work in download_illusts)
                     {
                         var path = Path.Join(download_dir_tmp, work.TmpSubPath);
-                        if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
+                        if (!File.Exists(path))
                         {
                             Log($"Download Fail: {work.url}");
                             illustList.Remove(work);//移到队末并重置url

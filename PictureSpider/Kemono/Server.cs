@@ -1179,7 +1179,7 @@ namespace PictureSpider.Kemono
                     foreach (var (key, illust) in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.TmpSubPath}";
-                        if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
+                        if (!File.Exists(path))
                         {
 //                            Log($"Download Fail: {illust.url}");
                             workList.Remove(key);//移到队末并重置url

@@ -79,15 +79,15 @@ namespace PictureSpider.Pawchive
         {
             return Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path) + "_preview" + Path.GetExtension(path));
         }
-        // 不能将 aria2 尚未下载完整的文件交给浏览器或复制到收藏目录。
+        // 优先使用原图，原图不存在时使用预览图。
         public string GetLocalPath(string directory)
         {
             var path = Path.Combine(directory, TmpSubPath);
             // TODO 优化，避免 entity 调用 File.Exists。
-            if (File.Exists(path) && !File.Exists(path + ".aria2"))
+            if (File.Exists(path))
                 return path;
             path = GetPreviewPath(path);
-            return File.Exists(path) && !File.Exists(path + ".aria2") ? path : "";
+            return File.Exists(path) ? path : "";
         }
         [NotMapped]
         public override string DownloadURL => GetGroup is { IsChild: true, isNonImage: false } ? null

@@ -152,7 +152,7 @@ namespace PictureSpider
         }
 
         public static HashSet<string> zipExtensions = new HashSet<string>{
-                ".zip", ".rar", ".gz", ".7z",".tar"
+                ".zip", ".rar", ".gz", ".7z"
             };
         public static bool IsZip(this string ext)
         {

@@ -713,7 +713,7 @@ namespace PictureSpider.Pixiv
                             for (int i = 0; i < illust.pageCount; ++i)
                             {
                                 var path = download_dir_main + "/" + illust.downloadFileName(i);
-                                if (File.Exists(path+".aria2")|| !File.Exists(path))//存在.aria2说明下载未完成
+                                if (!File.Exists(path))
                                     fail = true;
                             }
                             if (fail) continue;
@@ -731,7 +731,7 @@ namespace PictureSpider.Pixiv
                         for (int i = 0; i < illust.pageCount; ++i)
                         {
                             var path = download_dir_main + "/" + illust.storeFileName(i);
-                            if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
+                            if (!File.Exists(path))
                                 fail = true;
                         }
                         if (fail)//重新fetch

@@ -317,7 +317,7 @@ namespace PictureSpider.Hitomi
                     foreach (var illust in download_illusts)
                     {
                         var path = $"{download_dir_tmp}/{illust.fileName}{illust.ext}";
-                        if (File.Exists(path + ".aria2") || !File.Exists(path))//存在.aria2说明下载未完成
+                        if (!File.Exists(path))
                         {
                             Log($"Download Fail: {path} {illust.url}");
                             illustList.Remove(illust.Id);//移到队末并重置url
