@@ -72,8 +72,11 @@ namespace PictureSpider.Pawchive
             var megaDownloader = new MegaDownloadQueue(config.Proxy, config.Proxy);
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
-            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, _user_agent: "aria2/1.33.0"),megaDownloader,googleDriveDownloader);
-            httpArchiveEntriesReader = new HttpArchiveEntriesReader(config.Proxy, $"file.{baseHost}");
+            // 实测 Paw 文件服务对原 Chrome UA 和 API 使用的 PictureSpider UA 返回 403，现有 aria2 UA 可正常访问。
+            // 目录预检与实际下载共用此值，避免附件能下载但预检被拒绝；与帖子 API 的 UA 分开。
+            var downloadUserAgent = "aria2/1.33.0";
+            downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, _user_agent: downloadUserAgent),megaDownloader,googleDriveDownloader);
+            httpArchiveEntriesReader = new HttpArchiveEntriesReader(config.Proxy, baseHost, downloadUserAgent);
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }

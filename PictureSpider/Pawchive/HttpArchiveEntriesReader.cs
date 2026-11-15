@@ -28,7 +28,6 @@ namespace PictureSpider.Pawchive
 
     public class HttpArchiveEntriesReader : IDisposable
     {
-        private const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
         private const int RequestTimeoutSeconds = 35;
 
         // ZIP EOCD 由 22 字节固定字段和最长 65535 字节注释组成。
@@ -66,12 +65,12 @@ namespace PictureSpider.Pawchive
         private readonly HttpClient httpClient;
         private readonly string allowedHost;
 
-        public HttpArchiveEntriesReader(string proxy, string _allowedHost)
+        public HttpArchiveEntriesReader(string proxy, string _allowedHost, string userAgent)
         {
             allowedHost = _allowedHost;
             var handler = new HttpClientHandler
             {
-                AllowAutoRedirect = false,
+                AllowAutoRedirect = true,
                 AutomaticDecompression = DecompressionMethods.None,
                 Proxy = String.IsNullOrEmpty(proxy) ? null : new WebProxy(proxy, false),
                 UseProxy = !String.IsNullOrEmpty(proxy),
@@ -79,7 +78,7 @@ namespace PictureSpider.Pawchive
             };
             httpClient = new HttpClient(handler);
             httpClient.Timeout = TimeSpan.FromSeconds(RequestTimeoutSeconds);
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(BrowserUserAgent);
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
         }
 
         public void Dispose()
@@ -111,7 +110,6 @@ namespace PictureSpider.Pawchive
         private async Task<List<RemoteArchiveEntry>> ReadEntries(string url, string extension, CancellationToken cancellationToken)
         {
             var uri = new Uri(url);
-            ValidateUri(uri);
             long contentLength;
             EntityTagHeaderValue etag;
             DateTimeOffset? lastModified;
@@ -121,6 +119,7 @@ namespace PictureSpider.Pawchive
                 if (response.StatusCode != HttpStatusCode.OK)
                     throw new HttpRequestException($"Remote archive HEAD failed: {(int)response.StatusCode}", null, response.StatusCode);
                 ValidateUri(response.RequestMessage.RequestUri);
+                uri = response.RequestMessage.RequestUri;
                 if (!response.Headers.AcceptRanges.Contains("bytes"))
                     throw new IOException("Remote archive does not advertise byte range support.");
                 contentLength = response.Content.Headers.ContentLength ?? -1;
@@ -267,7 +266,9 @@ namespace PictureSpider.Pawchive
 
         private void ValidateUri(Uri uri)
         {
-            if (uri is null || uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals(allowedHost, StringComparison.OrdinalIgnoreCase))
+            if (uri is null || uri.Scheme != Uri.UriSchemeHttps
+                || !(uri.Host.Equals(allowedHost, StringComparison.OrdinalIgnoreCase)
+                    || uri.Host.EndsWith("." + allowedHost, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidDataException("Unexpected remote archive host.");
         }
 
