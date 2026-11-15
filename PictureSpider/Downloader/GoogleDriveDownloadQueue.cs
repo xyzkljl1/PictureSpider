@@ -170,7 +170,7 @@ namespace PictureSpider
                     throw new InvalidDataException("Unsupported image ZIP metadata or archive size.");
                 EntityTagHeaderValue etag = null;
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(35));
-                var entries = await Pawchive.HttpZipEntriesReader.ReadEntries(length.Value, async (from, to, token) =>
+                var entries = await Pawchive.HttpArchiveEntriesReader.ReadEntries(length.Value, async (from, to, token) =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get,
                         $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(fileId)}?alt=media&supportsAllDrives=true");
@@ -178,7 +178,7 @@ namespace PictureSpider
                         request.Headers.IfRange = new RangeConditionHeaderValue(etag);
                     if (!String.IsNullOrWhiteSpace(resourceKey))
                         request.Headers.Add("X-Goog-Drive-Resource-Keys", $"{fileId}/{resourceKey}");
-                    return await Pawchive.HttpZipEntriesReader.ReadRange(httpClient, request, from, to, length.Value, token, response =>
+                    return await Pawchive.HttpArchiveEntriesReader.ReadRange(httpClient, request, from, to, length.Value, token, response =>
                     {
                         if (etag is not null && !etag.Equals(response.Headers.ETag))
                             throw new IOException("Google Drive ZIP changed during inspection.");

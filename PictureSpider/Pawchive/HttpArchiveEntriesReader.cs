@@ -9,10 +9,15 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using SharpCompress.Archives;
+using SharpCompress.Archives.Rar;
+using SharpCompress.Archives.SevenZip;
+using SharpCompress.Common;
+using SharpCompress.Readers;
 
 namespace PictureSpider.Pawchive
 {
-    public class RemoteZipEntry
+    public class RemoteArchiveEntry
     {
         public string FullName { get; set; }
         public long CompressedLength { get; set; }
@@ -21,7 +26,7 @@ namespace PictureSpider.Pawchive
         public bool IsEncrypted { get; set; }
     }
 
-    public class HttpZipEntriesReader : IDisposable
+    public class HttpArchiveEntriesReader : IDisposable
     {
         private const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
         private const int RequestTimeoutSeconds = 35;
@@ -61,7 +66,7 @@ namespace PictureSpider.Pawchive
         private readonly HttpClient httpClient;
         private readonly string allowedHost;
 
-        public HttpZipEntriesReader(string proxy, string _allowedHost)
+        public HttpArchiveEntriesReader(string proxy, string _allowedHost)
         {
             allowedHost = _allowedHost;
             var handler = new HttpClientHandler
@@ -82,21 +87,28 @@ namespace PictureSpider.Pawchive
             httpClient.Dispose();
         }
 
-        public async Task<(bool success, List<RemoteZipEntry> entries)> GetEntries(string url,
+        public async Task<(bool success, List<RemoteArchiveEntry> entries)> GetEntries(string url, string extension = ".zip",
             CancellationToken cancellationToken = default)
         {
             try
             {
-                return (true, await ReadEntries(url, cancellationToken));
+                extension = extension.ToLowerInvariant();
+                if (extension is not (".zip" or ".rar" or ".7z"))
+                {
+                    Console.Error.WriteLine($"[HttpArchiveEntriesReader] Unsupported archive extension: {extension}");
+                    return (false, null);
+                }
+                return (true, await ReadEntries(url, extension, cancellationToken));
             }
-            catch (Exception e)
+            catch (Exception e) when (e is IOException or InvalidDataException or HttpRequestException or OperationCanceledException
+                or ArgumentException or NotSupportedException or SharpCompressException or OverflowException)
             {
-                Console.Error.WriteLine($"[HttpZipEntriesReader] Failed to read {url}: {e.Message}");
+                Console.Error.WriteLine($"[HttpArchiveEntriesReader] Failed to read {url}: {e.Message}");
                 return (false, null);
             }
         }
 
-        private async Task<List<RemoteZipEntry>> ReadEntries(string url, CancellationToken cancellationToken)
+        private async Task<List<RemoteArchiveEntry>> ReadEntries(string url, string extension, CancellationToken cancellationToken)
         {
             var uri = new Uri(url);
             ValidateUri(uri);
@@ -107,18 +119,18 @@ namespace PictureSpider.Pawchive
             {
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 if (response.StatusCode != HttpStatusCode.OK)
-                    throw new HttpRequestException($"Remote ZIP HEAD failed: {(int)response.StatusCode}", null, response.StatusCode);
+                    throw new HttpRequestException($"Remote archive HEAD failed: {(int)response.StatusCode}", null, response.StatusCode);
                 ValidateUri(response.RequestMessage.RequestUri);
                 if (!response.Headers.AcceptRanges.Contains("bytes"))
-                    throw new IOException("Remote ZIP does not advertise byte range support.");
+                    throw new IOException("Remote archive does not advertise byte range support.");
                 contentLength = response.Content.Headers.ContentLength ?? -1;
                 if (contentLength <= EocdFixedLength)
-                    throw new InvalidDataException("Remote ZIP is too small.");
+                    throw new InvalidDataException("Remote archive is too small.");
                 etag = response.Headers.ETag;
                 lastModified = response.Content.Headers.LastModified;
             }
 
-            return await ReadEntries(contentLength, async (from, to, token) =>
+            async Task<byte[]> ReadRemoteRange(long from, long to, CancellationToken token)
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 if (etag is not null && !etag.IsWeak)
@@ -127,10 +139,54 @@ namespace PictureSpider.Pawchive
                     request.Headers.IfRange = new RangeConditionHeaderValue(lastModified.Value);
                 return await ReadRange(httpClient, request, from, to, contentLength, token,
                     response => ValidateUri(response.RequestMessage.RequestUri));
-            }, cancellationToken);
+            }
+            if (extension == ".zip")
+                return await ReadEntries(contentLength, ReadRemoteRange, cancellationToken);
+            // SharpCompress 列目录使用同步的可定位流，放到线程池避免阻塞调用线程。
+            return await Task.Run(() => ReadArchiveEntries(contentLength, extension, ReadRemoteRange, cancellationToken), cancellationToken);
         }
 
-        internal static async Task<List<RemoteZipEntry>> ReadEntries(long contentLength,
+        internal static List<RemoteArchiveEntry> ReadArchiveEntries(long contentLength, string extension,
+            Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default)
+        {
+            using var stream = new HttpRangeStream(contentLength, readRange, cancellationToken);
+            var options = new ReaderOptions
+            {
+                ArchiveEncoding = new ArchiveEncoding
+                {
+                    Default = CodePagesEncodingProvider.Instance.GetEncoding("GB18030",
+                        EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
+                }
+            };
+            using IArchive archive = extension switch
+            {
+                ".rar" => RarArchive.OpenArchive(stream, options),
+                ".7z" => SevenZipArchive.OpenArchive(stream, options),
+                _ => throw new NotSupportedException("Unsupported remote archive format.")
+            };
+            var result = new List<RemoteArchiveEntry>();
+            foreach (var entry in archive.Entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (result.Count >= MaxEntryCount)
+                    throw new InvalidDataException("Remote archive contains too many entries.");
+                if (!entry.IsComplete || entry.IsSplitAfter || !String.IsNullOrEmpty(entry.LinkTarget))
+                    throw new InvalidDataException("Split or linked archive entries are not supported.");
+                result.Add(new RemoteArchiveEntry
+                {
+                    FullName = entry.Key,
+                    CompressedLength = entry.CompressedSize,
+                    Length = entry.Size,
+                    IsDirectory = entry.IsDirectory,
+                    IsEncrypted = entry.IsEncrypted
+                });
+            }
+            if (result.Count > 0 && archive is IRarArchive rar && rar.IsMultipartVolume())
+                throw new InvalidDataException("Multi-volume RAR archives are not supported.");
+            return result;
+        }
+
+        internal static async Task<List<RemoteArchiveEntry>> ReadEntries(long contentLength,
             Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default)
         {
             if (contentLength <= EocdFixedLength)
@@ -181,38 +237,38 @@ namespace PictureSpider.Pawchive
         {
             var expectedLength = checked(to - from + 1);
             if (expectedLength <= 0 || expectedLength > MaxCentralDirectoryLength)
-                throw new InvalidDataException("Invalid remote ZIP byte range.");
+                throw new InvalidDataException("Invalid remote archive byte range.");
             request.Headers.Range = new RangeHeaderValue(from, to);
             request.Headers.AcceptEncoding.ParseAdd("identity");
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (response.StatusCode != HttpStatusCode.PartialContent)
             {
                 if (!response.IsSuccessStatusCode)
-                    throw new HttpRequestException($"Remote ZIP HTTP {(int)response.StatusCode}", null, response.StatusCode);
-                throw new IOException($"Remote ZIP ignored the byte range request: {(int)response.StatusCode}");
+                    throw new HttpRequestException($"Remote archive HTTP {(int)response.StatusCode}", null, response.StatusCode);
+                throw new IOException($"Remote archive ignored the byte range request: {(int)response.StatusCode}");
             }
             validateResponse(response);
             var contentRange = response.Content.Headers.ContentRange;
             if (contentRange is null || contentRange.From != from || contentRange.To != to || contentRange.Length != totalLength)
-                throw new InvalidDataException("Remote ZIP returned an unexpected content range.");
+                throw new InvalidDataException("Remote archive returned an unexpected content range.");
             if (response.Content.Headers.ContentEncoding.Count > 0)
                 throw new InvalidDataException("Encoded byte range responses are not supported.");
             if (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value != expectedLength)
-                throw new InvalidDataException("Remote ZIP returned an unexpected range length.");
+                throw new InvalidDataException("Remote archive returned an unexpected range length.");
 
             var result = new byte[expectedLength];
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             await stream.ReadExactlyAsync(result, cancellationToken);
             var extra = new byte[1];
             if (await stream.ReadAsync(extra.AsMemory(0, 1), cancellationToken) != 0)
-                throw new InvalidDataException("Remote ZIP range exceeded the requested length.");
+                throw new InvalidDataException("Remote archive range exceeded the requested length.");
             return result;
         }
 
         private void ValidateUri(Uri uri)
         {
             if (uri is null || uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals(allowedHost, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Unexpected remote ZIP host.");
+                throw new InvalidDataException("Unexpected remote archive host.");
         }
 
         private static int FindEocd(byte[] data)
@@ -227,9 +283,9 @@ namespace PictureSpider.Pawchive
             return -1;
         }
 
-        private static List<RemoteZipEntry> ParseCentralDirectory(byte[] data, int entryCount)
+        private static List<RemoteArchiveEntry> ParseCentralDirectory(byte[] data, int entryCount)
         {
-            var result = new List<RemoteZipEntry>();
+            var result = new List<RemoteArchiveEntry>();
             var offset = 0;
             var utf8 = new UTF8Encoding(false, true);
             for (var i = 0; i < entryCount; ++i)
@@ -257,7 +313,7 @@ namespace PictureSpider.Pawchive
                         throw new InvalidDataException("Non-ASCII legacy ZIP names are not supported for key files.");
                     name = Encoding.ASCII.GetString(nameBytes);
                 }
-                result.Add(new RemoteZipEntry
+                result.Add(new RemoteArchiveEntry
                 {
                     FullName = name,
                     CompressedLength = compressedLength,

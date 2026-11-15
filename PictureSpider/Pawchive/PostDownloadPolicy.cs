@@ -111,7 +111,7 @@ namespace PictureSpider.Pawchive
         // 传入原帖附件清单，不能只用已被全局去重、拆分到子图组后的 works。
         public static async Task<(bool success, PostDownloadContent content)> ClassifyAttachments(
             IEnumerable<(string Name, string UrlPath)> attachments,
-            Func<string, CancellationToken, Task<(bool success, List<RemoteZipEntry> entries)>> readZipEntries,
+            Func<string, string, CancellationToken, Task<(bool success, List<RemoteArchiveEntry> entries)>> readArchiveEntries,
             CancellationToken cancellationToken = default)
         {
             var images = new List<(string Name, string UrlPath)>();
@@ -120,7 +120,7 @@ namespace PictureSpider.Pawchive
             foreach (var attachment in attachments)
             {
                 var ext = Path.GetExtension(attachment.Name ?? "").ToLowerInvariant();
-                if (!ext.IsImage() && ext != ".zip")
+                if (!ext.IsImage() && !ext.IsZip())
                     continue;
                 if (String.IsNullOrWhiteSpace(attachment.UrlPath))
                 {
@@ -136,10 +136,10 @@ namespace PictureSpider.Pawchive
                 }
 
                 var url = $"https://file.{Server.baseHost}/data{attachment.UrlPath}?f={Uri.EscapeDataString(attachment.Name)}";
-                var check = await readZipEntries(url, cancellationToken);
+                var check = await readArchiveEntries(url, ext, cancellationToken);
                 if (!check.success || check.entries is null)
                 {
-                    Console.Error.WriteLine($"[Paw] Can't classify image ZIP: {attachment.Name}");
+                    Console.Error.WriteLine($"[Paw] Can't classify image archive: {attachment.Name}");
                     return (false, null);
                 }
                 var files = check.entries.Where(x => !x.IsDirectory).ToList();

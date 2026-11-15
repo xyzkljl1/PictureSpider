@@ -40,7 +40,7 @@ namespace PictureSpider.Pawchive
         CookieContainer cookies = new CookieContainer();
         MegaApiClient mega;//从downloader借的mega client，用于访问
         GoogleDriveDownloadQueue googleDriveDownloader;
-        HttpZipEntriesReader httpZipEntriesReader;
+        HttpArchiveEntriesReader httpArchiveEntriesReader;
         private List<string> downloadQueue = new List<string>();//计划下载的work key,线程不安全,只在RunSchedule里使用
         public Server(Config config):base(config, config.PawchiveConnectStr)
         {
@@ -73,7 +73,7 @@ namespace PictureSpider.Pawchive
             mega = megaDownloader.MegaClient;
             googleDriveDownloader = new GoogleDriveDownloadQueue(config.ProxyGo, config.GoogleDriveApiKey);
             downloader = new Downloader(new Aria2DownloadQueue(Downloader.DownloaderPostfix.Pawchive, config.ProxyGo, baseUrl, 1, _user_agent: "aria2/1.33.0"),megaDownloader,googleDriveDownloader);
-            httpZipEntriesReader = new HttpZipEntriesReader(config.Proxy, $"file.{baseHost}");
+            httpArchiveEntriesReader = new HttpArchiveEntriesReader(config.Proxy, $"file.{baseHost}");
 
             Util.TouchDir(download_dir_root, download_dir_tmp, download_dir_fav);
         }
@@ -81,7 +81,7 @@ namespace PictureSpider.Pawchive
         {
             httpClient.Dispose();
             googleDriveDownloader.Dispose();
-            httpZipEntriesReader.Dispose();
+            httpArchiveEntriesReader.Dispose();
         }
         public override Task Init()
         {
@@ -633,7 +633,7 @@ namespace PictureSpider.Pawchive
                 urlPath = keyFiles[0].Value<string>("path"),
                 name = keyFiles[0].Value<string>("name")
             };
-            var (success, entries) = await httpZipEntriesReader.GetEntries(keyWork.DownloadURL);
+            var (success, entries) = await httpArchiveEntriesReader.GetEntries(keyWork.DownloadURL);
             if (!success)
                 return;
             var files = entries.Where(x => !x.IsDirectory && !String.IsNullOrWhiteSpace(x.FullName)
@@ -1201,7 +1201,7 @@ namespace PictureSpider.Pawchive
                     {
                         if (!File.Exists(path))
                         {
-                            var check = await PostDownloadPolicy.ClassifyAttachments(new[] { (zip.name, zip.urlPath) }, httpZipEntriesReader.GetEntries);
+                            var check = await PostDownloadPolicy.ClassifyAttachments(new[] { (zip.name, zip.urlPath) }, httpArchiveEntriesReader.GetEntries);
                             if (!check.success)
                                 continue;
                             if (check.content.Kind != PostDownloadKind.ImageArchives)
