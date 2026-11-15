@@ -509,7 +509,7 @@ namespace PictureSpider
             SlideVertical(1);
         }
         */ 
-        //切换书签状态，无->bookmark->bookmarkPrivate
+        //切换收藏状态，具体顺序由模块决定
         public async void SwitchBookmarkStatus(object sender, MouseEventArgs args)
         {
             if (index < 0 || index >= file_list.Count)

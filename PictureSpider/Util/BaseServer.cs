@@ -78,12 +78,12 @@ namespace PictureSpider
         {
             if (tripleBookmarkState)
             {
-                if (!file.bookmarked)//0->1
-                    file.bookmarked = true;
-                else if (file.bookmarkPrivate)//2->0
-                    file.bookmarked = file.bookmarkPrivate = false;
-                else//1->2
-                    file.bookmarkPrivate = true;
+                if (!file.bookmarked)//未收藏->私密收藏
+                    file.bookmarked = file.bookmarkPrivate = true;
+                else if (file.bookmarkPrivate)//私密收藏->公开收藏
+                    file.bookmarkPrivate = false;
+                else//公开收藏->未收藏
+                    file.bookmarked = false;
             }
             else
                 file.bookmarked = !file.bookmarked;
