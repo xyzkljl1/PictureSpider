@@ -997,7 +997,6 @@ namespace PictureSpider.Pawchive
             {
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
-                                        .Include(x => x.cover)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
@@ -1008,6 +1007,9 @@ namespace PictureSpider.Pawchive
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
+                    if (illustGroup.IsChild && !illustGroup.works.Any(x => x.urlPath.StartsWith("Attachment/", StringComparison.Ordinal))
+                        && illustGroup.user.dowloadExternalWorks is not (User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip))
+                        continue;
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if(exploreFile.validPageCount()>0)
                         result.Add(exploreFile);
@@ -1035,7 +1037,6 @@ namespace PictureSpider.Pawchive
                 string id = id_text.Substring(id_text.IndexOf('/') + 1);
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
-                                        .Include(x => x.cover)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
@@ -1046,6 +1047,9 @@ namespace PictureSpider.Pawchive
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
+                    if (!illustGroup.fav && illustGroup.IsChild && !illustGroup.works.Any(x => x.urlPath.StartsWith("Attachment/", StringComparison.Ordinal))
+                        && illustGroup.user.dowloadExternalWorks is not (User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip))
+                        continue;
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if (exploreFile.validPageCount() > 0)
                         result.Add(exploreFile);

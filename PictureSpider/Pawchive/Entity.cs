@@ -264,7 +264,7 @@ namespace PictureSpider.Pawchive
         public bool downloadAttachmentArchiveImages { get; set; } = false;
         [Column(TypeName = "enum('None','TitlePriority')")]
         public PostVersionRule postVersionRule { get; set; } = PostVersionRule.None;
-        public bool downloadCover { get; set; } = true;//控制封面抓取、下载和浏览；已有收藏保留
+        public bool downloadCover { get; set; } = true;//控制封面抓取和下载；已有收藏保留
         public bool dowloadEmbed { get; set; } = false;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
@@ -295,8 +295,7 @@ namespace PictureSpider.Pawchive
             userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
-            sortedIllusts = (illustGroup.fav ? illustGroup.works : illustGroup.GetShouldDownloadWorks().OfType<Work>())
-                .Where(x => x.Ext.IsImage()).ToList();
+            sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
             foreach (var work in sortedIllusts)
                 work.workGroup ??= illustGroup;
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
