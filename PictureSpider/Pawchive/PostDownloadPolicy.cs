@@ -9,20 +9,18 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Pawchive
 {
-    public enum PostDownloadKind
+    public enum PostVersionRule
     {
-        AttachmentImages,
-        ImageArchives
+        None,
+        TitlePriority
     }
 
     public record PostDownloadSelection(string Id, string BodyTitle, int? Priority, bool ShouldDownload);
 
-    public record PostDownloadContent(PostDownloadKind Kind, IReadOnlyList<(string Name, string UrlPath)> Files);
-
-    // 第一阶段只返回判定结果，不读取数据库、不修改作品状态或下载队列。
+    // 只返回判定结果，不读取数据库、不修改作品状态或下载队列。
     public static class PostDownloadPolicy
     {
-        public static readonly (string[] Keywords, int? PlanPriority, int? DownloadPriority)[] MankaiRules =
+        public static readonly (string[] Keywords, int? PlanPriority, int? DownloadPriority)[] TitlePriorityRules =
         {
             (new[] { @"(?<![\d.,])1000円", "プラン" }, 30, null),
             (new[] { @"(?<![\d.,])500円", "プラン" }, 20, null),
@@ -31,10 +29,12 @@ namespace PictureSpider.Pawchive
             (new[] { "個別ダウンロード" }, null, 0)
         };
 
-        // 调用方选择规则并传入同一作者的完整帖子列表，已读或已收藏的高档版本仍参与比较。
+        // 旧帖仅作为比较依据，只返回待判断帖子的结果。
         public static List<PostDownloadSelection> SelectPosts(IEnumerable<(string Id, string Title)> posts,
-            IReadOnlyList<(string[] Keywords, int? PlanPriority, int? DownloadPriority)> rules)
+            PostVersionRule versionRule, IReadOnlySet<string> pendingIds)
         {
+            var rules = versionRule == PostVersionRule.TitlePriority ? TitlePriorityRules
+                : Array.Empty<(string[] Keywords, int? PlanPriority, int? DownloadPriority)>();
             // 仅提取两端连续的括号说明，正文中间的括号不参与识别。
             const string content = @"[^【】\[\]［］()（）〔〕「」]*";
             var annotation = @"(?<annotation>【" + content + @"】|\[" + content + @"\]|［" + content
@@ -99,6 +99,7 @@ namespace PictureSpider.Pawchive
             var highestPriorities = result.Where(x => x.Priority.HasValue)
                 .GroupBy(x => x.BodyTitle, StringComparer.Ordinal)
                 .ToDictionary(x => x.Key, x => x.Max(p => p.Priority.Value), StringComparer.Ordinal);
+            result.RemoveAll(x => !pendingIds.Contains(x.Id));
             for (int i = 0; i < result.Count; i++)
                 if (result[i].Priority.HasValue)
                     result[i] = result[i] with
@@ -108,48 +109,29 @@ namespace PictureSpider.Pawchive
             return result;
         }
 
-        // 传入原帖附件清单，不能只用已被全局去重、拆分到子图组后的 works。
-        public static async Task<(bool success, PostDownloadContent content)> ClassifyAttachments(
-            IEnumerable<(string Name, string UrlPath)> attachments,
+        // 每个附件独立检查，不影响同帖的图片、视频或其它附件。
+        public static async Task<(bool success, bool isImageArchive)> CheckImageArchive(string name, string urlPath,
             Func<string, string, CancellationToken, Task<(bool success, List<RemoteArchiveEntry> entries)>> readArchiveEntries,
             CancellationToken cancellationToken = default)
         {
-            var images = new List<(string Name, string UrlPath)>();
-            var archives = new List<(string Name, string UrlPath)>();
-            var seenPaths = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var attachment in attachments)
+            var ext = Path.GetExtension(name ?? "").ToLowerInvariant();
+            if (!ext.IsZip())
+                return (true, false);
+            if (String.IsNullOrWhiteSpace(urlPath))
             {
-                var ext = Path.GetExtension(attachment.Name ?? "").ToLowerInvariant();
-                if (!ext.IsImage() && !ext.IsZip())
-                    continue;
-                if (String.IsNullOrWhiteSpace(attachment.UrlPath))
-                {
-                    Console.Error.WriteLine($"[Paw] Attachment has no path: {attachment.Name}");
-                    return (false, null);
-                }
-                if (!seenPaths.Add(attachment.UrlPath))
-                    continue;
-                if (ext.IsImage())
-                {
-                    images.Add(attachment);
-                    continue;
-                }
-
-                var url = $"https://file.{Server.baseHost}/data{attachment.UrlPath}?f={Uri.EscapeDataString(attachment.Name)}";
-                var check = await readArchiveEntries(url, ext, cancellationToken);
-                if (!check.success || check.entries is null)
-                {
-                    Console.Error.WriteLine($"[Paw] Can't classify image archive: {attachment.Name}");
-                    return (false, null);
-                }
-                var files = check.entries.Where(x => !x.IsDirectory).ToList();
-                if (files.Count > 0 && !check.entries.Any(x => x.IsEncrypted)
-                    && files.All(x => Path.GetExtension(x.FullName ?? "").IsImage()))
-                    archives.Add(attachment);
+                Console.Error.WriteLine($"[Paw] Attachment has no path: {name}");
+                return (false, false);
             }
-            return archives.Count > 0
-                ? (true, new PostDownloadContent(PostDownloadKind.ImageArchives, archives))
-                : (true, new PostDownloadContent(PostDownloadKind.AttachmentImages, images));
+            var url = $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
+            var check = await readArchiveEntries(url, ext, cancellationToken);
+            if (!check.success || check.entries is null)
+            {
+                Console.Error.WriteLine($"[Paw] Can't classify image archive: {name}");
+                return (false, false);
+            }
+            var files = check.entries.Where(x => !x.IsDirectory).ToList();
+            return (true, files.Count > 0 && !check.entries.Any(x => x.IsEncrypted)
+                && files.All(x => Path.GetExtension(x.FullName ?? "").IsImage()));
         }
     }
 }

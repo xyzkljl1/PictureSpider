@@ -168,12 +168,21 @@ namespace PictureSpider.Pawchive
         public int index { get; set; } = -1;
         public virtual WorkGroup workGroup { get; set; }
     }
+    public enum PostVersionState
+    {
+        Keep,
+        Pending,
+        Skip
+    }
+
     [PrimaryKey(nameof(id), "userservice")]//userservice是自动生成的对user的外键
     [Table("WorkGroups")]
     public class WorkGroup : IHasReadFav
     {
         public string id { get; set; }
         public string title { get; set; }
+        [Column(TypeName = "enum('Keep','Pending','Skip')")]
+        public PostVersionState postVersionState { get; set; } = PostVersionState.Keep;
         public bool isNonImage { get; set; } = false;
         // 子组可以是非图片文件组，也可以是完整解压后生成的图片组。
         public string parentId { get; set; }
@@ -214,7 +223,11 @@ namespace PictureSpider.Pawchive
         {
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
-                ((IsChild && !isNonImage ? user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip : work.coverGroup == this || user.downloadAttachmentImages)
+                (user.downloadAttachmentArchiveImages && work.Ext.IsZip()) ||
+                ((IsChild && !isNonImage
+                    ? work.urlPath.StartsWith("Attachment/", StringComparison.Ordinal) ? user.downloadAttachmentArchiveImages
+                        : user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip
+                    : work.coverGroup == this ? user.downloadCover || fav : user.downloadAttachmentImages)
                     && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
             if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
                 selected = selected.Concat(user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip
@@ -248,7 +261,10 @@ namespace PictureSpider.Pawchive
         //public bool dowloadCover { get; set; } = false;
         public bool downloadAttachmentVideos { get; set; } = false;
         public bool downloadAttachmentImages { get; set; } = true;
-        public bool downloadCover { get; set; } = true;//只控制抓取时新增封面，已关联的封面不受影响
+        public bool downloadAttachmentArchiveImages { get; set; } = false;
+        [Column(TypeName = "enum('None','TitlePriority')")]
+        public PostVersionRule postVersionRule { get; set; } = PostVersionRule.None;
+        public bool downloadCover { get; set; } = true;//控制封面抓取、下载和浏览；已有收藏保留
         public bool dowloadEmbed { get; set; } = false;//未实现
         public DateTime fetchedTime { get; set; }//此时间以前的已经fetch过了
 
@@ -279,7 +295,8 @@ namespace PictureSpider.Pawchive
             userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
-            sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
+            sortedIllusts = (illustGroup.fav ? illustGroup.works : illustGroup.GetShouldDownloadWorks().OfType<Work>())
+                .Where(x => x.Ext.IsImage()).ToList();
             foreach (var work in sortedIllusts)
                 work.workGroup ??= illustGroup;
             sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));

@@ -282,7 +282,12 @@ namespace PictureSpider.Pawchive
                     WorkGroup workGroup;
                     if (!existedWorkGroupIds.Contains(id))//只录入新增的group,不考虑更新
                     {
-                        workGroup = database.WorkGroups.Add(new WorkGroup { id=id,user=user}).Entity;
+                        workGroup = database.WorkGroups.Add(new WorkGroup
+                        {
+                            id = id,
+                            user = user,
+                            postVersionState = user.postVersionRule == PostVersionRule.None ? PostVersionState.Keep : PostVersionState.Pending
+                        }).Entity;
                         workGroup.title = obj.Value<string>("title");
                         if (user.downloadCover && obj["file"].ToObject<JObject>().ContainsKey("path"))
                             workGroup.cover =await TryAddWork(obj["file"], service);
@@ -307,6 +312,20 @@ namespace PictureSpider.Pawchive
             }
             while (offset < totalCount);
             await database.SaveChangesAsync();
+            // 列表完整获取后，连同上次中断遗留的父帖一起判断；旧结果不再修改。
+            var pendingGroups = await database.WorkGroups.Where(x => x.parentId == null
+                && x.user.id == user.id && x.user.service == service && x.postVersionState == PostVersionState.Pending)
+                .ToDictionaryAsync(x => x.id);
+            if (pendingGroups.Count > 0)
+            {
+                var posts = await database.WorkGroups.Where(x => x.parentId == null
+                    && x.user.id == user.id && x.user.service == service)
+                    .Select(x => new { x.id, x.title }).ToListAsync();
+                foreach (var post in PostDownloadPolicy.SelectPosts(posts.Select(x => (x.id, x.title)),
+                    user.postVersionRule, pendingGroups.Keys.ToHashSet()))
+                    pendingGroups[post.Id].postVersionState = post.ShouldDownload ? PostVersionState.Keep : PostVersionState.Skip;
+            }
+            // 判断结果与抓取进度由同一次 SaveChanges 的事务提交。
             user.fetchedTime = latest;
             await database.SaveChangesAsync();
         }
@@ -804,11 +823,15 @@ namespace PictureSpider.Pawchive
                                     where illustGroup.fetched == true
                                            && (illustGroup.fav || !illustGroup.readed)
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
+                                           && (illustGroup.fav || illustGroup.user.postVersionRule == PostVersionRule.None
+                                               || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
                                     select illustGroup).ToList();
                 var tmp = downloadQueue.Count;
                 foreach (var workGroup in illustGroups)//对收藏或未读的作品
                 {
                     if (workGroup.IsWip)
+                        continue;
+                    if (workGroup.IsChild && !workGroup.isNonImage)
                         continue;
                     if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.children.Count == 0)
                     {
@@ -822,8 +845,6 @@ namespace PictureSpider.Pawchive
                         workGroup.DettachDownloaded = true;
                         continue;
                     }
-                    if (workGroup.IsChild && !workGroup.isNonImage)
-                        continue;
                     foreach (var work in works)
                     {
                         var key = GetDownloadQueueKey(work);
@@ -921,14 +942,14 @@ namespace PictureSpider.Pawchive
             {
                 var illustGroups = (from illustGroup in db.WorkGroups.AsNoTracking()
                                         .Include(x => x.user)
+                                        .Include(x => x.cover)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
                                     where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.followed
-                                       && (illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
-                                            : illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega
-                                                || illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip)
+                                       && (illustGroup.user.postVersionRule == PostVersionRule.None
+                                           || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -965,16 +986,14 @@ namespace PictureSpider.Pawchive
                                     where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.id == id && illustGroup.user.service == service
+                                       && (illustGroup.fav || illustGroup.user.postVersionRule == PostVersionRule.None
+                                           || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    if ((illustGroup.parentId == null ? illustGroup.user.downloadAttachmentImages || illustGroup.cover != null
-                        : illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip) && illustGroup.works.Count > 0)
-                    {
-                        var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
-                        if (exploreFile.validPageCount() > 0)
-                            result.Add(exploreFile);
-                    }
+                    var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
+                    if (exploreFile.validPageCount() > 0)
+                        result.Add(exploreFile);
                     //目前从外链下载的都是视频，不在此浏览
                     //else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
                     //    result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
@@ -1201,10 +1220,10 @@ namespace PictureSpider.Pawchive
                     {
                         if (!File.Exists(path))
                         {
-                            var check = await PostDownloadPolicy.ClassifyAttachments(new[] { (zip.name, zip.urlPath) }, httpArchiveEntriesReader.GetEntries);
+                            var check = await PostDownloadPolicy.CheckImageArchive(zip.name, zip.urlPath, httpArchiveEntriesReader.GetEntries);
                             if (!check.success)
                                 continue;
-                            if (check.content.Kind != PostDownloadKind.ImageArchives)
+                            if (!check.isImageArchive)
                             {
                                 ignore_illusts.Add(key);
                                 continue;
