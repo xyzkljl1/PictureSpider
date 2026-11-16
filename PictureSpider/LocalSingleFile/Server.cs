@@ -204,7 +204,7 @@ namespace PictureSpider.LocalSingleFile
         }
         public override BaseUser GetUserById(string id)
         {
-            return null;
+            return string.IsNullOrEmpty(id) ? null : new BaseUser { displayId = id, displayText = id };
         }
         public override Task SwitchReaded(ExplorerFileBase file, int page)
         {

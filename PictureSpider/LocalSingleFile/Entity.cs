@@ -63,7 +63,14 @@ namespace PictureSpider.LocalSingleFile
             paths = _paths.ToList();
             pageBookmarks = Enumerable.Repeat(_b, paths.Count).ToArray();
             root_path = _root_path;
-            description = Path.GetRelativePath(root_path, Path.GetDirectoryName(paths[0])).Replace("\\","<br>");
+            var relativeDirectory = Path.GetRelativePath(root_path, Path.GetDirectoryName(paths[0]));
+            var parts = relativeDirectory.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 2);
+            if (parts.Length == 2)
+            {
+                userId = parts[0];
+                relativeDirectory = parts[1];
+            }
+            description = relativeDirectory.Replace("\\","<br>");
             in_fav_dir = bookmarked = _b;
             readed = false;
         }

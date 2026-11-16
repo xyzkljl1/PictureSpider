@@ -53,7 +53,8 @@ namespace PictureSpider
         {
             frozen = true;
             user = !string.IsNullOrEmpty(userId)&&server!=null ? server.GetUserById(userId, currentFile) : null;
-            followCheckBox.Enabled = user != null;
+            followCheckBox.Enabled = user != null && currentFile is not LocalSingleFile.ExplorerFile;
+            followCheckBox.Visible = followCheckBox.Enabled;
             if(user!=null)
             {
                 nameLabel.Text = string.IsNullOrEmpty(user.ModuleAbbreviation)
@@ -78,7 +79,7 @@ namespace PictureSpider
 
         private async void OnCheckedChange(object sender, EventArgs e)
         {
-            if (frozen||user==null)
+            if (frozen||user==null||!followCheckBox.Enabled)
                 return;
             followCheckBox.Text = CheckState2Text[followCheckBox.CheckState];
             if(user!=null)
