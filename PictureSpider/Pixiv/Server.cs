@@ -1049,11 +1049,22 @@ namespace PictureSpider.Pixiv
             int tmp = illust_fetch_queue.Count;
             if (only_necessary)
             {
-                var local_illust = (await database.Illusts.Select(x => new Illust(x.id, true)
+                var candidate_ids = new HashSet<int>();
+                if (list_bytime != null)
+                    candidate_ids.UnionWith(list_bytime);
+                if (list_bylike != null)
+                    candidate_ids.UnionWith(list_bylike.Keys);
+
+                var local_illust = new Dictionary<int, (DateTime updateTime, int likeCount)>();
+                foreach (var batch in candidate_ids.Chunk(1000))
                 {
-                    updateTime = x.updateTime,
-                    likeCount = x.likeCount
-                }).ToListAsync()).ToDictionary(illust => illust.id);
+                    var illusts = await database.Illusts
+                        .Where(x => batch.Contains(x.id))
+                        .Select(x => new { x.id, x.updateTime, x.likeCount })
+                        .ToListAsync();
+                    foreach (var illust in illusts)
+                        local_illust.Add(illust.id, (illust.updateTime, illust.likeCount));
+                }
                 if(list_bytime != null)
                     foreach (var id in list_bytime)//不在本地或更新时间距今UPDATE_INTERVAL以上的图
                         if ((!local_illust.ContainsKey(id))
