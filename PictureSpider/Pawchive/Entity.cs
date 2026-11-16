@@ -168,23 +168,14 @@ namespace PictureSpider.Pawchive
         public int index { get; set; } = -1;
         public virtual WorkGroup workGroup { get; set; }
     }
-    public enum PostVersionState
-    {
-        Keep,
-        Pending,
-        Skip
-    }
-
     [PrimaryKey(nameof(id), "userservice")]//userservice是自动生成的对user的外键
     [Table("WorkGroups")]
     public class WorkGroup : IHasReadFav, IHasDownloadStatus
     {
         public string id { get; set; }
         public string title { get; set; }
-        [Column(TypeName = "enum('Keep','Pending','Skip')")]
-        public PostVersionState postVersionState { get; set; } = PostVersionState.Keep;
-        [Column(TypeName = "enum('Skip','Downloading','Downloaded','Deleted')")]
-        public DownloadStatus downloadStatus { get; set; } = DownloadStatus.Downloading;
+        [Column(TypeName = "enum('Pending','Skip','Downloading','Downloaded','Deleted')")]
+        public DownloadStatus downloadStatus { get; set; } = DownloadStatus.Pending;
         public bool isNonImage { get; set; } = false;
         // 子组可以是非图片文件组，也可以是完整解压后生成的图片组。
         public string parentId { get; set; }

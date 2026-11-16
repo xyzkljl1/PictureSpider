@@ -250,7 +250,7 @@ namespace PictureSpider.Pawchive
             await database.SaveChangesAsync();
         }
         //获取该user的作品id并插入数据库
-        public async Task FetchWorkGroupListByUser(User user)
+        public async Task<bool> FetchWorkGroupListByUser(User user)
         {
             // 新用户先补全名称，避免等到每周更新，并在下载前确定作者目录。
             if (string.IsNullOrWhiteSpace(user.displayId) || user.displayId == user.id)
@@ -270,7 +270,7 @@ namespace PictureSpider.Pawchive
                 if (posts is null)
                 {
                     LogError($"Can't Fetch posts of {user.service}/{user.id}>>{offset}");
-                    return;
+                    return false;
                 }
                 if (posts.Count == 0)
                     break;
@@ -288,8 +288,7 @@ namespace PictureSpider.Pawchive
                         workGroup = database.WorkGroups.Add(new WorkGroup
                         {
                             id = id,
-                            user = user,
-                            postVersionState = user.postVersionRule == PostVersionRule.None ? PostVersionState.Keep : PostVersionState.Pending
+                            user = user
                         }).Entity;
                         workGroup.title = obj.Value<string>("title");
                         if (user.downloadCover && obj["file"].ToObject<JObject>().ContainsKey("path"))
@@ -314,23 +313,9 @@ namespace PictureSpider.Pawchive
                 }
             }
             while (offset < totalCount);
-            await database.SaveChangesAsync();
-            // 列表完整获取后，连同上次中断遗留的父帖一起判断；旧结果不再修改。
-            var pendingGroups = await database.WorkGroups.Where(x => x.parentId == null
-                && x.user.id == user.id && x.user.service == service && x.postVersionState == PostVersionState.Pending)
-                .ToDictionaryAsync(x => x.id);
-            if (pendingGroups.Count > 0)
-            {
-                var posts = await database.WorkGroups.Where(x => x.parentId == null
-                    && x.user.id == user.id && x.user.service == service)
-                    .Select(x => new { x.id, x.title }).ToListAsync();
-                foreach (var post in PostDownloadPolicy.SelectPosts(posts.Select(x => (x.id, x.title)),
-                    user.postVersionRule, pendingGroups.Keys.ToHashSet()))
-                    pendingGroups[post.Id].postVersionState = post.ShouldDownload ? PostVersionState.Keep : PostVersionState.Skip;
-            }
-            // 判断结果与抓取进度由同一次 SaveChanges 的事务提交。
             user.fetchedTime = latest;
             await database.SaveChangesAsync();
+            return true;
         }
         //如果不存在则添加，存在则返回null
         public async Task<Work> TryAddWork(JToken token, string service)
@@ -392,6 +377,17 @@ namespace PictureSpider.Pawchive
         {
             switch (operation.Kind)
             {
+                case PendingUiOperationKind.SetBookmarked:
+                    {
+                        var group = (WorkGroup)await FindWorkGroupByDbKey(operation.TargetKey);
+                        if (group is null)
+                            return;
+                        var value = operation.Value != 0;
+                        if (value && group.downloadStatus != DownloadStatus.Downloaded)
+                            group.downloadStatus = DownloadStatus.Downloading;
+                        group.fav = value;
+                        return;
+                    }
                 case PendingUiOperationKind.SetPageExcluded:
                     {
                         var parts = operation.TargetKey.Split(new[] { '|' }, 3);
@@ -494,6 +490,7 @@ namespace PictureSpider.Pawchive
                 {
                     id = await database.GetNextChildId(),
                     isNonImage = true,
+                    downloadStatus = group.downloadStatus,
                     parent = group,
                     user = group.user,
                     title = group.title,
@@ -805,7 +802,8 @@ namespace PictureSpider.Pawchive
                     parentId = parent.id,
                     user = parent.user,
                     title = $"{parent.title} [{Path.GetFileNameWithoutExtension(attachment?.name ?? external.name)}]",
-                    fetched = true
+                    fetched = true,
+                    downloadStatus = DownloadStatus.Downloading
                 };
                 int index = 1;
                 foreach (var file in files)
@@ -875,45 +873,43 @@ namespace PictureSpider.Pawchive
             // 查找tmp目录，将所有应下载的文件加入队列
             {
                 var illustGroups = (from illustGroup in database.WorkGroups
-                                    where illustGroup.fetched == true
+                                    where illustGroup.downloadStatus == DownloadStatus.Downloading
+                                           && illustGroup.fetched == true
                                            && (illustGroup.fav || !illustGroup.readed)
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
-                                           && (illustGroup.fav || illustGroup.user.postVersionRule == PostVersionRule.None
-                                               || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
                                     select illustGroup).ToList();
                 var tmp = downloadQueue.Count;
-                foreach (var workGroup in illustGroups)//对收藏或未读的作品
+                foreach (var workGroup in illustGroups)
                 {
-                    if (workGroup.IsWip)
-                        continue;
-                    if (workGroup.IsChild && !workGroup.isNonImage)
-                        continue;
-                    if (workGroup.works.Count == 0 && workGroup.externalWorks.Count == 0 && workGroup.children.Count == 0)
-                    {
-                        workGroup.readed = true;
-                        continue;
-                    }
+                    bool localImages = workGroup.IsChild && !workGroup.isNonImage;
                     var works = workGroup.GetShouldDownloadWorks().ToList();
                     // 子组的下载完成状态独立于父组的图片阅读状态。
                     if (workGroup.isNonImage && works.Count > 0 && works.All(work => work.DettachDownloaded))
                     {
                         workGroup.DettachDownloaded = true;
+                        workGroup.downloadStatus = DownloadStatus.Downloaded;
                         continue;
                     }
+                    bool complete = true;
                     foreach (var work in works)
                     {
-                        var key = GetDownloadQueueKey(work);
-                        if (workGroup.fav == false || work.excluded == false)//没有排除
-                            if (!downloadQueue.Contains(key)) //不在下载队列
-                                if(!(work.Dettached && work.DettachDownloaded)) // 不是之前下载过的dettach类型
-                                {
-                                    var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
-                                    if (work is Work preview && preview.DownloadPreview && preview.GetLocalPath(download_dir_tmp) != "")
-                                        continue;
-                                    if (work.Dettached || !File.Exists(path))
-                                        downloadQueue.Add(key);
-                                }
-                    } 
+                        if (work.Dettached && work.DettachDownloaded)
+                            continue;
+                        var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
+                        if (!work.Dettached && (work is Work preview && preview.DownloadPreview
+                            ? preview.GetLocalPath(download_dir_tmp) != "" : File.Exists(path)))
+                            continue;
+                        complete = false;
+                        // 解压图片没有远端下载地址，仍不单独入队。
+                        if (!localImages)
+                        {
+                            var key = GetDownloadQueueKey(work);
+                            if (!downloadQueue.Contains(key))
+                                downloadQueue.Add(key);
+                        }
+                    }
+                    if (complete)
+                        workGroup.downloadStatus = DownloadStatus.Downloaded;
                 }
                 if (downloadQueue.Count > tmp)
                     Log($"Update Download Queue {tmp}=>{downloadQueue.Count}");
@@ -999,11 +995,13 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && illustGroup.readed == false && illustGroup.fav == false
+                                    where (illustGroup.fetched || illustGroup.downloadStatus == DownloadStatus.Pending)
+                                       && illustGroup.readed == false && illustGroup.fav == false
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.followed
-                                       && (illustGroup.user.postVersionRule == PostVersionRule.None
-                                           || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
+                                       && (illustGroup.downloadStatus == DownloadStatus.Pending
+                                           || illustGroup.downloadStatus == DownloadStatus.Downloading
+                                           || illustGroup.downloadStatus == DownloadStatus.Downloaded)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -1039,11 +1037,13 @@ namespace PictureSpider.Pawchive
                                         .Include(x => x.user)
                                         .Include(x => x.works)
                                         .Include(x => x.externalWorks)
-                                    where illustGroup.fetched && (!illustGroup.readed || illustGroup.fav)
+                                    where (illustGroup.fetched || illustGroup.downloadStatus == DownloadStatus.Pending)
+                                       && (!illustGroup.readed || illustGroup.fav)
                                        && !illustGroup.isNonImage
                                        && illustGroup.user.id == id && illustGroup.user.service == service
-                                       && (illustGroup.fav || illustGroup.user.postVersionRule == PostVersionRule.None
-                                           || (illustGroup.parentId == null ? illustGroup.postVersionState : illustGroup.parent.postVersionState) == PostVersionState.Keep)
+                                       && (illustGroup.fav || illustGroup.downloadStatus == DownloadStatus.Pending
+                                           || illustGroup.downloadStatus == DownloadStatus.Downloading
+                                           || illustGroup.downloadStatus == DownloadStatus.Downloaded)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -1076,23 +1076,49 @@ namespace PictureSpider.Pawchive
             //注意linq语句产生的Iqueryable不是立即返回，而是一直占用连接,此期间无法进行其它查询
             //加上ToList令查询完成后再执行循环
             //获取follow/queue作者的作品
+            var fetchedUsers = new List<User>();
             foreach (var user in (from user in database.Users
                                   where user.followed == true || user.queued == true
                                   select user).ToList())
-                await FetchWorkGroupListByUser(user);
+                if (await FetchWorkGroupListByUser(user))
+                    fetchedUsers.Add(user);
             Log("Fetch User Done");
             foreach (var illustGroup in (from illustGroup in database.WorkGroups
                                          where illustGroup.fetched == false && illustGroup.parentId == null
                                             && (illustGroup.user.followed == true || illustGroup.user.queued == true)
                                          select illustGroup).ToList())
             {
-                // 等待重抓期间可能被收藏，不能再清空其旧作品。
-                if (illustGroup.fav && illustGroup.works.Count > 0)
-                {
-                    LogError($"Can't refetch favorite group: {illustGroup.service}/{illustGroup.id}");
-                    continue;
-                }
                 await FetchWorkGroup(illustGroup);
+            }
+            foreach (var user in fetchedUsers)
+            {
+                // 列表完整且详情齐备后一次性判断；中断或详情失败的组继续保留 Pending。
+                var pendingGroups = (await database.WorkGroups.Where(x => x.fetched
+                    && x.user.id == user.id && x.user.service == user.service && x.downloadStatus == DownloadStatus.Pending)
+                    .ToListAsync()).ToLookup(x => x.parentId ?? x.id);
+                if (pendingGroups.Count > 0)
+                {
+                    var posts = await database.WorkGroups.Where(x => x.parentId == null
+                        && x.user.id == user.id && x.user.service == user.service)
+                        .Select(x => new { x.id, x.title }).ToListAsync();
+                    foreach (var post in PostDownloadPolicy.SelectPosts(posts.Select(x => (x.id, x.title)),
+                        user.postVersionRule, pendingGroups.Select(x => x.Key).ToHashSet()))
+                        foreach (var group in pendingGroups[post.Id])
+                        {
+                            if ((!post.PassesVersionFilter || group.IsWip) && !group.fav)
+                                group.downloadStatus = DownloadStatus.Skip;
+                            else if (!(group.IsChild && !group.isNonImage)
+                                && group.works.Count == 0 && group.externalWorks.Count == 0 && group.children.Count == 0)
+                            {
+                                group.readed = true;
+                                group.downloadStatus = DownloadStatus.Skip;
+                            }
+                            else
+                                group.downloadStatus = group.GetShouldDownloadWorks().Any()
+                                    ? DownloadStatus.Downloading : DownloadStatus.Skip;
+                        }
+                }
+                await database.SaveChangesAsync();
             }
             Log("Fetch Groups Done");
         }
@@ -1242,11 +1268,6 @@ namespace PictureSpider.Pawchive
                         continue;
                     }
                     var group = work is Work imageWork ? imageWork.GetGroup : ((ExternalWork)work).workGroup;
-                    if (group.IsWip)
-                    {
-                        ignore_illusts.Add(key);
-                        continue;
-                    }
                     // 下载预览图时，此处后缀名可能不正确，队列里通过解析文件头确定正确格式。
                     var path = Path.Combine(download_dir_tmp, work is Work attachment ? attachment.DownloadSubPath : work.TmpSubPath);
                     var dir = Path.GetDirectoryName(path).Replace('\\','/');

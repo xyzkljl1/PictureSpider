@@ -2,6 +2,7 @@ namespace PictureSpider
 {
     public enum DownloadStatus
     {
+        Pending,
         Skip,
         Downloading,
         Downloaded,

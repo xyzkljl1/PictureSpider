@@ -15,7 +15,7 @@ namespace PictureSpider.Pawchive
         TitlePriority
     }
 
-    public record PostDownloadSelection(string Id, string BodyTitle, int? Priority, bool ShouldDownload);
+    public record PostVersionSelection(string Id, string BodyTitle, int? Priority, bool PassesVersionFilter);
 
     // 只返回判定结果，不读取数据库、不修改作品状态或下载队列。
     public static class PostDownloadPolicy
@@ -30,7 +30,7 @@ namespace PictureSpider.Pawchive
         };
 
         // 旧帖仅作为比较依据，只返回待判断帖子的结果。
-        public static List<PostDownloadSelection> SelectPosts(IEnumerable<(string Id, string Title)> posts,
+        public static List<PostVersionSelection> SelectPosts(IEnumerable<(string Id, string Title)> posts,
             PostVersionRule versionRule, IReadOnlySet<string> pendingIds)
         {
             var rules = versionRule == PostVersionRule.TitlePriority ? TitlePriorityRules
@@ -41,7 +41,7 @@ namespace PictureSpider.Pawchive
                 + @"］|\(" + content + @"\)|（" + content + @"）|〔" + content + @"〕|「" + content + @"」)";
             var edges = new Regex(@"\A\s*(?:" + annotation + @"\s*)+|\s*(?:" + annotation + @"\s*)+\z");
             const RegexOptions options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-            var result = new List<PostDownloadSelection>();
+            var result = new List<PostVersionSelection>();
             foreach (var post in posts)
             {
                 var bodyTitle = post.Title;
@@ -93,7 +93,7 @@ namespace PictureSpider.Pawchive
                         }
                     }
                 }
-                result.Add(new PostDownloadSelection(post.Id, bodyTitle, priority, true));
+                result.Add(new PostVersionSelection(post.Id, bodyTitle, priority, true));
             }
 
             var highestPriorities = result.Where(x => x.Priority.HasValue)
@@ -104,7 +104,7 @@ namespace PictureSpider.Pawchive
                 if (result[i].Priority.HasValue)
                     result[i] = result[i] with
                     {
-                        ShouldDownload = result[i].Priority.Value == highestPriorities[result[i].BodyTitle]
+                        PassesVersionFilter = result[i].Priority.Value == highestPriorities[result[i].BodyTitle]
                     };
             return result;
         }

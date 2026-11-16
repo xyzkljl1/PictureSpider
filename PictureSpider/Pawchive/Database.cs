@@ -25,10 +25,8 @@ namespace PictureSpider.Pawchive
             modelBuilder.Entity<User>().Property(x => x.downloadAttachmentArchiveImages).HasDefaultValue(false);
             modelBuilder.Entity<User>().Property(x => x.postVersionRule)
                 .HasConversion<string>().HasDefaultValue(PostVersionRule.None);
-            modelBuilder.Entity<WorkGroup>().Property(x => x.postVersionState)
-                .HasConversion<string>().HasDefaultValue(PostVersionState.Keep);
             modelBuilder.Entity<WorkGroup>().Property(x => x.downloadStatus)
-                .HasConversion<string>().HasDefaultValue(DownloadStatus.Downloading);
+                .HasConversion<string>().HasDefaultValue(DownloadStatus.Pending);
             modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()
                 .HasColumnType("enum('None','DirectExternal','KeyZipMega','GoogleDriveImageZip')")
