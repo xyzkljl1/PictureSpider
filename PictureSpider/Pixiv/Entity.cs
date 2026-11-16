@@ -80,7 +80,7 @@ namespace PictureSpider.Pixiv
         }
     }
     [Table("illust")]
-    public class Illust : IHasReadFav
+    public class Illust : IHasReadFav, IHasDownloadStatus
     {
         bool IHasReadFav.readed { get => readed; set => readed = value; }
         bool IHasReadFav.fav { get => bookmarked; set => bookmarked = value; }
@@ -111,6 +111,8 @@ namespace PictureSpider.Pixiv
         public string ugoiraURL { get; set; } = "";//动图url,如果此项不为空则为动图
         //My Data
         public Boolean readed { get; set; }
+        [Column(TypeName = "enum('Downloading','Downloaded')")]
+        public DownloadStatus downloadStatus { get; set; } = DownloadStatus.Downloading;
         public string bookmarkEach { get; set; } = "";/*为空表示全部有效；不为空且长度等于page时，为1的位表示忽略。
                                         string浪费空间且修改消耗大，但是考虑到读远比写次数多，且多数illust的bookmarkEach为空，直接使用string以方便数据库交互
                                         */

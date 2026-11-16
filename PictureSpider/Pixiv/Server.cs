@@ -451,7 +451,7 @@ namespace PictureSpider.Pixiv
             if (enableScheduleTasks)
             {
                 await DownloadIllustsInExplorerQueue();
-                foreach (var id in await database.Illusts.Where(x => !x.readed).Select(x => x.id).ToListAsync())
+                foreach (var id in await database.Illusts.Where(x => !x.readed && x.downloadStatus == DownloadStatus.Downloading).Select(x => x.id).ToListAsync())
                     illust_download_queue.Add(id);
             }
             Func<Task> runPendingStep = ApplyPendingUiOperations;
@@ -671,15 +671,23 @@ namespace PictureSpider.Pixiv
                 List<Illust> illustList = await database.GetIllustFull(id_list.ToList().Shuffle().ToList());
                 var download_illusts = new List<Illust>();
                 var processed_illusts = new List<int>();
+                var completed_illusts = new List<int>();
                 int download_ct = 0;
                 var queue = new TaskQueue<DownloadAddResult>(3000);
                 foreach (var illust in illustList)
                 {
+                    if (illust.downloadStatus == DownloadStatus.Downloaded)
+                    {
+                        processed_illusts.Add(illust.id);
+                        continue;
+                    }
                     bool downloaded = false;
+                    bool complete = illust.pageCount > 0;
                     for (int i = 0; i < illust.pageCount; ++i)
                     {
                         string store_file_name = illust.storeFileName(i);
                         bool exist = File.Exists(download_dir_main + "/" + store_file_name);
+                        complete &= exist;
                         if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
                         {
                             //用queue是为了并发发送任务节约时间
@@ -692,7 +700,11 @@ namespace PictureSpider.Pixiv
                     if (downloaded)
                         download_illusts.Add(illust);
                     else
+                    {
                         processed_illusts.Add(illust.id);
+                        if (complete)
+                            completed_illusts.Add(illust.id);
+                    }
                     if (limit >= 0 && download_ct >= limit)
                         break;
                 }
@@ -743,12 +755,16 @@ namespace PictureSpider.Pixiv
                         {
                             success_ct++;
                             processed_illusts.Add(illust.id);
+                            completed_illusts.Add(illust.id);
                         }
                     }
                     Log(String.Format("Download Done, {0}/{1}(illusts) Success", success_ct, download_illusts.Count));
                     //无法下载可能是因为已删除或已更新，尝试重新Fetch
                     await AddToIllustFetchQueue(fail_illusts, null, false);
                 }
+                foreach (var batch in completed_illusts.Chunk(1000))
+                    await database.Illusts.Where(x => batch.Contains(x.id))
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.downloadStatus, DownloadStatus.Downloaded));
                 return processed_illusts;
             }
             catch (Exception e)

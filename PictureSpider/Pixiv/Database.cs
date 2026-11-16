@@ -30,6 +30,7 @@ namespace PictureSpider.Pixiv
             modelBuilder.Entity<PendingUiOperation>().Property(x => x.Cookie).HasColumnType("text");
             modelBuilder.Entity<PendingUiOperation>().Property(x => x.UserAgent).HasColumnType("text");
             var illust = modelBuilder.Entity<Illust>();
+            illust.Property(x => x.downloadStatus).HasConversion<string>().HasDefaultValue(DownloadStatus.Downloading);
             illust.Property(x => x.tags).HasConversion(
                 value => string.Join("`", value),
                 value => value.Split('`', StringSplitOptions.None).ToList())
@@ -275,8 +276,12 @@ namespace PictureSpider.Pixiv
                         if(illust.valid)
                         {
                             string cmdText = "insert ignore user(userId) values(@userId);\n" +
-                                             "insert into illust values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW(),@18,@19,@20,@21)" +
-                                             "on duplicate key update id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
+                                             "insert into illust(id,title,description,xRestrict,tags,userId,width,height,pageCount,bookmarked,bookmarkPrivate," +
+                                             "urlFormat,urlThumbFormat,readed,bookmarkEach,valid,likeCount,bookmarkCount,updateTime,ugoiraFrames,ugoiraURL,viewCount,uploadDate) " +
+                                             "values(@0,@1,@2,@3,@4,@5,@6,@7,@8,@9,@10,@11,@12,@13,@14,@15,@16,@17,NOW(),@18,@19,@20,@21)" +
+                                             "on duplicate key update downloadStatus=IF((pageCount <=> @8) " +
+                                             "AND (urlFormat <=> @11) AND (ugoiraURL <=> @19),downloadStatus,@downloadStatus)," +
+                                             "id=@0,title=@1,description=@2,xRestrict=@3,tags=@4," +
                                              "userId=@5,width=@6,height=@7,pageCount=@8," +
                                              "urlFormat=@11,urlThumbFormat=@12,valid=@15,likeCount=@16,bookmarkCount=@17,updateTime=NOW(),"+
                                              "ugoiraFrames=@18,ugoiraURL=@19,viewCount=@20,uploadDate=@21;\n";
@@ -304,6 +309,7 @@ namespace PictureSpider.Pixiv
                             cmd.Parameters.AddWithValue("@19", illust.ugoiraURL);
                             cmd.Parameters.AddWithValue("@20", illust.viewCount);
                             cmd.Parameters.AddWithValue("@21", illust.uploadDate);
+                            cmd.Parameters.AddWithValue("@downloadStatus", nameof(DownloadStatus.Downloading));
                             affected += base.Database.ExecuteSqlRaw(cmd.CommandText, cmd.Parameters.Cast<object>());
                         }
                         else
