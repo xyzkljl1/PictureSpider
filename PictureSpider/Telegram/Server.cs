@@ -267,15 +267,18 @@ namespace PictureSpider.Telegram
                 Log($"Fetch {ct} Messages from {channel.title}");
             }
         }
-        private static string CleanWorkTitle(string title, ISet<string> ignoredTags, bool removeTagMarkers = false)
+        private static string CleanWorkTitle(string title, ISet<string> ignoredTags, Regex ignoredPhrases, bool removeTagMarkers = false)
         {
             var value = AuthorMatcher.NormalizeName(title);
             //只删除完整的类别标签，保留作者、角色及其它主题标签供匹配和命名。
             value = Regex.Replace(value, @"(?<![\p{L}\p{N}_])#([\p{L}\p{N}_]+)",
                 match => ignoredTags.Contains(match.Groups[1].Value) ? " " : match.Value);
-            if (string.IsNullOrWhiteSpace(value))
-                return AuthorMatcher.NormalizeName(title);
-            if (removeTagMarkers)
+            var onlyIgnoredTags = string.IsNullOrWhiteSpace(value);
+            if (onlyIgnoredTags)
+                value = AuthorMatcher.NormalizeName(title);
+            //短语按字面匹配任意位置；即使清理后为空，也不恢复被删除的短语。
+            value = ignoredPhrases?.Replace(value, " ") ?? value;
+            if (removeTagMarkers && !onlyIgnoredTags)
                 value = Regex.Replace(value, @"#(?=[\p{L}\p{N}_])", "");
             return Regex.Replace(value, @"\s+", " ").Trim();
         }
@@ -328,9 +331,15 @@ namespace PictureSpider.Telegram
         public async Task DownloadByMessages()
         { 
             Log("Start Download Try");
-            var blockedKeywords = database.BlockedKeywords.Select(x => x.keyword).ToList()
+            var textRules = database.TextRules.ToList().ToLookup(x => x.type, x => x.text);
+            var blockedKeywords = textRules[TextRuleType.BlockKeyword]
                 .Where(x => !String.IsNullOrWhiteSpace(x)).ToList();
-            var ignoredTitleTags = database.IgnoredTitleTags.Select(x => x.tag).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var ignoredTitleTags = textRules[TextRuleType.IgnoreTag].ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var phrases = textRules[TextRuleType.IgnorePhrase].Where(x => !String.IsNullOrWhiteSpace(x))
+                .Select(AuthorMatcher.NormalizeName).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(x => x.Length).Select(Regex.Escape).ToArray();
+            var ignoredTitlePhrases = phrases.Length == 0 ? null : new Regex("#?(?:" + string.Join("|", phrases) + ")",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             var channels = database.Channels.ToList();
             var matchAuthor = CreateAuthorMatcherAsync != null && channels.Any(x => x.download_telegraph || x.download_comments)
                 ? await CreateAuthorMatcherAsync() : null;
@@ -403,17 +412,27 @@ namespace PictureSpider.Telegram
                                     else
                                     {
                                         var requestUrl = $"{myDownloadServerAddr}/?url={System.Web.HttpUtility.UrlEncode(content.LinkPreview.Url)}";
-                                        var title = CleanWorkTitle(content.LinkPreview.Title ?? "", ignoredTitleTags);
+                                        var title = CleanWorkTitle(content.LinkPreview.Title ?? "", ignoredTitleTags, ignoredTitlePhrases);
                                         var match = matchAuthor?.Invoke(title);
+                                        var directory = "";
                                         if (match is { } matched)
                                         {
                                             var authorName = matched.AuthorName.NormalizeDirectoryName();
-                                            var workName = CleanWorkTitle(matched.WorkName, ignoredTitleTags, true).NormalizeDirectoryName();
+                                            var workName = CleanWorkTitle(matched.WorkName, ignoredTitleTags, ignoredTitlePhrases, true).NormalizeDirectoryName();
                                             if (workName.Length == 0)
-                                                workName = CleanWorkTitle(title, ignoredTitleTags, true).NormalizeDirectoryName();
+                                                workName = CleanWorkTitle(title, ignoredTitleTags, ignoredTitlePhrases, true).NormalizeDirectoryName();
                                             if (authorName.Length > 0 && workName.Length > 0)
-                                                requestUrl += "&dir=" + System.Web.HttpUtility.UrlEncode($"{authorName}/{workName}");
+                                                directory = $"{authorName}/{workName}";
                                         }
+                                        //未识别作者时，也将去掉短语的标题传给下载器；标题被清空则使用消息编号。
+                                        if (directory.Length == 0 && ignoredTitlePhrases?.IsMatch(AuthorMatcher.NormalizeName(content.LinkPreview.Title ?? "")) == true)
+                                        {
+                                            directory = CleanWorkTitle(title, ignoredTitleTags, ignoredTitlePhrases, true).NormalizeDirectoryName();
+                                            if (directory.Length == 0)
+                                                directory = message.id.ToString();
+                                        }
+                                        if (directory.Length > 0)
+                                            requestUrl += "&dir=" + System.Web.HttpUtility.UrlEncode(directory);
                                         if (await RequestGetAsync(requestUrl))
                                         {
                                             message.state = MessageState.Done;
@@ -465,10 +484,10 @@ namespace PictureSpider.Telegram
                                     comment_title = caption.Substring(0, Math.Min(30, caption.Length))
                                         .ReplaceInvalidCharInFilenameWithReturnValue().Replace("[", "").Replace("]", "")
                                         .Trim(new char[] { ' ', '#' });
-                                    var title = CleanWorkTitle(caption, ignoredTitleTags);
+                                    var title = CleanWorkTitle(caption, ignoredTitleTags, ignoredTitlePhrases);
                                     var match = matchAuthor?.Invoke(title);
                                     var workName = string.IsNullOrWhiteSpace(match?.WorkName) ? title : match.Value.WorkName;
-                                    var album_title = CleanWorkTitle(workName, ignoredTitleTags, true);
+                                    var album_title = CleanWorkTitle(workName, ignoredTitleTags, ignoredTitlePhrases, true);
                                     album_title = album_title.Substring(0, Math.Min(50, album_title.Length)).NormalizeDirectoryName();
                                     if (album_title != "")
                                         parent_dir = match is { } matched

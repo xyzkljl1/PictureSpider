@@ -71,6 +71,9 @@ namespace PictureSpider
             var brandedAuthorMatcher = fallbackPattern.Length == 0 || matchers[0].Pattern.Length == 0 ? null : new Regex(
                 @"^(?:" + fallbackPattern + @")(?<author>" + matchers[0].Pattern + @")-{3,}(?<work>.+)$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            var brandedHeaderMatcher = fallbackPattern.Length == 0 ? null : new Regex(
+                @"^(?<brand>" + fallbackPattern + @")(?<field>[^\s_:\-]+)(?=$|[\s_:\-])",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             var leadingAliasMatcher = matchers[0].Pattern.Length == 0 ? null : new Regex(
                 @"^(?:" + matchers[0].Pattern + @")", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             var cache = new Dictionary<string, AuthorMatchResult>(StringComparer.Ordinal);
@@ -158,6 +161,29 @@ namespace PictureSpider
                         item = item with { Status = AuthorMatchStatus.Matched, AuthorId = hits[0].AuthorId,
                             WorkName = (match.Groups["work"].Value + match.Groups["date"].Value).Trim(' ', '-', '_', ':') };
                         break;
+                    }
+                }
+                if (item.Status != AuthorMatchStatus.Matched)
+                {
+                    // 品牌、说明和作者连写时，仅识别首字段末尾的完整别名；英文品牌不能截断连续的字母数字。
+                    var header = brandedHeaderMatcher?.Match(authorText);
+                    if (header != null && header.Success
+                        && !(char.IsAsciiLetterOrDigit(header.Groups["brand"].Value.Last())
+                            && char.IsAsciiLetterOrDigit(header.Groups["field"].Value[0])))
+                    {
+                        var field = header.Groups["field"];
+                        var hits = matchers[0].Lookup.Where(x => field.Length > x.Key.Length
+                            && field.Value.EndsWith(x.Key, StringComparison.OrdinalIgnoreCase))
+                            .OrderByDescending(x => x.Key.Length).ToList();
+                        if (hits.Count > 0)
+                        {
+                            item = item with { Status = AuthorMatchStatus.NeedsReview };
+                            if (hits.SelectMany(x => x).Select(x => x.AuthorId).Distinct().Count() == 1
+                                && hits[0].Any(x => x.AllowAutoMatch))
+                                item = item with { Status = AuthorMatchStatus.Matched, AuthorId = hits[0].First().AuthorId,
+                                    WorkName = authorText.Remove(field.Index + field.Length - hits[0].Key.Length,
+                                        hits[0].Key.Length).Trim(' ', '-', '_', ':') };
+                        }
                     }
                 }
                 if (item.Status == AuthorMatchStatus.Unmatched)

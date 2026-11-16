@@ -11,19 +11,20 @@ using System.Threading.Tasks;
 
 namespace PictureSpider.Telegram
 {
-    [Table("IgnoredTitleTags")]
-    public class IgnoredTitleTag
+    public enum TextRuleType
     {
-        [Key]
-        [StringLength(255)]
-        public string tag { get; set; }
+        BlockKeyword,
+        IgnoreTag,
+        IgnorePhrase
     }
-    [Table("BlockedKeywords")]
-    public class BlockedKeyword
+    [Table("TextRules")]
+    [PrimaryKey(nameof(type), nameof(text))]
+    public class TextRule
     {
-        [Key]
+        [Column(TypeName = "enum('BlockKeyword','IgnoreTag','IgnorePhrase')")]
+        public TextRuleType type { get; set; }
         [StringLength(255)]
-        public string keyword { get; set; }
+        public string text { get; set; }
     }
     public enum MessageState
     {
