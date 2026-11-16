@@ -45,10 +45,11 @@ namespace PictureSpider.Pixiv
         }
         public async Task<List<int>> GetIllustIdByUpdateTime(DateTime time, float ratio = 1.0f, bool reverse = false)
         {
-            var list = await Illusts.Where(x => ((!x.readed || x.bookmarked) && x.updateTime < time) != reverse)
-                .Select(x => x.id).ToListAsync();
             var ct = await Illusts.CountAsync();
-            return list.Take((int)(ct * ratio)).ToList();
+            var query = reverse
+                ? Illusts.Where(x => !((!x.readed || x.bookmarked) && x.updateTime < time))
+                : Illusts.Where(x => (!x.readed || x.bookmarked) && x.updateTime < time);
+            return await query.Select(x => x.id).Take((int)(ct * ratio)).ToListAsync();
         }
         public Task<List<int>> GetBookmarkIllustId(bool pub)
         {
