@@ -668,42 +668,48 @@ namespace PictureSpider.Pixiv
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
                 //创建下载任务，打乱顺序以防止反复下载尚未fetch成功的illust
-                List<Illust> illustList = await database.GetIllustFull(id_list.ToList().Shuffle().ToList());
+                var illustIds = id_list.ToList().Shuffle().ToList();
                 var download_illusts = new List<Illust>();
                 var processed_illusts = new List<int>();
                 var completed_illusts = new List<int>();
                 int download_ct = 0;
                 var queue = new TaskQueue<DownloadAddResult>(3000);
-                foreach (var illust in illustList)
+                foreach (var batch in illustIds.Chunk(500))
                 {
-                    if (illust.downloadStatus == DownloadStatus.Downloaded)
+                    var illustList = await database.GetIllustFull(batch.ToList());
+                    foreach (var illust in illustList)
                     {
-                        processed_illusts.Add(illust.id);
-                        continue;
-                    }
-                    bool downloaded = false;
-                    bool complete = illust.pageCount > 0;
-                    for (int i = 0; i < illust.pageCount; ++i)
-                    {
-                        string store_file_name = illust.storeFileName(i);
-                        bool exist = File.Exists(download_dir_main + "/" + store_file_name);
-                        complete &= exist;
-                        if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
+                        if (illust.downloadStatus == DownloadStatus.Downloaded)
                         {
-                            //用queue是为了并发发送任务节约时间
-                            await queue.Add(downloader.Add(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
-                            download_ct++;
-                            downloaded = true;
+                            processed_illusts.Add(illust.id);
+                            continue;
                         }
-                        //TODO 删除多余的图片
-                    }
-                    if (downloaded)
-                        download_illusts.Add(illust);
-                    else
-                    {
-                        processed_illusts.Add(illust.id);
-                        if (complete)
-                            completed_illusts.Add(illust.id);
+                        bool downloaded = false;
+                        bool complete = illust.pageCount > 0;
+                        for (int i = 0; i < illust.pageCount; ++i)
+                        {
+                            string store_file_name = illust.storeFileName(i);
+                            bool exist = File.Exists(download_dir_main + "/" + store_file_name);
+                            complete &= exist;
+                            if (illust.shouldDownload(i)&&!exist)//下载时使用downloadFileName
+                            {
+                                //用queue是为了并发发送任务节约时间
+                                await queue.Add(downloader.Add(illust.URL(i), download_dir_main, illust.downloadFileName(i)));
+                                download_ct++;
+                                downloaded = true;
+                            }
+                            //TODO 删除多余的图片
+                        }
+                        if (downloaded)
+                            download_illusts.Add(illust);
+                        else
+                        {
+                            processed_illusts.Add(illust.id);
+                            if (complete)
+                                completed_illusts.Add(illust.id);
+                        }
+                        if (limit >= 0 && download_ct >= limit)
+                            break;
                     }
                     if (limit >= 0 && download_ct >= limit)
                         break;
