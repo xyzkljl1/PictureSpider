@@ -954,18 +954,32 @@ namespace PictureSpider.Pawchive
             //清理tmp文件夹
             {
                 int ct = 0;
+                var queuedWorks = downloadQueue.ToHashSet();
                 var workGroups = (from illustGroup in database.WorkGroups
                                     where illustGroup.readed && illustGroup.fetched && !illustGroup.fav && !illustGroup.isNonImage
+                                        && illustGroup.downloadStatus != DownloadStatus.Deleted
                                     select illustGroup).ToList();
                 foreach (var workGroup in workGroups)
                 {
-                    foreach (var work in workGroup.works)
-                        if (!work.Dettached)
-                        {
-                            ct += DeleteFile($"{download_dir_tmp}/{work.TmpSubPath}");
-                            ct += DeleteFile(Path.Combine(download_dir_tmp, Work.GetPreviewPath(work.TmpSubPath)));
-                        }
+                    var works = workGroup.works.Where(work => !work.Dettached).ToList();
+                    if (works.Any(work => queuedWorks.Contains(GetDownloadQueueKey(work))))
+                        continue;
+                    bool complete = true;
+                    foreach (var work in works)
+                    {
+                        var originalPath = Path.Combine(download_dir_tmp, work.TmpSubPath);
+                        foreach (var path in new[] { originalPath, Work.GetPreviewPath(originalPath) })
+                            if (File.Exists(path))
+                            {
+                                int deleted = DeleteFile(path);
+                                ct += deleted;
+                                complete &= deleted != 0;
+                            }
+                    }
+                    if (complete)
+                        workGroup.downloadStatus = DownloadStatus.Deleted;
                 }
+                database.SaveChanges();
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
                 Util.ClearEmptyFolders(download_dir_tmp, DateTime.UtcNow.AddMonths(-1));
