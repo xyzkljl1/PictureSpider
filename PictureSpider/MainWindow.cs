@@ -190,7 +190,10 @@ namespace PictureSpider
             if (IsDisposed || version != queueLoadVersion)
                 return;
             MainExplorer.SetList(server, files,
-                e.Item.type == ExplorerQueue.QueueType.User ? e.Item.id : "");
+                e.Item.type == ExplorerQueue.QueueType.User ? e.Item.id : "",
+                showPreviews: e.Item.type is not (ExplorerQueue.QueueType.Fav or ExplorerQueue.QueueType.FavR)
+                    && server is not AuthorHub.Server
+                    && !(server is LocalSingleFile.Server && e.Item.type == ExplorerQueue.QueueType.User));
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:验证平台兼容性", Justification = "<挂起>")]

@@ -41,6 +41,23 @@ namespace PictureSpider
         private ConcurrentDictionary<string,ImageCache> cache_pool = new ConcurrentDictionary<string, ImageCache>();
         private readonly object cacheLock = new object();
         private ImageCache displayedCache;
+        class AdjacentPreview
+        {
+            public int index;
+            public int page;
+            public int offset;
+            public string path;
+            public Rectangle bounds;
+        }
+        private List<AdjacentPreview> adjacentPreviews = new List<AdjacentPreview>();
+        private bool previewJumping;
+        private bool previewsEnabled = true;
+        private const int previewSize = 120;
+        private const int previewGap = 8;
+        private const int previewBorder = 2;
+        private (Rectangle bounds, bool horizontal, int count) previewLayout;
+        private int previewIndex = -1;
+        private int previewPage = -1;
         private List<ExplorerFileBase> file_list = new List<ExplorerFileBase>();
         private string queueUserId = "";
         private int index = 0;
@@ -136,12 +153,15 @@ namespace PictureSpider
             this.NotifyChange<string>("TotalPageText");
         }
         //设置当前列表
-        public void SetList(BaseServer _server,List<ExplorerFileBase> list,string userId = "")
+        public void SetList(BaseServer _server,List<ExplorerFileBase> list,string userId = "", bool showPreviews = true)
         {
             server = _server;
             queueUserId = userId;
+            previewsEnabled = showPreviews;
+            previewIndex = previewPage = -1;
             lock (cacheLock)
             {
+                adjacentPreviews = new List<AdjacentPreview>();
                 displayedCache = null;
                 this.Image = null;
                 foreach (var cache in cache_pool)
@@ -389,6 +409,7 @@ namespace PictureSpider
                         foreach (var tmp_cache in cache_pool)
                             if (!ReferenceEquals(tmp_cache.Value, displayedCache)
                                 && !ReferenceEquals(tmp_cache.Value, cache)
+                                && !adjacentPreviews.Any(x => x.path == tmp_cache.Key)
                                 && tmp_cache.Value.required_time < oldest_cache_time)
                             {
                                 oldest_cache = tmp_cache.Key;
@@ -408,6 +429,219 @@ namespace PictureSpider
             for(var i = s;i<t;++i)
                 if(i>=0 && i<eFile.pageCount())
                     Load(eFile,i);
+        }
+        private (Rectangle bounds, bool horizontal, int count) GetPreviewLayout()
+        {
+            if (!previewsEnabled || file_list.Count == 0 || file_list[index].pageCount() <= 1 || Image == null
+                || SizeMode != PictureBoxSizeMode.Zoom || Image.Tag is not int tag || tag < 0
+                || ClientSize.Width <= Padding.Horizontal || ClientSize.Height <= Padding.Vertical)
+                return default;
+
+            // 与 PictureBox.Zoom 使用相同的主图矩形，预览只占现有留白。
+            float scale = Math.Min((float)(ClientSize.Width - Padding.Horizontal) / Image.Width,
+                (float)(ClientSize.Height - Padding.Vertical) / Image.Height);
+            int width = (int)(Image.Width * scale);
+            int height = (int)(Image.Height * scale);
+            var main = new Rectangle((ClientSize.Width - width) / 2, (ClientSize.Height - height) / 2, width, height);
+            int size = LogicalToDeviceUnits(previewSize);
+            int gap = LogicalToDeviceUnits(previewGap);
+            bool fillHeight = FindForm()?.WindowState == FormWindowState.Maximized;
+            var regions = new[]
+            {
+                (bounds: Rectangle.FromLTRB(main.Right + gap, fillHeight ? 0 : gap,
+                    ClientSize.Width - gap, ClientSize.Height - (fillHeight ? 0 : gap)), horizontal: false),
+                (bounds: Rectangle.FromLTRB(gap, gap, ClientSize.Width - gap, main.Top - gap), horizontal: true)
+            };
+            var obstacles = Controls.Cast<System.Windows.Forms.Control>().Where(x => x.Visible)
+                .Select(x => Rectangle.Inflate(x.Bounds, gap, gap)).ToList();
+            // 主图比例变化时，只要原位置仍能容纳，就不移动或改变预览数量。
+            if (!previewLayout.bounds.IsEmpty
+                && regions.Any(x => x.horizontal == previewLayout.horizontal
+                    && x.bounds.Contains(previewLayout.bounds))
+                && (!fillHeight || previewLayout.horizontal
+                    || previewLayout.bounds.Top == 0 && previewLayout.bounds.Bottom == ClientSize.Height)
+                && obstacles.All(x => !x.IntersectsWith(previewLayout.bounds)))
+                return previewLayout;
+
+            foreach (var region in regions)
+            {
+                var area = region.bounds;
+                if (area.Width < size || area.Height < size)
+                    continue;
+                var spaces = new List<Rectangle> { area };
+                foreach (var obstacle in obstacles)
+                {
+                    var remaining = new List<Rectangle>();
+                    foreach (var space in spaces)
+                    {
+                        var overlap = Rectangle.Intersect(space, obstacle);
+                        if (overlap.Width <= 0 || overlap.Height <= 0)
+                            remaining.Add(space);
+                        else
+                        {
+                            remaining.Add(Rectangle.FromLTRB(space.Left, space.Top, overlap.Left, space.Bottom));
+                            remaining.Add(Rectangle.FromLTRB(overlap.Right, space.Top, space.Right, space.Bottom));
+                            remaining.Add(Rectangle.FromLTRB(space.Left, space.Top, space.Right, overlap.Top));
+                            remaining.Add(Rectangle.FromLTRB(space.Left, overlap.Bottom, space.Right, space.Bottom));
+                        }
+                    }
+                    spaces = remaining;
+                }
+                var best = Rectangle.Empty;
+                int count = 0;
+                foreach (var space in spaces)
+                {
+                    if (space.Width < size || space.Height < size)
+                        continue;
+                    if (fillHeight && !region.horizontal && (space.Top != 0 || space.Bottom != ClientSize.Height))
+                        continue;
+                    int slots = ((region.horizontal ? space.Width : space.Height) + gap) / (size + gap);
+                    if (slots % 2 == 0)
+                        slots--;
+                    // 至少容纳前图、当前图、后图；始终使用奇数个位置。
+                    if (slots < 3 || slots <= count)
+                        continue;
+                    count = slots;
+                    int length = fillHeight && !region.horizontal ? space.Height : slots * (size + gap) - gap;
+                    best = region.horizontal
+                        ? new Rectangle(space.Left + (space.Width - length) / 2, space.Top, length, size)
+                        : new Rectangle(space.Right - size, space.Top + (space.Height - length) / 2, size, length);
+                }
+                if (count > 0)
+                    return (best, region.horizontal, count);
+            }
+            return default;
+        }
+        private async void UpdateAdjacentPreviews(bool force = false)
+        {
+            var layout = GetPreviewLayout();
+            if (!force && layout == previewLayout && previewIndex == index && previewPage == sub_index)
+                return;
+            previewLayout = layout;
+            previewIndex = index;
+            previewPage = sub_index;
+            var previews = new List<AdjacentPreview>();
+            var files = file_list;
+            if (layout.count > 0)
+            {
+                previews.Add(new AdjacentPreview { index = index, page = sub_index, path = files[index].FilePath(sub_index) });
+                foreach (int direction in new[] { -1, 1 })
+                {
+                    int page = sub_index + direction;
+                    int offset = direction;
+                    while (page >= 0 && page < files[index].pageCount() && Math.Abs(offset) <= layout.count / 2)
+                    {
+                        if (files[index].isPageValid(page))
+                        {
+                            previews.Add(new AdjacentPreview { index = index, page = page, offset = offset, path = files[index].FilePath(page) });
+                            offset += direction;
+                        }
+                        page += direction;
+                    }
+                }
+            }
+            lock (cacheLock)
+                adjacentPreviews = previews;
+            Cursor = Cursors.Default;
+            Invalidate();
+            try
+            {
+                // 只读取本地图片，复用主图缓存；预览本身不触发已读或下载。
+                foreach (var preview in previews)
+                {
+                    await Task.Run(() => Load(files[preview.index], preview.page));
+                    if (IsDisposed || Disposing || !ReferenceEquals(adjacentPreviews, previews))
+                        return;
+                    Invalidate(previewLayout.bounds);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or ExternalException)
+            {
+                Console.WriteLine($"Can't load adjacent preview: {ex.Message}");
+            }
+        }
+        protected override void OnPaint(PaintEventArgs pe)
+        {
+            UpdateAdjacentPreviews();
+            base.OnPaint(pe);
+            lock (cacheLock)
+            {
+                foreach (var preview in adjacentPreviews)
+                    preview.bounds = Rectangle.Empty;
+                if (previewLayout.count == 0)
+                    return;
+                int size = LogicalToDeviceUnits(previewSize);
+                int border = LogicalToDeviceUnits(previewBorder);
+                using var pen = new Pen(SystemColors.Highlight, border);
+                foreach (var preview in adjacentPreviews)
+                {
+                    if (preview.offset != 0 && !file_list[preview.index].isPageValid(preview.page)
+                        || !cache_pool.TryGetValue(preview.path, out var cache)
+                        || cache.data == null || cache.data.Tag is not int pageTag || pageTag < 0)
+                        continue;
+                    // 最大化的竖列均分剩余高度，首末单元贴边；缩略图本身不缩放。
+                    int length = previewLayout.horizontal ? previewLayout.bounds.Width : previewLayout.bounds.Height;
+                    int position = (int)((long)(previewLayout.count / 2 + preview.offset) * (length - size) / (previewLayout.count - 1));
+                    preview.bounds = new Rectangle(previewLayout.bounds.X + (previewLayout.horizontal ? position : 0),
+                        previewLayout.bounds.Y + (previewLayout.horizontal ? 0 : position), size, size);
+                    var inner = Rectangle.Inflate(preview.bounds, -border, -border);
+                    float scale = Math.Min((float)inner.Width / cache.data.Width, (float)inner.Height / cache.data.Height);
+                    int width = (int)(cache.data.Width * scale);
+                    int height = (int)(cache.data.Height * scale);
+                    pe.Graphics.DrawImage(cache.data, new Rectangle(inner.X + (inner.Width - width) / 2,
+                        inner.Y + (inner.Height - height) / 2, width, height));
+                    if (preview.offset == 0)
+                        pe.Graphics.DrawRectangle(pen, Rectangle.Inflate(preview.bounds, -border / 2, -border / 2));
+                }
+            }
+        }
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            previewLayout = default;
+            previewIndex = -1;
+            foreach (var preview in adjacentPreviews)
+                preview.bounds = Rectangle.Empty;
+            Invalidate();
+        }
+        protected override void OnDpiChangedAfterParent(EventArgs e)
+        {
+            base.OnDpiChangedAfterParent(e);
+            previewLayout = default;
+            previewIndex = -1;
+            Invalidate();
+        }
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            Cursor = adjacentPreviews.Any(x => x.offset != 0 && x.bounds.Contains(e.Location)) ? Cursors.Hand : Cursors.Default;
+        }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            Cursor = Cursors.Default;
+        }
+        protected override async void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            if (e.Button != MouseButtons.Left || previewJumping)
+                return;
+            var previews = adjacentPreviews;
+            var target = previews.FirstOrDefault(x => x.bounds.Contains(e.Location));
+            if (target == null || target.offset == 0 || !file_list[target.index].isPageValid(target.page))
+                return;
+            previewJumping = true;
+            try
+            {
+                // 直接跳到目标，只处理离开的当前页，不把中间图组标成已读。
+                await MarkReaded();
+                if (!IsDisposed && !Disposing && ReferenceEquals(previews, adjacentPreviews))
+                    SlideTo(target.index, target.page);
+            }
+            finally
+            {
+                previewJumping = false;
+            }
         }
         //切图实现
         private void SlideTo(int i, int j,bool force_update=false)
@@ -436,6 +670,7 @@ namespace PictureSpider
             this.NotifyChange<Bitmap>("FavIcon");
             this.NotifyChange<bool>("PageInvalid");
             this.NotifyChange<string>("IndexText");
+            UpdateAdjacentPreviews(true);
             //载入相邻illustGroup的前n张图和当前illusgGroup浏览位置附近n张图
             for (int idx = i - 5; idx < i + 5; ++idx)
                 if (idx >= 0 && idx < file_list.Count && idx!=i)
