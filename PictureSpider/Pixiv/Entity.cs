@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PictureSpider.Pixiv
@@ -80,6 +81,7 @@ namespace PictureSpider.Pixiv
         }
     }
     [Table("illust")]
+    [Index(nameof(bookmarked), nameof(bookmarkPrivate))]
     public class Illust : IHasReadFav, IHasDownloadStatus
     {
         bool IHasReadFav.readed { get => readed; set => readed = value; }

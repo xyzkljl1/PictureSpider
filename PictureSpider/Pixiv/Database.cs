@@ -20,7 +20,8 @@ namespace PictureSpider.Pixiv
 
         protected override void OnConfiguring(DbContextOptionsBuilder builder)
         {
-            builder.UseMySql(ConnStr, new MySqlServerVersion(new Version(8, 0, 31)));
+            builder.UseMySql(ConnStr, new MySqlServerVersion(new Version(8, 0, 31)),
+                options => options.EnableIndexOptimizedBooleanColumns());
             builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -84,7 +85,8 @@ namespace PictureSpider.Pixiv
         }
         public async Task<List<Illust>> GetAllUnreadedIllustFull()
         {
-            var result = await Illusts.Where(x => !x.bookmarked && !x.readed).ToListAsync();
+            var result = await Illusts.FromSqlRaw("SELECT * FROM illust USE INDEX ()")
+                .Where(x => !x.bookmarked && !x.readed).ToListAsync();
             foreach (var illust in result)
                 illust.ugoiraFrames ??= "";
             return result;
