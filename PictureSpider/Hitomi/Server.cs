@@ -282,8 +282,6 @@ namespace PictureSpider.Hitomi
         {
             try
             {
-                //移除临时文件
-                downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<Illust>();
                 var refreshedIllustGroups = new HashSet<int>();
                 int download_ct = 0;

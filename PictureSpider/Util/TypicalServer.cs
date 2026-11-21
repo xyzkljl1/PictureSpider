@@ -145,8 +145,6 @@ namespace PictureSpider
         {
             try
             {
-                //移除临时文件
-                downloader.ClearTmpFiles(download_dir_tmp);
                 var download_illusts = new List<WorkType>();
                 int download_ct = 0;
                 foreach (var work in illustList)

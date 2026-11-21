@@ -1102,9 +1102,6 @@ namespace PictureSpider.Kemono
         {
             try
             {
-                //移除临时文件
-                foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
-                    File.Delete(file);
                 var download_illusts = new List<(string key, KemonoBaseWork work)>();
                 var ignore_illusts = new List<string>();
                 int download_ct = 0;

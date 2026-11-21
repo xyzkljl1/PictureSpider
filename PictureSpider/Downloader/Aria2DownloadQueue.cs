@@ -40,11 +40,6 @@ namespace PictureSpider
             threads = _threads;
             waitPollSeconds = _wait_poll_seconds;
         }
-        public void ClearTmpFiles(string dir)
-        {
-            foreach (var file in Directory.GetFiles(dir, "*.aria2"))//下载临时文件
-                File.Delete(file);
-        }
         public async override Task<DownloadAddResult> Add(string url, string dir, string file_name)
         {
             return await Add(url, dir, file_name, null);

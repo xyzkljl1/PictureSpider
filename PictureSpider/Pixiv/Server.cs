@@ -663,8 +663,6 @@ namespace PictureSpider.Pixiv
         {
             try
             {
-                //移除临时文件
-                downloader.ClearTmpFiles(download_dir_main);
                 foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
                     File.Delete(file);
                 //创建下载任务，打乱顺序以防止反复下载尚未fetch成功的illust

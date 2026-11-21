@@ -668,12 +668,6 @@ namespace PictureSpider.Pawchive
                 LogError("KeyZipMega test has no unfinished MEGA archive after parsing; download was not started.");
                 return false;
             }
-            // 原下载流程会清理根目录 aria2 文件；定向测试遇到这些文件时停止。
-            if (Directory.EnumerateFiles(download_dir_tmp, "*.aria2").Any())
-            {
-                LogError("KeyZipMega test stopped because the download root contains aria2 files.");
-                return false;
-            }
             var keys = works.Select(GetDownloadQueueKey).ToList();
             Log($"KeyZipMega test queued {keys.Count} archives through the normal download pipeline.");
             await ProcessIllustDownloadQueue(keys);
@@ -1274,9 +1268,6 @@ namespace PictureSpider.Pawchive
         {
             try
             {
-                //移除临时文件
-                foreach (var file in Directory.GetFiles(download_dir_tmp, "*.aria2"))//下载临时文件
-                    File.Delete(file);
                 var download_illusts = new List<(string key, PawchiveBaseWork work)>();
                 var ignore_illusts = new List<string>();
                 int download_ct = 0;
