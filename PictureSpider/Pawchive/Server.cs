@@ -1175,7 +1175,6 @@ namespace PictureSpider.Pawchive
                     if (DateTime.Now.Day != last_daily_task)//每日一次
                     {
                         last_daily_task = DateTime.Now.Day;
-                        SyncLocalFile();
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
                         if (DateTime.Now.DayOfWeek == DayOfWeek.Monday) //每周一次
