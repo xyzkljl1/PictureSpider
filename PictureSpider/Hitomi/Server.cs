@@ -664,9 +664,9 @@ namespace PictureSpider.Hitomi
                         illustGroup = new IllustGroup();
                         illustGroup.Id = id;
                         illustGroup.illusts = new List<Illust>();
+                        illustGroup.user = user;
                         database.IllustGroups.Add(illustGroup);
                     }
-                    illustGroup.user=user;
                 }
             }
             await database.SaveChangesAsync();
