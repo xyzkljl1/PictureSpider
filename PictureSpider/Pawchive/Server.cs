@@ -870,7 +870,7 @@ namespace PictureSpider.Pawchive
 
         // 下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         // 只管理图片，对dettach类型(视频等)只负责加到下载队列
-        private void SyncLocalFile()
+        private void SyncLocalFile(bool weeklyTask)
         {
             // 查找tmp目录，将所有应下载的文件加入队列
             {
@@ -918,6 +918,7 @@ namespace PictureSpider.Pawchive
             }
             database.SaveChanges();
             //整理Fav文件夹
+            if (weeklyTask)
             {
                 var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
                 foreach (var user in database.Users.Where(x => x.AuthorStorageName != null).ToList())
@@ -984,7 +985,8 @@ namespace PictureSpider.Pawchive
                 database.SaveChanges();
                 if (ct > 0)
                     Log($"Delete from tmp:{ct}");
-                Util.ClearEmptyFolders(download_dir_tmp, DateTime.UtcNow.AddMonths(-1));
+                if (weeklyTask)
+                    Util.ClearEmptyFolders(download_dir_tmp, DateTime.UtcNow.AddMonths(-1));
             }
         }
 #pragma warning disable CS1998 // 异步方法缺少 "await" 运算符，将以同步方式运行
@@ -1160,7 +1162,7 @@ namespace PictureSpider.Pawchive
             int last_daily_task = DateTime.Now.Day;
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
-                SyncLocalFile();
+                SyncLocalFile(weeklyTask: false);
             await RunPendingAndScheduleLoop(
                 ApplyPendingUiOperations,
                 async () =>
@@ -1171,12 +1173,13 @@ namespace PictureSpider.Pawchive
                         last_daily_task = DateTime.Now.Day;
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
-                        if (DateTime.Now.DayOfWeek == DayOfWeek.Monday) //每周一次
+                        bool weeklyTask = DateTime.Now.DayOfWeek == DayOfWeek.Monday;
+                        if (weeklyTask)
                         {
                             foreach (var user in database.Users.ToList())//更新作者
                                 await FetchUser(user.id, user.service);
                         }
-                        SyncLocalFile();
+                        SyncLocalFile(weeklyTask);
                     }
                     //同时下载太多503
                     await ProcessIllustDownloadQueue(downloadQueue, 40);

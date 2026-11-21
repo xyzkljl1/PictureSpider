@@ -97,7 +97,7 @@ namespace PictureSpider.Hitomi
 
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
-                await SyncLocalFile();
+                await SyncLocalFile(syncFavorites: false);
 
             await RunPendingAndScheduleLoop(
                 ApplyPendingUiOperations,
@@ -108,7 +108,7 @@ namespace PictureSpider.Hitomi
                     last_daily_task = DateTime.Now.Day;
                     await FetchUserAndIllustGroups();
                     await ApplyPendingUiOperations();
-                    await SyncLocalFile();
+                    await SyncLocalFile(syncFavorites: DateTime.Now.DayOfWeek == DayOfWeek.Monday);
                 }
                 //同时下载太多503，aria2c多线程下载时也会产生很多503
                 await ApplyPendingUiOperations();
@@ -162,7 +162,7 @@ namespace PictureSpider.Hitomi
             }
         }
         //下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
-        private async Task SyncLocalFile()
+        private async Task SyncLocalFile(bool syncFavorites)
         {
             //下载
             {
@@ -214,6 +214,7 @@ namespace PictureSpider.Hitomi
                         await WEBP2JPGorGIF(illust);
             }
             //整理Fav文件夹
+            if (syncFavorites)
             {
                 var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
                 foreach (var user in database.Users.ToList().Where(x => x.AuthorStorageName != null))
