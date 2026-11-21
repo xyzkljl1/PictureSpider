@@ -317,9 +317,16 @@ namespace PictureSpider.Pawchive
             await database.SaveChangesAsync();
             return true;
         }
+        private static bool IsDeferredAttachment(JToken file)
+        {
+            return file is JObject obj && obj["deferred"] is JValue { Value: true }
+                && string.IsNullOrWhiteSpace(obj["path"]?.ToString());
+        }
         //如果不存在则添加，存在则返回null
         public async Task<Work> TryAddWork(JToken token, string service)
         {
+            if (IsDeferredAttachment(token))
+                return null;
             string path = token.Value<string>("path");
             if (database.Works.Count(x => x.urlPath == path && x.service == service) > 0)
                 return null;
@@ -685,6 +692,7 @@ namespace PictureSpider.Pawchive
         private async Task ParseKeyZipMega(WorkGroup workGroup, List<JToken> attachments)
         {
             var keyFiles = attachments
+                .Where(x => !IsDeferredAttachment(x))
                 .Where(x => String.Equals(Path.GetFileName(x.Value<string>("name")), "key.zip", StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (keyFiles.Count == 0)
