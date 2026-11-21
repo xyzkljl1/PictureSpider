@@ -169,6 +169,7 @@ namespace PictureSpider.Hitomi
                 
                 var illustGroups = (from illustGroup in database.IllustGroups
                                     where illustGroup.fetched == true
+                                           && illustGroup.downloadStatus == DownloadStatus.Downloading
                                            && !illustGroup.isCollection
                                            && (illustGroup.fav || !illustGroup.readed)
                                            && (illustGroup.user.followed == true || illustGroup.user.queued == true)
@@ -179,14 +180,23 @@ namespace PictureSpider.Hitomi
                     .OrderBy(x => x.user.followed && !x.readed && !x.fav ? 0 : x.user.queued ? 1 : 2)
                     .ThenBy(x => x.title).ThenBy(x => x.Id))//Main、作者队列、其它作品
                 {
+                    bool complete = true;
                     foreach (var illust in illustGroup.illusts.OrderBy(x => x.index))
                     {
                         downloadOrder[illust.Id] = downloadOrder.Count;
-                        if (illust.excluded==false)//没有排除
-                            if (!downloadQueue.Contains(illust.Id)) //不在下载队列
-                                if (!File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}")) //不在本地
-                                    downloadQueue.Add(illust.Id);
+                        if (illust.excluded)
+                            continue;
+                        bool queued = downloadQueue.Contains(illust.Id);
+                        if (!queued && !File.Exists($"{download_dir_tmp}/{illust.fileName}{illust.ext}"))
+                        {
+                            downloadQueue.Add(illust.Id);
+                            queued = true;
+                        }
+
+                        if (queued || illust.ext == ".webp") // 补转成功后再确认最终文件。
+                            complete = false;
                     }
+                    illustGroup.downloadStatus = complete ? DownloadStatus.Downloaded : DownloadStatus.Downloading;
                 }
                 downloadQueue = downloadQueue.OrderBy(id => downloadOrder.GetValueOrDefault(id, int.MaxValue)).ToList();
                 if (downloadQueue.Count > tmp)
@@ -244,16 +254,29 @@ namespace PictureSpider.Hitomi
             {
                 int ct= 0;
                 var illustGroups = (from illustGroup in database.IllustGroups
-                                    where illustGroup.readed&&illustGroup.fetched && !illustGroup.fav
+                                    where illustGroup.readed && illustGroup.fetched && !illustGroup.fav
+                                        && (illustGroup.downloadStatus == DownloadStatus.Downloading || illustGroup.downloadStatus == DownloadStatus.Downloaded)
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
-                    foreach (var illust in illustGroup.illusts)
-                        ct+=DeleteFile($"{download_dir_tmp}/{illust.fileName}{illust.ext}");
+                    bool complete = true;
+                    foreach (var path in database.Entry(illustGroup).Collection(x => x.illusts).Query()
+                        .Select(x => download_dir_tmp + "/" + x.fileName + x.ext))
+                    {
+                        if (File.Exists(path))
+                        {
+                            int deleted = DeleteFile(path);
+                            ct += deleted;
+                            complete &= deleted != 0;
+                        }
+                    }
+                    if (complete)
+                        illustGroup.downloadStatus = DownloadStatus.Deleted;
                 }
                 if(ct>0)
                     Log($"Delete from tmp:{ct}");
             }
+            await database.SaveChangesAsync();
         }
         private async Task ProcessIllustDownloadQueue(List<int> illustList, int limit = -1, bool forceRefreshUrl = false)
         {
@@ -275,7 +298,8 @@ namespace PictureSpider.Hitomi
                         illustList.Remove(illustId);
                         continue;
                     }
-                    if (illust.illustGroup.readed && !illust.illustGroup.fav)
+                    if (illust.illustGroup.downloadStatus == DownloadStatus.Deleted
+                        || (illust.illustGroup.readed && !illust.illustGroup.fav))
                     {
                         illustList.Remove(illustId);
                         continue;
@@ -686,6 +710,16 @@ namespace PictureSpider.Hitomi
         {
             switch (operation.Kind)
             {
+                case PendingUiOperationKind.SetBookmarked:
+                    {
+                        var group = (IllustGroup)await FindWorkGroupByDbKey(operation.TargetKey);
+                        if (group is null)
+                            return;
+                        group.fav = operation.Value != 0;
+                        if (group.fav && group.downloadStatus == DownloadStatus.Deleted)
+                            group.downloadStatus = DownloadStatus.Downloading;
+                        return;
+                    }
                 case PendingUiOperationKind.SetPageExcluded:
                     if (int.TryParse(operation.TargetKey, out var illustId))
                     {

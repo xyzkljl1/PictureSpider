@@ -37,7 +37,8 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                         .HasColumnType("tinyint(1)");
 
                     b.Property<string>("ext")
-                        .HasColumnType("longtext");
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
 
                     b.Property<string>("fileName")
                         .HasColumnType("longtext");
@@ -53,6 +54,8 @@ namespace PictureSpider.Migrations.DatabaseMigrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ext");
+
                     b.HasIndex("illustGroupId");
 
                     b.ToTable("Illusts");
@@ -65,6 +68,12 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                         .HasColumnType("int");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("downloadStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("enum('Downloading','Downloaded','Deleted')")
+                        .HasDefaultValue("Downloading");
 
                     b.Property<bool>("fav")
                         .HasColumnType("tinyint(1)");
@@ -93,6 +102,8 @@ namespace PictureSpider.Migrations.DatabaseMigrations
                     b.HasKey("Id");
 
                     b.HasIndex("username");
+
+                    b.HasIndex("fav", "downloadStatus", "readed");
 
                     b.ToTable("IllustGroups");
                 });

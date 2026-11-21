@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace PictureSpider.Hitomi
 {
     [Table("Illusts")]
+    [Index(nameof(ext))]
     public class Illust
     {
         //不同图片hash可能会重复，例如汉化组在最后加的页面因此使用自增Id
@@ -24,6 +25,7 @@ namespace PictureSpider.Hitomi
         public string url { get; set; } = "";
         //注意ext虽然是由url决定，但是需要保存，因为检查本地文件存在时需要ext
         //必须小写
+        [MaxLength(16)]
         public string ext { get; set; } = "";
         //页号        
         public int index { get; set; } = -1;
@@ -50,7 +52,8 @@ namespace PictureSpider.Hitomi
         Excluded
     }
     [Table("IllustGroups")]
-    public class IllustGroup : IHasReadFav
+    [Index(nameof(fav), nameof(downloadStatus), nameof(readed))]
+    public class IllustGroup : IHasReadFav, IHasDownloadStatus
     {
         [Key]
         public int Id { get; set; }
@@ -59,6 +62,8 @@ namespace PictureSpider.Hitomi
         public bool fav { get; set; } = false;
         //已经fetch过
         public bool fetched { get; set; } = false;
+        [Column(TypeName = "enum('Downloading','Downloaded','Deleted')")]
+        public DownloadStatus downloadStatus { get; set; } = DownloadStatus.Downloading;
         //旧图组无需检查，只有新入库的图组检查语言。
         [Column(TypeName = "enum('Allowed','Pending','Excluded')")]
         public LanguageCheckState languageCheckState { get; set; } = LanguageCheckState.Pending;

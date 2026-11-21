@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore.Proxies;
@@ -12,6 +13,12 @@ namespace PictureSpider.Hitomi
 {
     public class Database : BaseBackgroundEFDatabase
     {
+        protected override void OnConfiguring(DbContextOptionsBuilder builder)
+        {
+            base.OnConfiguring(builder);
+            new MySqlDbContextOptionsBuilder(builder).EnableIndexOptimizedBooleanColumns();
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             //级联删除
@@ -21,6 +28,8 @@ namespace PictureSpider.Hitomi
                 .WithMany(e => e.illusts)
                 .OnDelete(DeleteBehavior.Cascade);
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<IllustGroup>().Property(x => x.downloadStatus)
+                .HasConversion<string>().HasDefaultValue(DownloadStatus.Downloading);
             modelBuilder.Entity<IllustGroup>().Property(x => x.languageCheckState)
                 .HasConversion<string>().HasDefaultValue(LanguageCheckState.Allowed);
         }
