@@ -795,7 +795,7 @@ namespace PictureSpider.Kemono
 
         // 下载(加入队列)应当下载的图片，将收藏的作品加入fav文件夹，从fav中删除多余的文件,从tmp中删除已读
         // 只管理图片，对dettach类型(视频等)只负责加到下载队列
-        private void SyncLocalFile()
+        private void SyncLocalFile(bool syncFavorites)
         {
             // 查找tmp目录，将所有应下载的文件加入队列
             {
@@ -837,6 +837,7 @@ namespace PictureSpider.Kemono
             }
             database.SaveChanges();
             //整理Fav文件夹
+            if (syncFavorites)
             {
                 var favoriteDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(download_dir_fav) };
                 foreach (var user in database.Users.ToList().Where(x => x.AuthorStorageName != null))
@@ -1003,7 +1004,7 @@ namespace PictureSpider.Kemono
             int last_daily_task = DateTime.Now.Day;
             await ApplyPendingUiOperations();
             if (enableScheduleTasks)
-                SyncLocalFile();
+                SyncLocalFile(syncFavorites: false);
             await RunPendingAndScheduleLoop(
                 ApplyPendingUiOperations,
                 async () =>
@@ -1014,7 +1015,7 @@ namespace PictureSpider.Kemono
                         last_daily_task = DateTime.Now.Day;
                         await FetchUserAndIllustGroups();
                         await ApplyPendingUiOperations();
-                        SyncLocalFile();
+                        SyncLocalFile(syncFavorites: DateTime.Today.DayOfWeek == DayOfWeek.Monday);
                         if (DateTime.Now.DayOfWeek == DayOfWeek.Sunday) //每周一次
                         {
                             foreach (var user in database.Users.ToList())//更新作者
@@ -1027,11 +1028,14 @@ namespace PictureSpider.Kemono
                 new TimeSpan(0, 30, 0),
                 enableScheduleTasks);
 #else
+            var lastScheduleDate = DateTime.Today;
             await RunPendingAndScheduleLoop(
                 ApplyPendingUiOperations,
                 () =>
                 {
-                    SyncLocalFile();
+                    var today = DateTime.Today;
+                    SyncLocalFile(syncFavorites: today != lastScheduleDate && today.DayOfWeek == DayOfWeek.Monday);
+                    lastScheduleDate = today;
                     return Task.CompletedTask;
                 },
                 new TimeSpan(0, 30, 0),

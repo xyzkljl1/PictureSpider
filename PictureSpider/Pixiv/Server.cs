@@ -507,6 +507,8 @@ namespace PictureSpider.Pixiv
                 await GenerateExplorerQueue();
                 await FetchUserStatus();
                 await SyncBookmarkDirectory();
+                foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
+                    File.Delete(file);
             }
 
             /*下载*/
@@ -663,8 +665,6 @@ namespace PictureSpider.Pixiv
         {
             try
             {
-                foreach (var file in Directory.GetFiles(download_dir_main, "*.zip"))//动图临时文件
-                    File.Delete(file);
                 //创建下载任务，打乱顺序以防止反复下载尚未fetch成功的illust
                 var illustIds = id_list.ToList().Shuffle().ToList();
                 var download_illusts = new List<Illust>();

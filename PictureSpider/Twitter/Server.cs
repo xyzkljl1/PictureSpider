@@ -204,8 +204,11 @@ namespace PictureSpider.Twitter
                     await FetchTweetsByUserWeb(user.name, Math.Max(apiLatestTweetId, searchLatestTweetId).ToString());
                     await Task.Delay(TimeSpan.FromSeconds(random.Next(20, 45)));
                 }
-                Log("Twitter sync bookmark directory");
-                await SyncBookmarkDirectory();
+                if (interval_ct != 0 && DateTime.Today.DayOfWeek == DayOfWeek.Monday)
+                {
+                    Log("Twitter sync bookmark directory");
+                    await SyncBookmarkDirectory();
+                }
             }
             Log("Twitter download waiting media");
             await DownloadWaitingMedia(DownloadLimitPerRun);
