@@ -969,26 +969,22 @@ namespace PictureSpider.Pawchive
                 foreach (var dir in favoriteDirectories)
                     if (Directory.Exists(dir))
                         existedFiles.UnionWith(Directory.GetFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }));
-                var illustGroups = (from illustGroup in database.WorkGroups
+                var illustGroups = (from illustGroup in database.WorkGroups.Include(x => x.externalWorks)
                                     where illustGroup.fav && !illustGroup.isNonImage
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
-                    foreach (var illust in illustGroup.works)
-                        if (!illust.Dettached) // 一个group中可能同时存在图片和dettach类型
+                    foreach (var illust in illustGroup.GetImagePages())
+                        if (!illust.excluded)
                         {
-                            var favDirectory = illust.GetGroup.user.AuthorStorageName == null ? download_dir_fav : download_dir_unified_fav;
+                            var favDirectory = illustGroup.user.AuthorStorageName == null ? download_dir_fav : download_dir_unified_fav;
                             var tmp_path = illust.GetLocalPath(download_dir_tmp);
                             var fav_path = Path.GetFullPath(Path.Combine(favDirectory, illust.FavSubPath));
-                            if (!illust.excluded)
-                            {
-                                var preview_path = Work.GetPreviewPath(fav_path);
-                                if (!existedFiles.Contains(fav_path) && tmp_path == Path.Combine(download_dir_tmp, Work.GetPreviewPath(illust.TmpSubPath)))
-                                    fav_path = preview_path;
-                                if (existedFiles.Contains(fav_path))
-                                    existedFiles.Remove(fav_path);
-                                else if (CopyFile(tmp_path, fav_path) == 0)
-                                    existedFiles.Remove(preview_path);//原图未就绪或复制失败时保留已有预览图
-                            }
+                            var preview_path = illust is Work ? Work.GetPreviewPath(fav_path) : null;
+                            if (preview_path != null && !existedFiles.Contains(fav_path)
+                                && tmp_path == Path.Combine(download_dir_tmp, Work.GetPreviewPath(illust.TmpSubPath)))
+                                fav_path = preview_path;
+                            if (!existedFiles.Remove(fav_path) && CopyFile(tmp_path, fav_path) == 0 && preview_path != null)
+                                existedFiles.Remove(preview_path);//原图未就绪或复制失败时保留已有预览图
                         }
                 foreach (var file in existedFiles)//剩下的都是不需要的文件
                     DeleteFile(file);
@@ -1113,9 +1109,6 @@ namespace PictureSpider.Pawchive
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if (exploreFile.validPageCount() > 0)
                         result.Add(exploreFile);
-                    //目前从外链下载的都是视频，不在此浏览
-                    //else if (illustGroup.user.dowloadExternalWorks&& illustGroup.externalWorks is not null&& illustGroup.externalWorks.Count>0)
-                    //    result.Add(new ExplorerExternalFile(illustGroup, download_dir_tmp));
                 }
             }
             if (queue.type == ExplorerQueue.QueueType.User)

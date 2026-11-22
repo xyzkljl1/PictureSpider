@@ -16,6 +16,12 @@ using System.Threading.Tasks;
 namespace PictureSpider.Pawchive
 {
     public class PawchiveBaseWork: BaseWork {
+        public int index { get; set; } = -1;//页号
+        public virtual string GetLocalPath(string directory)
+        {
+            var path = Path.Combine(directory, TmpSubPath);
+            return File.Exists(path) ? path : "";
+        }
         // 表示交由外部程序管理，本程序只负责下载，用于非图片类型文件
         [NotMapped]
         public bool Dettached
@@ -80,21 +86,19 @@ namespace PictureSpider.Pawchive
             return Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path) + "_preview" + Path.GetExtension(path));
         }
         // 优先使用原图，原图不存在时使用预览图。
-        public string GetLocalPath(string directory)
+        public override string GetLocalPath(string directory)
         {
-            var path = Path.Combine(directory, TmpSubPath);
+            var path = base.GetLocalPath(directory);
             // TODO 优化，避免 entity 调用 File.Exists。
-            if (File.Exists(path))
+            if (path != "")
                 return path;
-            path = GetPreviewPath(path);
+            path = GetPreviewPath(Path.Combine(directory, TmpSubPath));
             return File.Exists(path) ? path : "";
         }
         [NotMapped]
         public override string DownloadURL => GetGroup is { IsChild: true, isNonImage: false } ? null
             : DownloadPreview ? $"https://img.{Server.baseHost}/thumbnail/data{urlPath}"
             : $"https://file.{Server.baseHost}/data{urlPath}?f={Uri.EscapeDataString(name)}";
-        //页号
-        public int index { get; set; } = -1;
         //由于Work通过cover和works分别关联到WorkGroup，需要手动指定哪个外键对应哪个关联关系
         [ForeignKey("workGroupid,workGroupuserservice")]
         public virtual WorkGroup workGroup { get; set; }
@@ -170,8 +174,6 @@ namespace PictureSpider.Pawchive
             ExternalWorkType.GoogleDrive => Downloader.DownloaderType.GoogleDriveDownloadQueue,
             _ => throw new NotSupportedException($"Unsupported external work type: {type}")
         };
-        //页号
-        public int index { get; set; } = -1;
         public virtual WorkGroup workGroup { get; set; }
     }
     [PrimaryKey(nameof(id), "userservice")]//userservice是自动生成的对user的外键
@@ -218,11 +220,20 @@ namespace PictureSpider.Pawchive
         public virtual ICollection<Work> works { get; set; } = new List<Work>();
         public virtual ICollection<ExternalWork> externalWorks { get; set; } = new List<ExternalWork>();
 
+        private bool HasMegaImageSource => externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference);
+
+        public IEnumerable<PawchiveBaseWork> GetImagePages()
+        {
+            var images = works.Where(x => x.Ext.IsImage());
+            if (HasMegaImageSource)
+                images = images.Where(x => x.urlPath == cover?.urlPath);
+            return images.Cast<PawchiveBaseWork>().Concat(externalWorks.Where(x => x.IsMegaImage));
+        }
+
         public IEnumerable<PawchiveBaseWork> GetShouldDownloadWorks()
         {
             bool megaImages = user.dowloadExternalWorks == User.DownloadExternalWorkType.MegaFolderImages;
-            bool attachmentImages = user.downloadAttachmentImages && !(megaImages && !IsChild
-                && externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference));
+            bool attachmentImages = user.downloadAttachmentImages && !(megaImages && !IsChild && HasMegaImageSource);
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
                 (user.downloadAttachmentArchiveImages && work.Ext.IsZip()) ||
@@ -287,7 +298,7 @@ namespace PictureSpider.Pawchive
     {
         //基类中定义的属性在基类中修改，未定义的在illust中
         public WorkGroup illustGroup;
-        public List<Work> sortedIllusts;
+        public List<PawchiveBaseWork> sortedIllusts;
         public string download_dir_tmp;
         [DbKey]
         [NotMapped]
@@ -301,10 +312,12 @@ namespace PictureSpider.Pawchive
             userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
             readed = illustGroup.readed;
-            sortedIllusts = illustGroup.works.Where(x=>x.Ext.IsImage()).ToList();
+            sortedIllusts = illustGroup.GetImagePages().OrderBy(x => x.index).ToList();
             foreach (var work in sortedIllusts)
-                work.workGroup ??= illustGroup;
-            sortedIllusts.Sort((x, y) => x.index.CompareTo(y.index));
+                if (work is Work attachment)
+                    attachment.workGroup ??= illustGroup;
+                else if (work is ExternalWork external)
+                    external.workGroup ??= illustGroup;
         }
         public override string FilePath(int page)
         {
@@ -326,7 +339,12 @@ namespace PictureSpider.Pawchive
         {
             if (page < 0 || page >= sortedIllusts.Count)
                 throw new ArgumentOutOfRangeException(nameof(page));
-            return $"Work|{sortedIllusts[page].service}|{sortedIllusts[page].urlPath}";
+            return sortedIllusts[page] switch
+            {
+                Work work => $"Work|{work.service}|{work.urlPath}",
+                ExternalWork work => $"ExternalWork|{(int)work.type}|{work.id}",
+                _ => throw new NotSupportedException()
+            };
         }
     }
     public class ExplorerExternalFile : ExplorerFileBaseEx
