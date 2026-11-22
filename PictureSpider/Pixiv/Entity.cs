@@ -32,6 +32,8 @@ namespace PictureSpider.Pixiv
         public string Id { get; set; }
         public DateTime QueueUpdateTime { get; set; }
         public string Queue { get; set; }
+        [Column(TypeName = "mediumtext")]
+        public string NicheRQueue { get; set; }
         public string CookieCache { get; set; }
         public string CSRFTokenCache { get; set; }
         public string UserAgentCache { get; set; }

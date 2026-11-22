@@ -189,10 +189,11 @@ namespace PictureSpider.Pixiv
                 .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.bookmarkEach, bookmarkEach));
             Console.WriteLine("Update {0} Rows", ret);
         }
-        public async Task UpdateQueue(string queue)
+        public async Task UpdateQueue(string queue, string nicheRQueue)
         {
-            int ret = await QueueStatuses.ExecuteUpdateAsync(setters => setters
+            int ret = await QueueStatuses.Where(x => x.Id == "Current").ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.Queue, queue)
+                .SetProperty(x => x.NicheRQueue, nicheRQueue)
                 .SetProperty(x => x.QueueUpdateTime, x => DateTime.Now));
             Console.WriteLine("Update {0} Rows", ret);
         }

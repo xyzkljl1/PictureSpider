@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS `status` (
   `CookieCache` text COLLATE utf8mb3_bin NOT NULL,
   `QueueUpdateTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `Queue` mediumtext COLLATE utf8mb3_bin NOT NULL,
+  `NicheRQueue` mediumtext COLLATE utf8mb3_bin NULL,
   `CSRFTokenCache` varchar(300) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL DEFAULT '""',
   `UserAgentCache` text COLLATE utf8mb3_bin NULL,
   PRIMARY KEY (`Id`)

@@ -1,0 +1,1 @@
+ALTER TABLE `status` ADD COLUMN `NicheRQueue` MEDIUMTEXT COLLATE utf8mb3_bin NULL AFTER `Queue`;
