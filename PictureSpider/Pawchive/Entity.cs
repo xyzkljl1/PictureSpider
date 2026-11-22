@@ -191,9 +191,9 @@ namespace PictureSpider.Pawchive
         public bool IsChild => parentId != null;
         [NotMapped]
         public WorkGroup ParentGroup => IsChild ? parent : this;
-        // 子组沿用父帖标题；只匹配与字母、数字、下划线分隔的大写 WIP。
+        // 子组沿用父帖标题；只匹配与字母、数字、下划线分隔的 WIP，忽略大小写。
         [NotMapped]
-        public bool IsWip => Regex.IsMatch(ParentGroup.title ?? "", @"(?<![\p{L}\p{N}_])WIP(?![\p{L}\p{N}_])");
+        public bool IsWip => Regex.IsMatch(ParentGroup.title ?? "", @"(?<![\p{L}\p{N}_])WIP(?![\p{L}\p{N}_])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         [NotMapped]
         public bool DettachDownloaded
         {
