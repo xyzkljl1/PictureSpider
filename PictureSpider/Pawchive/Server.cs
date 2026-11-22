@@ -111,6 +111,13 @@ namespace PictureSpider.Pawchive
                 var url = HtmlEntity.DeEntitize(href.Value);
                 if (foldersOnly && !IsMegaFolderLink(url))
                     continue;
+                if (foldersOnly && !url.Contains('#') && anchor.NextSibling is HtmlTextNode adjacentText)
+                {
+                    // 有些帖子把密钥放在链接外，后面还可能紧跟正文。
+                    var key = Regex.Match(HtmlEntity.DeEntitize(adjacentText.Text), @"^#[A-Za-z0-9_-]{22}");
+                    if (key.Success)
+                        url += key.Value;
+                }
                 if (!url.StartsWith("https://mega.nz/", StringComparison.Ordinal) || (includeMega && seenMega.Add(url)))
                     yield return url;
             }
@@ -196,9 +203,10 @@ namespace PictureSpider.Pawchive
                         continue;
                     }
                     var totalSize = pendingFiles.Sum(x => (decimal)x.size.Value);
-                    if (pendingFiles.Count > 200 || totalSize > 5L * 1024 * 1024 * 1024)
+                    const int maxFiles = 300;
+                    if (pendingFiles.Count > maxFiles || totalSize > 5L * 1024 * 1024 * 1024)
                     {
-                        LogError($"ExternalWork limit exceeded {workGroup.service}/{workGroup.id}: {pendingFiles.Count} files, {totalSize} bytes (max 200 files / 5 GiB), {url}");
+                        LogError($"ExternalWork limit exceeded {workGroup.service}/{workGroup.id}: {pendingFiles.Count} files, {totalSize} bytes (max {maxFiles} files / 5 GiB), {url}");
                         continue;
                     }
                     foreach (var file in files)

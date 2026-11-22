@@ -20,6 +20,7 @@
 /tmp_x_media_AlterKyon*/
 /db_backups/*.sql
 /tmp
+/temp/
 /output
 /AGENTS.md
 /TODO.md
