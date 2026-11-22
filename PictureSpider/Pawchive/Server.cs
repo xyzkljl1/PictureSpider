@@ -399,6 +399,8 @@ namespace PictureSpider.Pawchive
                 return null;
             var ret = database.Works.Add(new Work { urlPath = path, service = service }).Entity;
             ret.name = token.Value<string>("name");
+            if (string.IsNullOrWhiteSpace(ret.name))
+                ret.name = Path.GetFileName(path);
             await database.SaveChangesAsync();
             return ret;
         }
