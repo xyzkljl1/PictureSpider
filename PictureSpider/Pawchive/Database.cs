@@ -30,7 +30,7 @@ namespace PictureSpider.Pawchive
                 .HasConversion<string>().HasDefaultValue(DownloadStatus.Pending);
             modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()
-                .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaFolderImages')")
+                .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaImages')")
                 .HasDefaultValue(User.DownloadExternalWorkType.None);
             modelBuilder.Entity<WorkGroup>()
                 .HasOne(x => x.parent)

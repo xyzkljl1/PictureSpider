@@ -99,7 +99,7 @@ namespace PictureSpider.Pawchive
         private static IEnumerable<string> GetPostLinks(string content, User.DownloadExternalWorkType mode)
         {
             bool includeMega = mode != User.DownloadExternalWorkType.GoogleDriveImageZip;
-            bool foldersOnly = mode == User.DownloadExternalWorkType.MegaFolderImages;
+            bool megaImages = mode == User.DownloadExternalWorkType.MegaImages;
             var doc = new HtmlDocument();
             doc.LoadHtml(content ?? "");
             var seenMega = new HashSet<string>(StringComparer.Ordinal);
@@ -109,12 +109,13 @@ namespace PictureSpider.Pawchive
                 if (href is null)
                     continue;
                 var url = HtmlEntity.DeEntitize(href.Value);
-                if (foldersOnly && !IsMegaFolderLink(url))
+                if (megaImages && !IsMegaFolderLink(url) && !url.StartsWith("https://mega.nz/file/", StringComparison.Ordinal))
                     continue;
-                if (foldersOnly && !url.Contains('#') && anchor.NextSibling is HtmlTextNode adjacentText)
+                if (megaImages && !url.Contains('#') && anchor.NextSibling is HtmlTextNode adjacentText)
                 {
                     // 有些帖子把密钥放在链接外，后面还可能紧跟正文。
-                    var key = Regex.Match(HtmlEntity.DeEntitize(adjacentText.Text), @"^#[A-Za-z0-9_-]{22}");
+                    var key = Regex.Match(HtmlEntity.DeEntitize(adjacentText.Text),
+                        IsMegaFolderLink(url) ? @"^#[A-Za-z0-9_-]{22}" : @"^#[A-Za-z0-9_-]{43}");
                     if (key.Success)
                         url += key.Value;
                 }
@@ -130,7 +131,7 @@ namespace PictureSpider.Pawchive
                     continue;
                 var text = HtmlEntity.DeEntitize(node.Text);
                 foreach (Match match in Regex.Matches(text, @"https://mega\.nz/(?:file|folder)/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+(?:/(?:file|folder)/[A-Za-z0-9_-]+)*"))
-                    if ((!foldersOnly || IsMegaFolderLink(match.Value)) && seenMega.Add(match.Value))
+                    if (seenMega.Add(match.Value))
                         yield return match.Value;
             }
         }
@@ -138,8 +139,9 @@ namespace PictureSpider.Pawchive
         {
             var mode = workGroup.user.dowloadExternalWorks;
             bool googleDriveImageZip = mode == User.DownloadExternalWorkType.GoogleDriveImageZip;
-            bool megaImages = mode == User.DownloadExternalWorkType.MegaFolderImages;
+            bool megaImages = mode == User.DownloadExternalWorkType.MegaImages;
             var links = GetPostLinks(workGroup.desc, mode).ToList();
+            bool hasMegaImageSource = megaImages && links.Any(IsMegaFolderLink);
             // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
             var index = (database.ExternalWorks.Where(x => (x.workGroup.id == workGroup.id || x.workGroup.parentId == workGroup.id)
                 && x.workGroup.user.service == workGroup.service && x.type != ExternalWork.ExternalWorkType.MegaFolderReference)
@@ -185,8 +187,18 @@ namespace PictureSpider.Pawchive
                     else if (url.StartsWith("https://mega.nz/file/"))
                     {
                         var node = await mega.GetNodeFromLinkAsync(new Uri(url));
-                        if (node is not null && Path.GetExtension(node.Name).IsVideo())//暂时只处理video
-                            files.Add((node.Id, node.Name, url, node.Size));
+                        if (node is null)
+                            continue;
+                        var ext = Path.GetExtension(node.Name ?? "");
+                        if (megaImages)
+                        {
+                            if (!ext.IsZip() || node.Size <= 0 || node.Size > ArchiveExtractor.MaxArchiveBytes)
+                                continue;
+                            hasMegaImageSource = true;
+                        }
+                        else if (!ext.IsVideo())
+                            continue;
+                        files.Add((node.Id, node.Name, url, node.Size));
                     }
                     if (files.Count == 0)
                         continue;
@@ -250,8 +262,8 @@ namespace PictureSpider.Pawchive
                     throw;
                 }
             }
-            // 合集没有归属本帖的图片时，仍需记住来源，避免回退到附件。
-            if (megaImages && links.Count > 0 && !workGroup.externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference))
+            // ZIP 会移入非图片子组，父帖沿用来源标记以免回退到附件。
+            if (hasMegaImageSource && !workGroup.externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference))
             {
                 workGroup.externalWorks.Add(new ExternalWork
                 {
@@ -674,7 +686,7 @@ namespace PictureSpider.Pawchive
                 if (illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
                     await ParseKeyZipMega(illustGroup, attachments);
                 if (illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.ExternalVideos
-                    or User.DownloadExternalWorkType.GoogleDriveImageZip or User.DownloadExternalWorkType.MegaFolderImages)
+                    or User.DownloadExternalWorkType.GoogleDriveImageZip or User.DownloadExternalWorkType.MegaImages)
                     parsedExternalWorks = await ParseGroupContent(illustGroup);
             }
             catch (Exception e)
@@ -817,7 +829,8 @@ namespace PictureSpider.Pawchive
             var group = attachment?.GetGroup ?? external.workGroup;
             var parent = group.ParentGroup;
             bool googleDriveImageZip = external != null && group.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
-            bool createImageGroup = attachment != null || googleDriveImageZip
+            bool megaImageZip = external?.type == ExternalWork.ExternalWorkType.Mega && group.user.dowloadExternalWorks == User.DownloadExternalWorkType.MegaImages;
+            bool createImageGroup = attachment != null || googleDriveImageZip || megaImageZip
                 || group.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega;
             var destinationDirectory = Path.Combine(Path.GetDirectoryName(archivePath),
                 Path.GetFileNameWithoutExtension(archivePath) + "_images");
@@ -833,7 +846,8 @@ namespace PictureSpider.Pawchive
                 imageKeyPrefix = attachment != null ? $"Attachment/{archiveId}" : $"{external.type}/{external.id}";
             }
             var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory,
-                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: attachment != null || googleDriveImageZip);
+                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: attachment != null || googleDriveImageZip,
+                allowNoImages: megaImageZip);
             if (!success)
                 return false;
             if (createImageGroup)
@@ -847,6 +861,8 @@ namespace PictureSpider.Pawchive
                     LogError($"Archive cleanup failed {GetDownloadQueueKey(work)}: {e.Message}");
                     return false;
                 }
+                if (files.Count == 0)
+                    return true;
                 var imageGroup = new WorkGroup
                 {
                     id = await database.GetNextChildId(),
@@ -1070,7 +1086,7 @@ namespace PictureSpider.Pawchive
                 foreach (var illustGroup in illustGroups)
                 {
                     if (illustGroup.IsChild && !illustGroup.works.Any(x => x.urlPath.StartsWith("Attachment/", StringComparison.Ordinal))
-                        && illustGroup.user.dowloadExternalWorks is not (User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip))
+                        && !illustGroup.user.DownloadsExternalArchiveImages)
                         continue;
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if(exploreFile.validPageCount()>0)
@@ -1112,7 +1128,7 @@ namespace PictureSpider.Pawchive
                 foreach (var illustGroup in illustGroups)
                 {
                     if (!illustGroup.fav && illustGroup.IsChild && !illustGroup.works.Any(x => x.urlPath.StartsWith("Attachment/", StringComparison.Ordinal))
-                        && illustGroup.user.dowloadExternalWorks is not (User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip))
+                        && !illustGroup.user.DownloadsExternalArchiveImages)
                         continue;
                     var exploreFile = new ExplorerFile(illustGroup, download_dir_tmp);
                     if (exploreFile.validPageCount() > 0)

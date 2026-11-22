@@ -94,7 +94,7 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<string>("dowloadExternalWorks")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaFolderImages')")
+                        .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaImages')")
                         .HasDefaultValue("None");
 
                     b.Property<bool>("downloadAttachmentImages")

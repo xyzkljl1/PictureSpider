@@ -31,7 +31,7 @@ namespace PictureSpider
         // flatFileName非空时，按原路径排序，以“页号_文件名.扩展名”平铺到目标目录。
         public static async Task<(bool success, List<string> files)> ExtractFiles(string archivePath, string destinationDirectory,
             IEnumerable<string> allowedExtensions, CancellationToken cancellationToken = default, string flatFileName = null,
-            bool requireImagesOnly = false)
+            bool requireImagesOnly = false, bool allowNoImages = false)
         {
             string stagingRoot = null;
             try
@@ -116,7 +116,7 @@ namespace PictureSpider
                         throw new InvalidDataException("Archive entry length does not match the directory entry.");
                     extractedFiles.Add(destinationPath);
                 }
-                if (extractedFiles.Count == 0)
+                if (extractedFiles.Count == 0 && !allowNoImages)
                     throw new InvalidDataException("Archive does not contain supported files.");
                 if (flatFileName != null)
                 {
