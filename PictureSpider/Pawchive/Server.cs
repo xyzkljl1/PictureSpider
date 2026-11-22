@@ -186,13 +186,19 @@ namespace PictureSpider.Pawchive
                     //<p><br></p><p>Dropbox</p><p><a href=\"https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0\" rel=\"nofollow noopener\" target=\"_blank\">https://www.dropbox.com/s/fzgnbgsrrxpohv0/55.Nilou%20%28audio%20update%29%202160p.mp4?dl=0</a></p><p>MEGA</p><p><a href=\"https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0\" rel=\"nofollow noopener\" target=\"_blank\">https://mega.nz/file/YGI0jSzK#A-ZKPcngj9YkWDeo43JfK5o-rIh1Xniz0OSq08XMhU0</a> </p>
                     else if (url.StartsWith("https://mega.nz/file/"))
                     {
-                        var node = await mega.GetNodeFromLinkAsync(new Uri(url));
+                        var link = new Uri(url);
+                        var node = await mega.GetNodeFromLinkAsync(link);
                         if (node is null)
                             continue;
                         var ext = Path.GetExtension(node.Name ?? "");
                         if (megaImages)
                         {
-                            if (!ext.IsZip() || node.Size <= 0 || node.Size > ArchiveExtractor.MaxArchiveBytes)
+                            if (!ext.IsZip())
+                                continue;
+                            var check = await httpArchiveEntriesReader.CheckMegaImageArchive(node, link);
+                            if (!check.success)
+                                return false;
+                            if (!check.imagesOnly)
                                 continue;
                             hasMegaImageSource = true;
                         }
@@ -846,8 +852,7 @@ namespace PictureSpider.Pawchive
                 imageKeyPrefix = attachment != null ? $"Attachment/{archiveId}" : $"{external.type}/{external.id}";
             }
             var (success, files) = await ArchiveExtractor.ExtractFiles(archivePath, destinationDirectory,
-                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: attachment != null || googleDriveImageZip,
-                allowNoImages: megaImageZip);
+                Util.imageExtensions, flatFileName: archiveId, requireImagesOnly: attachment != null || googleDriveImageZip || megaImageZip);
             if (!success)
                 return false;
             if (createImageGroup)
@@ -861,8 +866,6 @@ namespace PictureSpider.Pawchive
                     LogError($"Archive cleanup failed {GetDownloadQueueKey(work)}: {e.Message}");
                     return false;
                 }
-                if (files.Count == 0)
-                    return true;
                 var imageGroup = new WorkGroup
                 {
                     id = await database.GetNextChildId(),

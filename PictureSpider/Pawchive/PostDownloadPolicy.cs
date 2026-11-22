@@ -129,9 +129,11 @@ namespace PictureSpider.Pawchive
                 Console.Error.WriteLine($"[Paw] Can't classify image archive: {name}");
                 return (false, false);
             }
-            var files = check.entries.Where(x => !x.IsDirectory).ToList();
-            return (true, files.Count > 0 && !check.entries.Any(x => x.IsEncrypted)
-                && files.All(x => Path.GetExtension(x.FullName ?? "").IsImage()));
+            return (true, IsImageOnlyArchive(check.entries));
         }
+
+        internal static bool IsImageOnlyArchive(List<RemoteArchiveEntry> entries) =>
+            entries.Any(x => !x.IsDirectory) && entries.All(x => !x.IsEncrypted
+                && (x.IsDirectory || Path.GetExtension(x.FullName ?? "").IsImage()));
     }
 }

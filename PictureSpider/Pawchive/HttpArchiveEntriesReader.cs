@@ -6,12 +6,16 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
+using Newtonsoft.Json.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Rar;
 using SharpCompress.Archives.SevenZip;
+using SharpCompress.Archives.Zip;
 using SharpCompress.Common;
 using SharpCompress.Readers;
 
@@ -145,6 +149,87 @@ namespace PictureSpider.Pawchive
             return await Task.Run(() => ReadArchiveEntries(contentLength, extension, ReadRemoteRange, cancellationToken), cancellationToken);
         }
 
+        internal async Task<(bool success, bool imagesOnly)> CheckMegaImageArchive(CG.Web.MegaApiClient.INode node, Uri link)
+        {
+            var length = node.Size;
+            if (length <= 0 || length > ArchiveExtractor.MaxArchiveBytes)
+                return (true, false);
+            var extension = Path.GetExtension(node.Name).ToLowerInvariant();
+            try
+            {
+                // 分享密钥只在本地使用。MEGA 的 g 命令只需公开文件 ID。
+                var command = new { a = "g", g = 1, p = node.Id, ssl = 2 };
+                using var timeout = new CancellationTokenSource(httpClient.Timeout);
+                var token = timeout.Token;
+                using var reply = await httpClient.PostAsJsonAsync("https://g.api.mega.co.nz/cs", new[] { command }, token);
+                reply.EnsureSuccessStatusCode();
+                var metadata = (JToken.Parse(await reply.Content.ReadAsStringAsync(token)) as JArray)?.First as JObject;
+                if (metadata?["g"] is not JValue { Value: string url } || !Uri.TryCreate(url, UriKind.Absolute, out var downloadUri)
+                    || downloadUri.Scheme != Uri.UriSchemeHttps)
+                    throw new InvalidDataException("MEGA did not return a download URL.");
+
+                var shareKey = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlDecode(link.Fragment.TrimStart('#'));
+                if (shareKey.Length != 32)
+                    throw new InvalidDataException("Invalid MEGA file key.");
+                using var aes = Aes.Create();
+                var fileKey = shareKey[..16];
+                for (int i = 0; i < fileKey.Length; i++)
+                    fileKey[i] ^= shareKey[16 + i];
+                aes.Key = fileKey;
+
+                async Task<byte[]> ReadMegaRange(long from, long to, CancellationToken cancellation)
+                {
+                    // MEGA 的分段 URL 返回所请求的密文。按原文件中的块号生成 CTR 密钥流。
+                    var rangeUri = new UriBuilder(downloadUri) { Path = downloadUri.AbsolutePath + $"/{from}-{to}" }.Uri;
+                    using var range = await httpClient.GetAsync(rangeUri, HttpCompletionOption.ResponseHeadersRead, cancellation);
+                    range.EnsureSuccessStatusCode();
+                    var count = checked((int)(to - from + 1));
+                    if (range.Content.Headers.ContentLength is long returned && returned != count)
+                        throw new InvalidDataException("Unexpected MEGA range length.");
+                    var bytes = new byte[count];
+                    using var stream = await range.Content.ReadAsStreamAsync(cancellation);
+                    await stream.ReadExactlyAsync(bytes, cancellation);
+                    if (range.Content.Headers.ContentLength == null && await stream.ReadAsync(new byte[1], cancellation) != 0)
+                        throw new InvalidDataException("MEGA returned more than the requested byte range.");
+                    int skip = (int)(from % 16);
+                    var counters = new byte[((skip + count + 15) / 16) * 16];
+                    long block = from / 16;
+                    for (int i = 0; i < counters.Length; i += 16)
+                    {
+                        Array.Copy(shareKey, 16, counters, i, 8);
+                        BinaryPrimitives.WriteInt64BigEndian(counters.AsSpan(i + 8), block++);
+                    }
+                    var mask = aes.EncryptEcb(counters, PaddingMode.None);
+                    for (int i = 0; i < bytes.Length; i++)
+                        bytes[i] ^= mask[skip + i];
+                    return bytes;
+                }
+
+                List<RemoteArchiveEntry> entries;
+                if (extension == ".zip")
+                {
+                    try
+                    {
+                        entries = await ReadEntries(length, ReadMegaRange, token, ArchiveExtractor.LegacyArchiveEncoding);
+                    }
+                    catch (NotSupportedException) // ZIP64 的目录由 SharpCompress 读取。
+                    {
+                        entries = await Task.Run(() => ReadArchiveEntries(length, extension, ReadMegaRange, token), token);
+                    }
+                }
+                else
+                    entries = await Task.Run(() => ReadArchiveEntries(length, extension, ReadMegaRange, token), token);
+                return (true, PostDownloadPolicy.IsImageOnlyArchive(entries));
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or HttpRequestException or OperationCanceledException
+                or Newtonsoft.Json.JsonException or FormatException or ArgumentException or NotSupportedException or SharpCompressException
+                or System.Security.Cryptography.CryptographicException or OverflowException)
+            {
+                Console.Error.WriteLine($"[Paw] MEGA archive inspection failed for {node.Id}: {e.Message}");
+                return (false, false);
+            }
+        }
+
         internal static List<RemoteArchiveEntry> ReadArchiveEntries(long contentLength, string extension,
             Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default)
         {
@@ -159,6 +244,7 @@ namespace PictureSpider.Pawchive
             };
             using IArchive archive = extension switch
             {
+                ".zip" => ZipArchive.OpenArchive(stream, options),
                 ".rar" => RarArchive.OpenArchive(stream, options),
                 ".7z" => SevenZipArchive.OpenArchive(stream, options),
                 _ => throw new NotSupportedException("Unsupported remote archive format.")
@@ -186,7 +272,8 @@ namespace PictureSpider.Pawchive
         }
 
         internal static async Task<List<RemoteArchiveEntry>> ReadEntries(long contentLength,
-            Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default)
+            Func<long, long, CancellationToken, Task<byte[]>> readRange, CancellationToken cancellationToken = default,
+            Encoding legacyEncoding = null)
         {
             if (contentLength <= EocdFixedLength)
                 throw new InvalidDataException("Remote ZIP is too small.");
@@ -227,7 +314,7 @@ namespace PictureSpider.Pawchive
                 else
                     centralDirectory = await readRange(centralDirectoryOffset, centralDirectoryEnd - 1, cancellationToken);
             }
-            return ParseCentralDirectory(centralDirectory, entryCount);
+            return ParseCentralDirectory(centralDirectory, entryCount, legacyEncoding);
         }
 
         internal static async Task<byte[]> ReadRange(HttpClient client, HttpRequestMessage request,
@@ -284,7 +371,7 @@ namespace PictureSpider.Pawchive
             return -1;
         }
 
-        private static List<RemoteArchiveEntry> ParseCentralDirectory(byte[] data, int entryCount)
+        private static List<RemoteArchiveEntry> ParseCentralDirectory(byte[] data, int entryCount, Encoding legacyEncoding)
         {
             var result = new List<RemoteArchiveEntry>();
             var offset = 0;
@@ -308,6 +395,8 @@ namespace PictureSpider.Pawchive
                 string name;
                 if ((flags & Utf8FileNameFlag) != 0)
                     name = utf8.GetString(nameBytes);
+                else if (legacyEncoding != null)
+                    name = legacyEncoding.GetString(nameBytes);
                 else
                 {
                     if (nameBytes.IndexOfAnyExceptInRange(PrintableAsciiStart, PrintableAsciiEnd) >= 0)
