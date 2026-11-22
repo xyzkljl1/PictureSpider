@@ -292,12 +292,8 @@ namespace PictureSpider.Pixiv
             if (queue.type == ExplorerQueue.QueueType.Main || queue.type == ExplorerQueue.QueueType.MainR)
             {
                 bool is_private = queue.type == ExplorerQueue.QueueType.MainR;
-                var status = await database.QueueStatuses.Where(x => x.Id == "Current")
-                    .Select(x => new { x.Queue, x.NicheRQueue }).SingleAsync();
-                var nicheIds = (status.NicheRQueue ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
-                var id_list = status.Queue.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .Where(id => !is_private || nicheIds.Contains(id) == (queue.id == "NicheR"))
-                    .Select(int.Parse).ToList();
+                var ids = await database.GetQueue(queue.id == "NicheR");
+                var id_list = ids.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
                 foreach (var illust in await database.GetIllustFull(id_list))
                     if ((illust.xRestrict > 0) == is_private && !illust.readed && !illust.bookmarked)
                         illusts.Add(illust);
@@ -539,7 +535,7 @@ namespace PictureSpider.Pixiv
             {
                 var list_nonprivate = new List<Illust>();
                 var list_private = new List<Illust>();
-                var nicheRIds = new HashSet<int>();
+                var nicheCandidates = new List<(Illust illust, double multiplier, string tag)>();
 
                 foreach (var illust in (await database.GetAllUnreadedIllustFull()).FindAll((Illust illust) =>
                                       {
@@ -558,11 +554,9 @@ namespace PictureSpider.Pixiv
                 var followed_tags=(await database.GetFollowedTagsOrdered()).ToHashSet();
                 var now = DateTime.Now;
 
-                var tmp = new List<List<Illust>> {list_private, list_nonprivate };
-                for(int i=0;i<2;++i)
+                foreach (var illust_list in new[] { list_private, list_nonprivate })
                 {
                     int FOLLOWED_USER_MAGIC_NUMBER = 1000000;//关注作者对illust分数的加算加成
-                    var illust_list = tmp[i];
                     var scores = new Dictionary<Illust, double>();
                     //关注作者最优先
                     //收藏、点赞高的优先，浏览量低的优先，时间近的优先
@@ -574,81 +568,55 @@ namespace PictureSpider.Pixiv
                         double view_penalty = Math.Sqrt(1 + 8 * Math.Clamp(viewCount / 200000.0, 0, 1));
                         double time_penalty = Math.Sqrt(1 + 8 * Math.Min(days / 540.0, 1));
                         scores[illust] = (illust.bookmarkCount + illust.likeCount / 2.0) / view_penalty / time_penalty;
-                        illust.debugMsg = $"收藏加分：{illust.bookmarkCount:#,0}<br>点赞加分：{illust.likeCount / 2.0:#,0.#}<br>"
-                            + $"发布：{days:#,0} 天（×{1 / time_penalty:0.##}）<br>"
-                            + $"浏览：{viewCount:#,0}{(illust.viewCount == 0 ? "（估）" : "")}（×{1 / view_penalty:0.##}）<br>";
                         if (followed_user.Contains(illust.userId))
                             scores[illust] += FOLLOWED_USER_MAGIC_NUMBER;
+                        illust.debugMsg = $"原分：{scores[illust]:#,0.##}<br>收藏加分：{illust.bookmarkCount:#,0}<br>点赞加分：{illust.likeCount / 2.0:#,0.#}<br>"
+                            + $"发布：{days:#,0} 天（×{1 / time_penalty:0.##}）<br>"
+                            + $"浏览：{viewCount:#,0}{(illust.viewCount == 0 ? "（估）" : "")}（×{1 / view_penalty:0.##}）<br>";
                     }
                     illust_list.Sort((l, r) => scores[r].CompareTo(scores[l]));
-                    /* 小众标签补偿，防止浏览人数少的题材永远不会上队列
-                     * 将各关注标签下非关注作者的最高分抬至无补偿队列中非关注作者的第150名。
-                     * 按各标签自己的基础分排名衰减倍率，多标签取最高倍率，不叠加。
-                    */
+                    if (illust_list != list_private)
+                        continue;
+                    // 小众R只补偿未关注作者。各标签按原分顺序衰减，多标签取最大倍率。
                     var unfollowed_illusts = illust_list.Where(x => !followed_user.Contains(x.userId)).ToList();
-                    var addition_in_tag = new Dictionary<string, double>();
-                    if(illust_list.Count>1000&&unfollowed_illusts.Count>=150)
-                    {
-                        double baseline = scores[unfollowed_illusts[149]];
-                        foreach (var tag in followed_tags)
-                            addition_in_tag.Add(tag, 0);
-                        //先用addition_in_tag记下每个标签的最高分
-                        foreach (var illust in unfollowed_illusts)
-                            foreach (var tag in illust.tags)
-                                if (followed_tags.Contains(tag))
-                                    if (addition_in_tag[tag] < scores[illust])
-                                        addition_in_tag[tag] = scores[illust];
-                        foreach (var tag in followed_tags)
-                            addition_in_tag[tag] = addition_in_tag[tag] > 0 ? Math.Max(baseline / addition_in_tag[tag], 1) : 1;
-                    }
-                    foreach (var illust in illust_list)
+                    var addition_in_tag = followed_tags.ToDictionary(tag => tag, tag => 0.0);
+                    foreach (var illust in unfollowed_illusts)
+                        foreach (var tag in illust.tags)
+                            if (addition_in_tag.TryGetValue(tag, out var highest) && scores[illust] > highest)
+                                addition_in_tag[tag] = scores[illust];
+                    foreach (var tag in followed_tags)
+                        addition_in_tag[tag] = addition_in_tag[tag] > 0 ? Math.Max(100_000.0 / addition_in_tag[tag], 1) : 1;
+                    foreach (var illust in unfollowed_illusts)
                     {
                         double max_addup = 1;
                         string compensationTag = null;
-                        int follow_bonus = followed_user.Contains(illust.userId) ? FOLLOWED_USER_MAGIC_NUMBER : 0;
-                        if (follow_bonus == 0)
-                            foreach (var tag in illust.tags.Distinct())
-                            {
-                                if (addition_in_tag.TryGetValue(tag, out var addition))
-                                {
-                                    if (addition > max_addup)
-                                    {
-                                        max_addup = addition;
-                                        compensationTag = tag;
-                                    }
-                                    addition_in_tag[tag] = (addition - 1) * 0.9 + 1;
-                                }
-                            }
-                        double base_score = scores[illust] - follow_bonus;
-                        illust.score = (int)Math.Round(base_score * max_addup + follow_bonus, MidpointRounding.AwayFromZero);
-                        var tagInfo = "";
-                        if (illust.xRestrict > 0 && compensationTag != null)
+                        foreach (var tag in illust.tags.Distinct())
                         {
-                            nicheRIds.Add(illust.id);
-                            tagInfo = $"（{WebUtility.HtmlEncode(compensationTag)}）";
+                            if (addition_in_tag.TryGetValue(tag, out var addition))
+                            {
+                                if (addition > max_addup)
+                                {
+                                    max_addup = addition;
+                                    compensationTag = tag;
+                                }
+                                addition_in_tag[tag] = (addition - 1) * 0.9 + 1;
+                            }
                         }
-                        illust.debugMsg = $"评分：{illust.score:#,0}<br>小众补偿：{max_addup:#,0.##}{tagInfo}<br>" + illust.debugMsg;
+                        if (compensationTag != null)
+                        {
+                            illust.score = (int)Math.Round(scores[illust] * max_addup, MidpointRounding.AwayFromZero);
+                            nicheCandidates.Add((illust, max_addup, compensationTag));
+                        }
                     }
-                    //重新排序
-                    illust_list.Sort((l, r) => r.score.CompareTo(l.score));
-                    /*
-                     * 不能用illust_list = illust_list.Take<Illust>(Math.Min(MaxSize, illust_list.Count)).ToList<Illust>();
-                     * 这样不会修改list_nonprivate/list_private的值
-                    */
                 }
-                //合并成一个字符串,因为没有混用的场景，混合时不需要排序
-                string queue = "";
-                foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
-                    queue += " " + illust.id;
-                foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
-                    queue += " " + illust.id;
-                //debug code
-                var debug_messages = new Dictionary<int, string>();
-                foreach (var illust in list_nonprivate.Take<Illust>(Math.Min(MaxSize, list_nonprivate.Count)))
-                    debug_messages.Add(illust.id, illust.debugMsg);
-                foreach (var illust in list_private.Take<Illust>(Math.Min(MaxSize, list_private.Count)))
-                    debug_messages.Add(illust.id, illust.debugMsg);
-                var nicheRQueue = string.Join(" ", list_private.Take(MaxSize).Where(x => nicheRIds.Contains(x.id)).Select(x => x.id));
+                var main = list_nonprivate.Take(MaxSize).Concat(list_private.Take(MaxSize)).ToList();
+                var nicheR = nicheCandidates.OrderByDescending(x => x.illust.score).Take(MaxSize).ToList();
+                var queue = string.Join(" ", main.Select(x => x.id));
+                var nicheRQueue = string.Join(" ", nicheR.Select(x => x.illust.id));
+                var debug_messages = main.ToDictionary(x => x.id, x => x.debugMsg);
+                foreach (var item in nicheR)
+                    debug_messages[item.illust.id] = item.illust.debugMsg +
+                        $"小众评分：{item.illust.score:#,0}<br>小众补偿：{item.multiplier:#,0.##}（{WebUtility.HtmlEncode(item.tag)}）<br>";
                 await database.UpdateQueue(queue, nicheRQueue);
                 illust_debug_msg = debug_messages;
                 try
@@ -796,10 +764,10 @@ namespace PictureSpider.Pixiv
         private async Task DownloadIllustsInExplorerQueue()
         {
             //浏览队列+队列与收藏的作者
-            var id_list = new HashSet<int>
-                    ((await database.GetQueue()).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                    .ToList<string>()
-                    .Select<string, int>(x => Int32.Parse(x)));
+            var queues = await database.QueueStatuses.Where(x => x.Id == "Current")
+                .Select(x => new { x.Queue, x.NicheRQueue }).SingleAsync();
+            var id_list = (queues.Queue + " " + queues.NicheRQueue).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(int.Parse).ToHashSet();
             var userIds = database.Users.Where(x => x.followed || x.queued).Select(x => x.userId);
             (await database.Illusts.Where(x => userIds.Contains(x.userId)).Select(x => x.id).ToListAsync()).ForEach(id => id_list.Add(id));
             await DownloadIllusts(id_list, -1);

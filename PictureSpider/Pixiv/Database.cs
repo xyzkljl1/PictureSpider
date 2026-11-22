@@ -138,9 +138,10 @@ namespace PictureSpider.Pixiv
             return (await QueueStatuses.Where(x => x.Id == "Current")
                 .Select(x => EF.Functions.DateDiffDay(x.QueueUpdateTime.Date, DateTime.Now.Date)).ToListAsync())[0];
         }
-        public async Task<string> GetQueue()
+        public async Task<string> GetQueue(bool nicheR = false)
         {
-            return (await QueueStatuses.Where(x => x.Id == "Current").Select(x => x.Queue).ToListAsync())[0];
+            return await QueueStatuses.Where(x => x.Id == "Current")
+                .Select(x => nicheR ? x.NicheRQueue ?? "" : x.Queue).SingleAsync();
         }
         public User GetUserByIdSync(int userId)
         {
