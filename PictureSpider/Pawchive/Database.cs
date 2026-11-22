@@ -21,6 +21,7 @@ namespace PictureSpider.Pawchive
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<ExternalWork>().Property(x => x.type).HasConversion<string>();
             modelBuilder.Entity<User>().Property(x => x.downloadCover).HasDefaultValue(true);
             modelBuilder.Entity<User>().Property(x => x.downloadAttachmentArchiveImages).HasDefaultValue(false);
             modelBuilder.Entity<User>().Property(x => x.postVersionRule)
@@ -29,7 +30,7 @@ namespace PictureSpider.Pawchive
                 .HasConversion<string>().HasDefaultValue(DownloadStatus.Pending);
             modelBuilder.Entity<User>().Property(x => x.dowloadExternalWorks)
                 .HasConversion<string>()
-                .HasColumnType("enum('None','DirectExternal','KeyZipMega','GoogleDriveImageZip')")
+                .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaFolderImages')")
                 .HasDefaultValue(User.DownloadExternalWorkType.None);
             modelBuilder.Entity<WorkGroup>()
                 .HasOne(x => x.parent)

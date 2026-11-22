@@ -113,6 +113,7 @@ namespace PictureSpider.Pawchive
         {
             Mega=0,
             GoogleDrive=1,
+            MegaFolderReference,
         }
         public string id { get; set; }
         public string name { get; set; }
@@ -126,7 +127,12 @@ namespace PictureSpider.Pawchive
         [NotMapped]
         public string service { get { return workGroup.service; } }
         public string url { get; set; }
+        [Column(TypeName = "enum('Mega','GoogleDrive','MegaFolderReference')")]
         public ExternalWorkType type { get; set; }
+        [NotMapped]
+        public bool IsMegaImage => type == ExternalWorkType.Mega && Ext.IsImage();
+        [NotMapped]
+        public bool IsMegaFolderReference => type == ExternalWorkType.MegaFolderReference;
 
         [NotMapped]
         public override string Ext { get => Path.GetExtension(name ?? "").ToLower(); }//改成从name获取防止循环引用
@@ -214,17 +220,23 @@ namespace PictureSpider.Pawchive
 
         public IEnumerable<PawchiveBaseWork> GetShouldDownloadWorks()
         {
+            bool megaImages = user.dowloadExternalWorks == User.DownloadExternalWorkType.MegaFolderImages;
+            bool attachmentImages = user.downloadAttachmentImages && !(megaImages && !IsChild
+                && externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference));
             var selected = works.Where(work =>
                 (user.downloadAttachmentVideos && work.Ext.IsVideo()) ||
                 (user.downloadAttachmentArchiveImages && work.Ext.IsZip()) ||
                 ((IsChild && !isNonImage
                     ? work.urlPath.StartsWith("Attachment/", StringComparison.Ordinal) ? user.downloadAttachmentArchiveImages
                         : user.dowloadExternalWorks is User.DownloadExternalWorkType.KeyZipMega or User.DownloadExternalWorkType.GoogleDriveImageZip
-                    : work.coverGroup == this ? user.downloadCover || fav : user.downloadAttachmentImages)
+                    : work.coverGroup == this ? user.downloadCover || fav : attachmentImages)
                     && work.Ext.IsImage())).Cast<PawchiveBaseWork>();
-            if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
+            if (megaImages)
+                selected = selected.Concat(externalWorks.Where(x => x.IsMegaImage && x.url != null));
+            else if (user.dowloadExternalWorks != User.DownloadExternalWorkType.None)
                 selected = selected.Concat(user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip
-                    ? externalWorks.Where(x => x.type == ExternalWork.ExternalWorkType.GoogleDrive && x.Ext == ".zip") : externalWorks);
+                    ? externalWorks.Where(x => x.type == ExternalWork.ExternalWorkType.GoogleDrive && x.Ext == ".zip")
+                    : externalWorks.Where(x => !x.IsMegaImage && !x.IsMegaFolderReference));
             return selected.Where(work => !fav || !work.excluded);
         }
     }
@@ -237,9 +249,10 @@ namespace PictureSpider.Pawchive
         public enum DownloadExternalWorkType
         {
             None=0,
-            DirectExternal=1,
+            ExternalVideos=1,
             KeyZipMega=2,
             GoogleDriveImageZip=3,
+            MegaFolderImages,
         }
         //注意此id为原网站id，不保证不同service无重复，也不能保证在int范围内
         //必须id+service才能确定一个作者,group和illust同理

@@ -95,8 +95,11 @@ namespace PictureSpider.Pawchive
 #endif
             return Task.CompletedTask;
         }
-        private static IEnumerable<string> GetPostLinks(string content, bool includeMega)
+        private static bool IsMegaFolderLink(string url) => url.StartsWith("https://mega.nz/folder/", StringComparison.Ordinal);
+        private static IEnumerable<string> GetPostLinks(string content, User.DownloadExternalWorkType mode)
         {
+            bool includeMega = mode != User.DownloadExternalWorkType.GoogleDriveImageZip;
+            bool foldersOnly = mode == User.DownloadExternalWorkType.MegaFolderImages;
             var doc = new HtmlDocument();
             doc.LoadHtml(content ?? "");
             var seenMega = new HashSet<string>(StringComparer.Ordinal);
@@ -106,6 +109,8 @@ namespace PictureSpider.Pawchive
                 if (href is null)
                     continue;
                 var url = HtmlEntity.DeEntitize(href.Value);
+                if (foldersOnly && !IsMegaFolderLink(url))
+                    continue;
                 if (!url.StartsWith("https://mega.nz/", StringComparison.Ordinal) || (includeMega && seenMega.Add(url)))
                     yield return url;
             }
@@ -118,18 +123,21 @@ namespace PictureSpider.Pawchive
                     continue;
                 var text = HtmlEntity.DeEntitize(node.Text);
                 foreach (Match match in Regex.Matches(text, @"https://mega\.nz/(?:file|folder)/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+(?:/(?:file|folder)/[A-Za-z0-9_-]+)*"))
-                    if (seenMega.Add(match.Value))
+                    if ((!foldersOnly || IsMegaFolderLink(match.Value)) && seenMega.Add(match.Value))
                         yield return match.Value;
             }
         }
         private async Task<bool> ParseGroupContent(WorkGroup workGroup)
         {
-            bool googleDriveImageZip = workGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.GoogleDriveImageZip;
+            var mode = workGroup.user.dowloadExternalWorks;
+            bool googleDriveImageZip = mode == User.DownloadExternalWorkType.GoogleDriveImageZip;
+            bool megaImages = mode == User.DownloadExternalWorkType.MegaFolderImages;
+            var links = GetPostLinks(workGroup.desc, mode).ToList();
             // 补录另一下载源时保留旧编号，避免同名文件覆盖已有外链文件。
             var index = (database.ExternalWorks.Where(x => (x.workGroup.id == workGroup.id || x.workGroup.parentId == workGroup.id)
-                && x.workGroup.user.service == workGroup.service)
+                && x.workGroup.user.service == workGroup.service && x.type != ExternalWork.ExternalWorkType.MegaFolderReference)
                 .Max(x => (int?)x.index) ?? 0) + 1;
-            foreach (var url in GetPostLinks(workGroup.desc, !googleDriveImageZip))
+            foreach (var url in links)
             {
                 try
                 {
@@ -138,11 +146,12 @@ namespace PictureSpider.Pawchive
                     //包含一个mega文件夹
                     //patreon/user/3659577/post/117461502/revision/9878902
                     //<p><img src=\"/05/68/0568e59bd4bfdea28e3b3183046b81668dc841dfd5bcdc847612248a161138f2.webp\"></p><p>Hi guys!</p><p><a href=\"https://mega.nz/folder/CRR1FKwK#TvDSfT70WLo16AppXzIBtQ\" rel=\"noopener noreferrer\">DOWNLOAD</a>&nbsp;(Watermark-free)</p>
-                    if (url.StartsWith("https://mega.nz/folder/"))//Mega folder
+                    if (IsMegaFolderLink(url))//Mega folder
                     {
                         var rootUri = new Uri(url);
                         foreach (var meganode in await mega.GetNodesFromLinkAsync(rootUri))//GetNodesFromLinkAsync是递归的
-                            if (meganode.Type == NodeType.File && Path.GetExtension(meganode.Name).IsVideo())//暂时只处理video
+                            if (meganode.Type == NodeType.File && (megaImages
+                                ? Path.GetExtension(meganode.Name).IsImage() : Path.GetExtension(meganode.Name).IsVideo()))
                                 files.Add((meganode.Id, meganode.Name, GetMegaLink(meganode, rootUri).AbsoluteUri, meganode.Size));
                     }
                     else if (url.StartsWith("https://drive.google.com/"))
@@ -228,8 +237,20 @@ namespace PictureSpider.Pawchive
                 catch (Exception e)
                 {
                     LogError($"Fail ParseGroupContent {workGroup.id}: {e.Message}");
+                    if (megaImages && (e is HttpRequestException or IOException or OperationCanceledException or ApiException))
+                        return false;
                     throw;
                 }
+            }
+            // 合集没有归属本帖的图片时，仍需记住来源，避免回退到附件。
+            if (megaImages && links.Count > 0 && !workGroup.externalWorks.Any(x => x.IsMegaImage || x.IsMegaFolderReference))
+            {
+                workGroup.externalWorks.Add(new ExternalWork
+                {
+                    type = ExternalWork.ExternalWorkType.MegaFolderReference,
+                    id = $"{workGroup.service}/{workGroup.id}",
+                    workGroup = workGroup
+                });
             }
             return true;
         }
@@ -502,7 +523,7 @@ namespace PictureSpider.Pawchive
         {
             database.ChangeTracker.DetectChanges();
             var works = group.works.Where(x => x.Dettached).ToList();
-            var externalWorks = group.externalWorks.Where(x => x.Dettached).ToList();
+            var externalWorks = group.externalWorks.Where(x => !x.IsMegaFolderReference && x.Dettached).ToList();
             var cover = group.cover;
             var child = group.children.SingleOrDefault(x => x.isNonImage);
             if (works.Count == 0 && externalWorks.Count == 0 && !(cover?.Dettached ?? false))
@@ -550,7 +571,7 @@ namespace PictureSpider.Pawchive
                             pending.Enqueue(child);
                 var works = groups.SelectMany(x => x.works.Concat(x.cover is null ? Array.Empty<Work>() : new[] { x.cover })).Distinct().ToList();
                 var externalWorks = groups.SelectMany(x => x.externalWorks).ToList();
-                var allWorks = works.Cast<PawchiveBaseWork>().Concat(externalWorks).ToList();
+                var allWorks = works.Cast<PawchiveBaseWork>().Concat(externalWorks.Where(x => !x.IsMegaFolderReference)).ToList();
                 // 保留收藏、已下载内容，以及仍被其他图组引用的作品。
                 if (groups.Any(x => x.fav || (x.isNonImage && x.DettachDownloaded)
                         || (x.IsChild && !x.isNonImage && x.works.Count > 0))
@@ -644,7 +665,8 @@ namespace PictureSpider.Pawchive
             {
                 if (illustGroup.user.dowloadExternalWorks == User.DownloadExternalWorkType.KeyZipMega)
                     await ParseKeyZipMega(illustGroup, attachments);
-                if(illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.DirectExternal or User.DownloadExternalWorkType.GoogleDriveImageZip)
+                if (illustGroup.user.dowloadExternalWorks is User.DownloadExternalWorkType.ExternalVideos
+                    or User.DownloadExternalWorkType.GoogleDriveImageZip or User.DownloadExternalWorkType.MegaFolderImages)
                     parsedExternalWorks = await ParseGroupContent(illustGroup);
             }
             catch (Exception e)
@@ -1146,7 +1168,7 @@ namespace PictureSpider.Pawchive
                             if ((!post.PassesVersionFilter || group.IsWip) && !group.fav)
                                 group.downloadStatus = DownloadStatus.Skip;
                             else if (!(group.IsChild && !group.isNonImage)
-                                && group.works.Count == 0 && group.externalWorks.Count == 0 && group.children.Count == 0)
+                                && group.works.Count == 0 && group.externalWorks.All(x => x.IsMegaFolderReference) && group.children.Count == 0)
                             {
                                 group.readed = true;
                                 group.downloadStatus = DownloadStatus.Skip;
@@ -1313,6 +1335,11 @@ namespace PictureSpider.Pawchive
                         await Task.Delay(TimeSpan.FromSeconds(2));
                         Util.TouchDir(dir);
                         if (await downloader.Add(Downloader.DownloaderType.Aria2DownloadQueue, work.DownloadURL, dir, filename) == DownloadAddResult.TryLater)
+                            continue;
+                    }
+                    else if (work is ExternalWork { IsMegaImage: true } image)
+                    {
+                        if (await downloader.Add(image, download_dir_tmp) == DownloadAddResult.TryLater)
                             continue;
                     }
                     else if ((ext.IsVideo() || ext.IsZip()) && work is ExternalWork)

@@ -30,8 +30,8 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<string>("id")
                         .HasColumnType("varchar(95)");
 
-                    b.Property<int>("type")
-                        .HasColumnType("int");
+                    b.Property<string>("type")
+                        .HasColumnType("enum('Mega','GoogleDrive','MegaFolderReference')");
 
                     b.Property<bool>("excluded")
                         .HasColumnType("tinyint(1)");
@@ -94,7 +94,7 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<string>("dowloadExternalWorks")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("enum('None','DirectExternal','KeyZipMega','GoogleDriveImageZip')")
+                        .HasColumnType("enum('None','ExternalVideos','KeyZipMega','GoogleDriveImageZip','MegaFolderImages')")
                         .HasDefaultValue("None");
 
                     b.Property<bool>("downloadAttachmentImages")
