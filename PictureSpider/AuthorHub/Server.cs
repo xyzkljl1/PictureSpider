@@ -85,6 +85,7 @@ namespace PictureSpider.AuthorHub
             if (string.IsNullOrWhiteSpace(connectStr))
                 return result;
 
+            result.Add(new ExplorerQueue(ExplorerQueue.QueueType.Main, "0", "Paw / X / Kemono / Hitomi"));
             List<Author> authors;
             try
             {
@@ -111,6 +112,19 @@ namespace PictureSpider.AuthorHub
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
             var result = new List<ExplorerFileBase>();
+            if (queue.type == ExplorerQueue.QueueType.Main)
+            {
+                foreach (var (module, type) in new[] {
+                    (SourceModule.Pawchive, ExplorerQueue.QueueType.Main),
+                    (SourceModule.Twitter, ExplorerQueue.QueueType.MainR),
+                    (SourceModule.Kemono, ExplorerQueue.QueueType.Main),
+                    (SourceModule.Hitomi, ExplorerQueue.QueueType.Main) })
+                {
+                    if (sourceServers.TryGetValue(module, out var server))
+                        result.AddRange(await server.GetExplorerQueueItems(new ExplorerQueue(type, "0", type.ToString())));
+                }
+                return result;
+            }
             if (queue.type != ExplorerQueue.QueueType.User || string.IsNullOrWhiteSpace(connectStr)
                 || !long.TryParse(queue.id, NumberStyles.None, CultureInfo.InvariantCulture, out var authorId))
                 return result;
