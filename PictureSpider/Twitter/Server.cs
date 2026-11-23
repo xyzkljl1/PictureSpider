@@ -98,22 +98,27 @@ namespace PictureSpider.Twitter
 
         public override async Task<List<ExplorerFileBase>> GetExplorerQueueItems(ExplorerQueue queue)
         {
-            var medias = new List<Media>();
             using var db = NewDbContext(true);
-            if (queue.type == ExplorerQueue.QueueType.MainR)
-                medias = await db.GetFollowedUnreadMedia();
-            else if (queue.type == ExplorerQueue.QueueType.FavR)
+            var query = queue.type switch
             {
-                medias = await db.GetBookmarkedMedia();
+                ExplorerQueue.QueueType.MainR => db.GetFollowedUnreadMedia(),
+                ExplorerQueue.QueueType.FavR => db.GetBookmarkedMedia(),
+                _ => db.GetMediaByUserId(queue.id)
+            };
+            var medias = await query.Where(media => media.media_type == MediaType.Image)
+                .Select(media => new { media, published = db.Tweets.Where(tweet => tweet.id == media.tweet_id)
+                    .Select(tweet => (DateTime?)tweet.created_at).FirstOrDefault() }).ToListAsync();
+            if (queue.type == ExplorerQueue.QueueType.FavR)
+            {
                 var userNames = await db.Users.ToDictionaryAsync(user => user.id, user => user.name);
-                medias = medias.OrderBy(media => userNames.GetValueOrDefault(media.user_id, media.user_id))
-                               .ThenBy(media => long.Parse(media.tweet_id))
-                               .ThenBy(media => media.id).ToList();
+                medias = medias.OrderBy(x => userNames.GetValueOrDefault(x.media.user_id, x.media.user_id))
+                               .ThenBy(x => long.Parse(x.media.tweet_id))
+                               .ThenBy(x => x.media.id).ToList();
             }
-            else
-                medias = await db.GetMediaByUserId(queue.id);
-            return medias.Where(media => media.media_type == MediaType.Image)
-                         .Select(media => (ExplorerFileBase)new ExplorerFile(media, download_dir_tmp))
+            return medias.Select(x => (ExplorerFileBase)new ExplorerFile(x.media, download_dir_tmp)
+                         {
+                             PublishedAt = x.published is DateTime date && date != default ? DateTime.SpecifyKind(date, DateTimeKind.Utc) : null
+                         })
                          .ToList();
         }
 
@@ -851,7 +856,7 @@ namespace PictureSpider.Twitter
             foreach (var user in users.Values.Where(user => user.AuthorStorageName != null))
                 favoriteDirectories.Add(Path.Combine(download_dir_unified_fav, user.AuthorStorageName, "twitter"));
             var private_files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var media in await database.GetBookmarkedMedia())
+            foreach (var media in await database.GetBookmarkedMedia().ToListAsync())
             {
                 var storageName = users.GetValueOrDefault(media.user_id)?.AuthorStorageName;
                 var favDirectory = storageName == null ? download_dir_private : Path.Combine(download_dir_unified_fav, storageName, "twitter");

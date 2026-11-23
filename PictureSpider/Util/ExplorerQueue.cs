@@ -20,6 +20,7 @@ namespace PictureSpider
         public string id;
         public string title;
         public string description="";
+        public DateTime? PublishedAt;
         public string userId;
         public bool bookmarked;
         public bool bookmarkPrivate;

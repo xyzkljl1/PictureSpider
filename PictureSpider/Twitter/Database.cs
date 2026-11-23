@@ -70,31 +70,28 @@ namespace PictureSpider.Twitter
             return await query.ToListAsync();
         }
 
-        public async Task<List<Media>> GetFollowedUnreadMedia()
+        internal IQueryable<Media> GetFollowedUnreadMedia()
         {
             var userIds = Users.Where(user => user.followed).Select(user => user.id);
-            return await Medias.Where(media => media.downloaded
+            return Medias.Where(media => media.downloaded
                                                && userIds.Contains(media.user_id)
                                                && !media.readed
                                                && !media.bookmarked)
-                               .OrderByDescending(media => media.tweet_id)
-                               .ToListAsync();
+                               .OrderByDescending(media => media.tweet_id);
         }
 
-        public async Task<List<Media>> GetBookmarkedMedia()
+        internal IQueryable<Media> GetBookmarkedMedia()
         {
-            return await Medias.Where(media => media.downloaded && media.bookmarked)
-                               .OrderByDescending(media => media.tweet_id)
-                               .ToListAsync();
+            return Medias.Where(media => media.downloaded && media.bookmarked)
+                        .OrderByDescending(media => media.tweet_id);
         }
 
-        public async Task<List<Media>> GetMediaByUserId(string user_id)
+        internal IQueryable<Media> GetMediaByUserId(string user_id)
         {
-            return await Medias.Where(media => media.user_id == user_id
+            return Medias.Where(media => media.user_id == user_id
                                                && media.downloaded
                                                && (media.bookmarked || !media.readed))
-                               .OrderByDescending(media => media.tweet_id)
-                               .ToListAsync();
+                               .OrderByDescending(media => media.tweet_id);
         }
     }
 }

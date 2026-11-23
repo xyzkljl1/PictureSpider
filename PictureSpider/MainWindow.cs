@@ -56,6 +56,8 @@ namespace PictureSpider
             MainExplorer.CurrentFileChanged += (s, e) =>
             {
                 var file = MainExplorer.CurrentFile;
+                publishedLabel.Text = file?.PublishedAt is DateTime published ? $"发布：{published.ToLocalTime():yyyy-MM-dd HH:mm}" : "";
+                publishedLabel.Visible = publishedLabel.Text.Length > 0;
                 AuthorBox.SetClient(MainExplorer.server, file);
                 // 非联合队列沿用原来的 Pixiv 标签库。
                 TagBox.SetClient(MainExplorer.server is AuthorHub.Server && file != null ? MainExplorer.server : servers[0], file);
@@ -233,17 +235,20 @@ namespace PictureSpider
             sidePanel.BackColor = System.Drawing.Color.Transparent;
             sidePanel.ColumnCount = 1;
             sidePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
-            sidePanel.RowCount = 5;
+            sidePanel.RowCount = 6;
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 0));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 100));
+            sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             sidePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100));
             sidePanel.Controls.Add(this.QueueTools, 0, 0);
             sidePanel.Controls.Add(queuePanel, 0, 1);
             sidePanel.Controls.Add(this.AuthorBox, 0, 2);
             sidePanel.Controls.Add(this.TagBox, 0, 3);
-            sidePanel.Controls.Add(this.DescBrowser, 0, 4);
+            publishedLabel = new Label { AutoSize = true, Visible = false };
+            sidePanel.Controls.Add(publishedLabel, 0, 4);
+            sidePanel.Controls.Add(this.DescBrowser, 0, 5);
             sidePanel.Location = new System.Drawing.Point(12, 73);
             sidePanel.Margin = new System.Windows.Forms.Padding(0);
             sidePanel.Name = "sidePanel";
@@ -500,6 +505,7 @@ namespace PictureSpider
         private AuthorBox AuthorBox;
         private QueueTreeView queueTreeView;
         private Label queueHeader;
+        private Label publishedLabel;
         private TableLayoutPanel sidePanel;
         private FlowLayoutPanel QueueTools;
         private Label BookmarkPageLabel;

@@ -268,6 +268,7 @@ namespace PictureSpider.Pixiv
             download_dir_main = _download_dir;
             title = illust.title;
             description = illust.description;
+            PublishedAt = illust.uploadDate == default ? null : illust.uploadDate;
             id=illust.id.ToString();
             tags=illust.tags;
             userId=illust.userId.ToString();
