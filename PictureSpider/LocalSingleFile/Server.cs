@@ -168,9 +168,12 @@ namespace PictureSpider.LocalSingleFile
                 foreach (var group in existedFiles.Where(x => !readed.Contains(x))
                     .GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
                     .OrderBy(x => Path.GetRelativePath(dir, x.Key), NaturalStringComparer.Instance))
+                {
+                    var date = GetDirectoryDate(group.Key);
                     foreach (var paths in group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
                         .Select(x => Path.GetFullPath(x)).Chunk(500))
-                        result.Add(new ExplorerFile(paths,dir, false));
+                        result.Add(new ExplorerFile(paths,dir, false, date));
+                }
             }
             return result;
         }
@@ -181,11 +184,19 @@ namespace PictureSpider.LocalSingleFile
             var result = new List<ExplorerFileBase>();
             foreach (var group in GetFiles(dir).GroupBy(x => Path.GetDirectoryName(x), StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => Path.GetRelativePath(root, x.Key), NaturalStringComparer.Instance))
+            {
+                var date = GetDirectoryDate(group.Key);
                 foreach (var paths in group.OrderBy(x => Path.GetFileName(x), NaturalStringComparer.Instance)
                     .Select(x => Path.GetFullPath(x)).Chunk(500))
-                    result.Add(new ExplorerFile(paths, root, true));
+                    result.Add(new ExplorerFile(paths, root, true, date));
+            }
             return result;
         }
+        private static Lazy<DateTime?> GetDirectoryDate(string path) => new(() =>
+        {
+            var directory = new DirectoryInfo(path);
+            return directory.Exists ? directory.CreationTime : null;
+        });
         //获取该目录及子目录下所有图片文件,为便于比较统一使用Path.GetFullPath
         HashSet<string> GetFiles(string dir)
         {

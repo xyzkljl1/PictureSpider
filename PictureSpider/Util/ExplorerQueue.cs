@@ -20,7 +20,7 @@ namespace PictureSpider
         public string id;
         public string title;
         public string description="";
-        public DateTime? PublishedAt;
+        public virtual DateTime? PublishedAt { get; set; }
         public string userId;
         public bool bookmarked;
         public bool bookmarkPrivate;

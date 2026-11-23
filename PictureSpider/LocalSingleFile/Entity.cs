@@ -58,8 +58,11 @@ namespace PictureSpider.LocalSingleFile
         //原本位于fav目录的文件，取消fav->fav后，应当原地不动
         //原本不位于fav目录的文件，fav->取消fav->fav,应当加入待处理队列
         public bool in_fav_dir=false;
-        public ExplorerFile(IEnumerable<string> _paths,string _root_path,bool _b)
+        private readonly Lazy<DateTime?> directoryDate;
+        public override DateTime? PublishedAt => directoryDate.Value;
+        public ExplorerFile(IEnumerable<string> _paths,string _root_path,bool _b, Lazy<DateTime?> directoryDate)
         {
+            this.directoryDate = directoryDate;
             paths = _paths.ToList();
             pageBookmarks = Enumerable.Repeat(_b, paths.Count).ToArray();
             root_path = _root_path;
