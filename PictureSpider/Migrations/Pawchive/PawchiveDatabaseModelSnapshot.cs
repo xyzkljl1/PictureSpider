@@ -190,6 +190,9 @@ namespace PictureSpider.Migrations.Pawchive
                     b.Property<bool>("fetched")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime?>("fetchedTime")
                         .HasColumnType("datetime(6)");
 

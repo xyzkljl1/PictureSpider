@@ -56,7 +56,7 @@ namespace PictureSpider
             MainExplorer.CurrentFileChanged += (s, e) =>
             {
                 var file = MainExplorer.CurrentFile;
-                publishedLabel.Text = file?.PublishedAt is DateTime published ? $"发布：{published.ToLocalTime():yyyy-MM-dd HH:mm}" : "";
+                publishedLabel.Text = file?.PublishedAt is DateTime published ? $"发布：{published:yyyy-MM-dd HH:mm}" : "";
                 publishedLabel.Visible = publishedLabel.Text.Length > 0;
                 AuthorBox.SetClient(MainExplorer.server, file);
                 // 非联合队列沿用原来的 Pixiv 标签库。

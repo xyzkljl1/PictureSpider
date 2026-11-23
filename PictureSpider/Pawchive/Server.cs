@@ -358,6 +358,7 @@ namespace PictureSpider.Pawchive
                             user = user
                         }).Entity;
                         workGroup.title = obj.Value<string>("title");
+                        workGroup.PublishedAt = date == default ? null : date;
                         if (user.downloadCover && obj["file"].ToObject<JObject>().ContainsKey("path"))
                             workGroup.cover =await TryAddWork(obj["file"], service);
                         int index = 1;
@@ -568,6 +569,7 @@ namespace PictureSpider.Pawchive
                     isNonImage = true,
                     downloadStatus = group.downloadStatus,
                     parent = group,
+                    PublishedAt = group.PublishedAt,
                     user = group.user,
                     title = group.title,
                     desc = group.desc,
@@ -658,6 +660,7 @@ namespace PictureSpider.Pawchive
                 illustGroup.works.Add(preservedCover);
             await database.SaveChangesAsync();
             illustGroup.fetchedTime = DateTime.Now;
+            illustGroup.PublishedAt = doc.Value<DateTime?>("published") ?? illustGroup.PublishedAt;
             illustGroup.previewOnly = doc.Value<bool?>("has_full") == false;
             illustGroup.desc = doc.Value<string>("content");
             illustGroup.embedUrl = doc["embed"]?.Value<string>("url");
@@ -873,6 +876,7 @@ namespace PictureSpider.Pawchive
                     id = await database.GetNextChildId(),
                     parent = parent,
                     parentId = parent.id,
+                    PublishedAt = parent.PublishedAt,
                     user = parent.user,
                     title = $"{parent.title} [{Path.GetFileNameWithoutExtension(attachment?.name ?? external.name)}]",
                     fetched = true,

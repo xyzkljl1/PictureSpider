@@ -212,6 +212,7 @@ namespace PictureSpider.Pawchive
         public bool fetched { get; set; } = false;
         [Column(TypeName = "datetime(6)")]
         public DateTime? fetchedTime { get; set; }
+        public DateTime? PublishedAt { get; set; }
         public bool previewOnly { get; set; } = false;//网站只有预览图，与本地下载完成状态无关
 
         [ForeignKey("userid,userservice")]
@@ -312,6 +313,7 @@ namespace PictureSpider.Pawchive
             illustGroup = _illustGroup;
             download_dir_tmp = _download_dir;
             title = illustGroup.title;
+            PublishedAt = illustGroup.PublishedAt;
             id = illustGroup.id.ToString();
             userId = illustGroup.user.DbKey;
             bookmarked = illustGroup.fav;
