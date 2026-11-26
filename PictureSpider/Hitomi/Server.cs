@@ -462,6 +462,7 @@ namespace PictureSpider.Hitomi
                                      .Include(x => x.user)
                                      .Include(x => x.illusts)
                                  where illustGroup.fetched
+                                    && !illustGroup.isCollection
                                     && illustGroup.user.followed
                                     && illustGroup.readed == false
                                     && illustGroup.fav == false
@@ -478,6 +479,7 @@ namespace PictureSpider.Hitomi
                                         .Include(x => x.user)
                                         .Include(x => x.illusts)
                                     where illustGroup.fetched && illustGroup.fav
+                                       && !illustGroup.isCollection
                                     select illustGroup).ToList();
                 foreach (var illustGroup in illustGroups)
                 {
@@ -491,6 +493,7 @@ namespace PictureSpider.Hitomi
                                         .Include(x => x.user)
                                         .Include(x => x.illusts)
                                     where illustGroup.fetched
+                                       && !illustGroup.isCollection
                                        && illustGroup.user.name==queue.id
                                        && (!illustGroup.readed || illustGroup.fav)
                                     select illustGroup).ToList();
