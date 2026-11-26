@@ -119,7 +119,8 @@ namespace PictureSpider.Pixiv
         {
             return !ret.Value<Boolean>("NetError")
                    && ret.Value<Boolean>("error")
-                   && ret.Value<string>("message") == "抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。";
+                   && (ret.Value<string>("message") == "抱歉，您当前所寻找的个用户已经离开了pixiv, 或者这ID不存在。"
+                       || ret.Value<string>("message")?.Contains("已被冻结") == true);
         }
         // 从另一个api获取用户名，仅用于被RequestUserNameAsync调用
         private async Task<string> RequestUserNameAsyncAlter(int userId)
