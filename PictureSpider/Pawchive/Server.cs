@@ -109,9 +109,11 @@ namespace PictureSpider.Pawchive
                 if (href is null)
                     continue;
                 var url = HtmlEntity.DeEntitize(href.Value);
-                if (megaImages && !IsMegaFolderLink(url) && !url.StartsWith("https://mega.nz/file/", StringComparison.Ordinal))
+                var isMegaLink = IsMegaFolderLink(url) || url.StartsWith("https://mega.nz/file/", StringComparison.Ordinal);
+                if (megaImages && !isMegaLink)
                     continue;
-                if (megaImages && !url.Contains('#') && anchor.NextSibling is HtmlTextNode adjacentText)
+                var linkNode = anchor.ParentNode.Name == "strong" && anchor.ParentNode.ChildNodes.Count == 1 ? anchor.ParentNode : anchor;
+                if (includeMega && isMegaLink && !url.Contains('#') && linkNode.NextSibling is HtmlTextNode adjacentText)
                 {
                     // 有些帖子把密钥放在链接外，后面还可能紧跟正文。
                     var key = Regex.Match(HtmlEntity.DeEntitize(adjacentText.Text),
