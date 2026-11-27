@@ -166,7 +166,7 @@ namespace PictureSpider
                     $"/{Uri.EscapeDataString(fileId)}?fields=id,name,size&supportsAllDrives=true", fileId, resourceKey);
                 var length = file.Value<long?>("size");
                 if (file.Value<string>("id") != fileId || !String.Equals(Path.GetExtension(file.Value<string>("name")), ".zip", StringComparison.OrdinalIgnoreCase)
-                    || length is null || length <= 0 || length > ArchiveExtractor.MaxArchiveBytes)
+                    || length is null || length <= 0)
                     throw new InvalidDataException("Unsupported image ZIP metadata or archive size.");
                 EntityTagHeaderValue etag = null;
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(35));
@@ -193,6 +193,8 @@ namespace PictureSpider
                     Console.WriteLine($"[GoogleDrive] Skip ZIP containing no images, non-image files or encrypted entries: {url}");
                     return (true, false, etag);
                 }
+                if (length > ArchiveExtractor.MaxArchiveBytes)
+                    throw new InvalidDataException("Unsupported image ZIP metadata or archive size.");
                 return (true, true, etag);
             }
             catch (HttpRequestException e) { error = e.Message; }
